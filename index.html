@@ -1,149 +1,99 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>学术主页 - adgo</title>
-    <style>
-        /* 全局样式 */
-        body {
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #fdfdfd;
-            color: #222;
-            line-height: 1.6;
-        }
-
-        header {
-            background: #2c3e50;
-            color: #fff;
-            padding: 1rem 2rem;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        nav {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        nav .logo {
-            font-size: 1.3rem;
-            font-weight: bold;
-        }
-
-        nav ul {
-            list-style: none;
-            display: flex;
-            gap: 1.5rem;
-            margin: 0;
-            padding: 0;
-        }
-
-        nav ul li a {
-            text-decoration: none;
-            color: #ecf0f1;
-            transition: color 0.2s;
-        }
-
-        nav ul li a:hover {
-            color: #1abc9c;
-        }
-
-        section {
-            max-width: 900px;
-            margin: 3rem auto;
-            padding: 0 1.5rem;
-        }
-
-        h1, h2 {
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
-        footer {
-            text-align: center;
-            padding: 2rem 1rem;
-            margin-top: 3rem;
-            background: #ecf0f1;
-            font-size: 0.9rem;
-            color: #555;
-        }
-
-        .intro {
-            text-align: center;
-            padding: 3rem 1rem;
-        }
-
-        .intro p {
-            font-size: 1.1rem;
-            color: #444;
-        }
-
-        .papers ul {
-            padding-left: 1.2rem;
-        }
-
-        .papers li {
-            margin: 0.5rem 0;
-        }
-
-        .papers a {
-            color: #1abc9c;
-            text-decoration: none;
-        }
-
-        .papers a:hover {
-            text-decoration: underline;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学术主页 - 首页</title>
+  <meta name="description" content="学术个人主页 - 简约风格，可部署到 GitHub Pages">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 </head>
 <body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html">Academic</a>
+      <nav class="nav">
+        <a class="nav-link active" href="index.html">首页</a>
+        <a class="nav-link" href="publications.html">科研成果</a>
+        <a class="nav-link" href="about.html">个人简介</a>
+      </nav>
+    </div>
+  </header>
 
-    <!-- 顶部导航栏 -->
-    <header>
-        <nav>
-            <div class="logo">adgo's Homepage</div>
-            <ul>
-                <li><a href="#home">首页</a></li>
-                <li><a href="about.html">个人简介</a></li>
-                <li><a href="work.html">科研成果</a></li>
-            </ul>
-        </nav>
-    </header>
+  <main class="container layout">
+    <aside class="sidebar card">
+      <img class="avatar" src="assets/img/avatar.jpg" alt="头像占位" />
+      <h1 class="name">你的名字 Your Name</h1>
+      <p class="title">学校 · 学院 · 专业</p>
+      <ul class="info-list">
+        <li>📍 城市，国家</li>
+        <li>✉️ <a href="mailto:you@example.com">you@example.com</a></li>
+        <li>🔗 <a href="https://github.com/yourname" target="_blank" rel="noopener">GitHub</a></li>
+        <li>🎓 <a href="https://scholar.google.com" target="_blank" rel="noopener">Google Scholar</a></li>
+      </ul>
+    </aside>
 
-    <!-- 首页 -->
-    <section id="home" class="intro">
-        <h1>在读研究生</h1>
-        <p>你好，我是 <b>adgo</b>，一名计算机专业的研究生。我的研究方向包括
-           <i>边缘计算</i>、<i>联邦学习</i> 与 <i>强化学习</i>。我热衷于探索新技术，
-           并乐于分享学习过程中遇到的问题和解决方案。</p>
-    </section>
+    <section class="content">
+      <section class="card section">
+        <h2>简介</h2>
+        <p>
+          我是 XX 大学 XX 学院的研究生/教师，研究方向包括 A、B、C。目前关注 X 方向的可解释性与工程落地，欢迎交流与合作。
+        </p>
+      </section>
 
-    <!-- 个人简介 -->
-    <section id="about">
-        <h2>个人简介</h2>
-        <p>目前就读于江西理工大学，研究方向涵盖边缘计算、联邦学习和人工智能优化方法。
-           在科研过程中，我注重结合理论与实践，并积极发表相关论文。</p>
-    </section>
-
-    <!-- 科研成果 -->
-    <section id="work" class="papers">
-        <h2>科研成果</h2>
-        <ul>
-            <li>论文1：《Decentralized QoS-Aware Model Inference using Federated Split Learning for Cloud-Edge Medical Detection》，发表于 IEEE TPDS.</li>
-            <li>论文2：《Joint client–server selection and resource allocation based on split federated learning in Edge-to-Cloud computing environments》，发表于 Computer Networks.</li>
-            <li>更多成果请访问 <a href="https://github.com/你的GitHub用户名" target="_blank">我的GitHub</a></li>
+      <section class="card section">
+        <h2>近期动态</h2>
+        <ul class="timeline">
+          <li><span class="time">2025-09</span> 一篇论文被 Journal/Conference 接收。</li>
+          <li><span class="time">2025-06</span> 在 Conference 作口头报告。</li>
+          <li><span class="time">2025-03</span> 获得奖学金/项目立项。</li>
         </ul>
+      </section>
+
+      <section class="card section">
+        <h2>荣誉与奖励</h2>
+        <ul class="bullets">
+          <li>2024.12 PCIM Europe 2024 Conference, Student Travel Grant</li>
+          <li>2023.10 Northwestern Polytechnical University, Second Prize Scholarship</li>
+          <li>2022.10 Northwestern Polytechnical University, First Prize Scholarship</li>
+        </ul>
+      </section>
+
+      <section class="card section">
+        <h2>教育经历</h2>
+        <ul class="bullets">
+          <li>2022.09 - 今：XX 大学，硕士/博士，XX 专业</li>
+          <li>2018.09 - 2022.06：XX 大学，本科，XX 专业</li>
+        </ul>
+      </section>
+
+      <section class="card section">
+        <h2>代表性论文</h2>
+        <ol class="pub-list">
+          <li>
+            作者A, 作者B, 你的名字*. 论文标题. 会议/期刊, 年份. 
+            <a href="#" class="btn-link">PDF</a>
+            <a href="#" class="btn-link">BibTeX</a>
+            <a href="publications.html" class="btn-link">更多</a>
+          </li>
+        </ol>
+      </section>
     </section>
+  </main>
 
-    <!-- 页脚 -->
-    <footer>
-        &copy; 2025 adgo | 学术主页 | GitHub Pages 托管
-    </footer>
+  <footer class="site-footer">
+    <div class="container">
+      <span>© <span id="year"></span> Your Name</span>
+      <span>· 本站托管于 GitHub Pages</span>
+      <a class="counter" href="https://hits.seeyoufarm.com" target="_blank" rel="noopener">访客统计</a>
+    </div>
+  </footer>
 
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
 </body>
-</html>
+</html> 
