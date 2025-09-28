@@ -8,109 +8,111 @@
   <link rel="stylesheet" href="assets/css/style.css">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <style>
-    body {
-      margin: 0;
-      font-family: "Inter", Arial, sans-serif;
-      background: #fff;
-      color: #333;
-    }
-    .site-header {
-      background: #003366;
-      color: #fff;
-      padding: 12px 20px;
-    }
-    .site-header .container {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .brand {
-      font-weight: bold;
-      color: #fff;
-      text-decoration: none;
-      font-size: 1.2rem;
-    }
-    .nav a {
-      color: #fff;
-      margin-left: 20px;
-      text-decoration: none;
-    }
-    .nav a.active {
-      text-decoration: underline;
-    }
+   /* 页面整体 */
+body {
+  font-family: "Inter", Arial, sans-serif;
+  margin: 0;
+  background: #fff;
+  color: #333;
+}
 
-    /* 布局 */
-    .layout {
-      display: flex;
-      max-width: 1200px;
-      margin: 30px auto;
-      padding: 0 20px;
-      gap: 30px;
-    }
-    .sidebar {
-      flex: 0 0 280px;
-    }
-    .content {
-      flex: 1;
-    }
+/* 顶部导航 */
+.site-header {
+  background: linear-gradient(90deg, #003366, #005599); /* 渐变蓝 */
+  color: #fff;
+  padding: 14px 30px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.site-header .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.brand {
+  font-weight: bold;
+  font-size: 1.4rem;
+  text-decoration: none;
+  color: #fff;
+}
+.nav a {
+  color: #fff;
+  margin-left: 25px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+}
+.nav a:hover {
+  color: #ffdd55; /* hover 高亮 */
+  border-bottom: 2px solid #ffdd55;
+  padding-bottom: 3px;
+}
+.nav a.active {
+  border-bottom: 2px solid #fff;
+  padding-bottom: 3px;
+}
 
-    /* 卡片 */
-    .card {
-      background: #fafafa;
-      border: 1px solid #eee;
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 20px;
-    }
-    .profile-card {
-      text-align: center;
-    }
-    .profile-avatar {
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      object-fit: cover;
-      margin-bottom: 15px;
-    }
-    .profile-name {
-      font-size: 1.4rem;
-      font-weight: 600;
-    }
-    .muted {
-      color: #666;
-      font-size: 0.9rem;
-      margin: 2px 0;
-    }
+/* 主体布局 */
+.layout {
+  display: flex;
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 0 30px;
+  gap: 40px;
+  min-height: 100vh; /* 页面至少占满一屏 */
+}
 
-    .socials {
-      margin-top: 15px;
-      display: flex;
-      justify-content: center;
-      gap: 12px;
-    }
-    .icon-btn {
-      text-decoration: none;
-      font-size: 1rem;
-      color: #003366;
-    }
+/* 左边栏 */
+.sidebar {
+  flex: 0 0 280px;
+  align-self: flex-start;
+}
+.profile-avatar {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  display: block;
+  margin: 0 auto 20px;
+}
+.profile-name {
+  text-align: center;
+  margin: 10px 0;
+}
+.muted {
+  color: #666;
+  font-size: 0.9rem;
+  text-align: center;
+  margin: 4px 0;
+}
 
-    h2 {
-      color: #003366;
-      border-left: 4px solid #003366;
-      padding-left: 10px;
-    }
+/* 卡片样式 */
+.card {
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 25px;
+  margin-bottom: 35px; /* 加大卡片间隔 */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+.card h2 {
+  margin-top: 0;
+  color: #003366;
+  border-left: 4px solid #003366;
+  padding-left: 10px;
+}
 
-    .pub-list li {
-      margin-bottom: 10px;
-    }
+/* 页脚 */
+.site-footer {
+  text-align: center;
+  padding: 30px 15px;
+  border-top: 1px solid #eee;
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 40px;
+}
 
-    .site-footer {
-      text-align: center;
-      padding: 20px;
-      border-top: 1px solid #eee;
-      font-size: 0.9rem;
-      color: #666;
-    }
   </style>
 </head>
 <body>
