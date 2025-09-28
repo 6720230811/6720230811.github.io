@@ -6,18 +6,21 @@
   <title>学术主页 - 个人简介</title>
   <link rel="stylesheet" href="assets/css/style.css">
   <style>
-    body { font-family: "Inter", Arial, sans-serif; margin: 0; background: #fff; color: #333; }
-    .site-header { background: #003366; color: #fff; padding: 12px 20px; }
+    body { font-family: "Inter", Arial, sans-serif; margin: 0; background: #fafafa; color: #222; font-size: 18px; line-height: 1.8; }
+    .site-header { background: #fff; border-bottom: 2px solid #eee; padding: 18px 40px; position: sticky; top: 0; z-index: 100; }
     .site-header .container { display: flex; justify-content: space-between; align-items: center; }
-    .brand { font-weight: bold; color: #fff; text-decoration: none; font-size: 1.2rem; }
-    .nav a { color: #fff; margin-left: 20px; text-decoration: none; }
-    .nav a.active { text-decoration: underline; }
-    .layout { display: flex; max-width: 1200px; margin: 30px auto; padding: 0 20px; gap: 30px; }
-    .sidebar { flex: 0 0 280px; }
-    .content { flex: 1; }
-    .card { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-    h2 { color: #003366; border-left: 4px solid #003366; padding-left: 10px; }
-    .site-footer { text-align: center; padding: 20px; border-top: 1px solid #eee; font-size: 0.9rem; color: #666; }
+    .brand { font-weight: 700; font-size: 1.8rem; color: #2a4d8f; text-decoration: none; }
+    .nav a { color: #333; margin-left: 30px; text-decoration: none; font-weight: 500; font-size: 1.1rem; position: relative; padding: 6px 0; }
+    .nav a::after { content: ""; position: absolute; left: 0; bottom: -4px; width: 0; height: 3px; background: #2a4d8f; transition: width 0.3s; }
+    .nav a:hover::after, .nav a.active::after { width: 100%; }
+    .layout { display: flex; max-width: 1200px; margin: 60px auto; padding: 0 40px; gap: 50px; }
+    .sidebar { flex: 0 0 320px; }
+    .profile-avatar { width: 180px; height: 180px; border-radius: 50%; display: block; margin: 0 auto 20px; }
+    .profile-name { text-align: center; font-size: 1.5rem; font-weight: 600; margin: 10px 0; }
+    .muted { text-align: center; color: #666; margin: 5px 0; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 35px; margin-bottom: 45px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .card h2 { margin-top: 0; font-size: 1.6rem; color: #2a4d8f; border-left: 5px solid #2a4d8f; padding-left: 12px; margin-bottom: 20px; }
+    .site-footer { text-align: center; padding: 40px 20px; border-top: 1px solid #ddd; font-size: 1rem; color: #555; margin-top: 50px; }
   </style>
 </head>
 <body>
@@ -33,40 +36,50 @@
     </div>
   </header>
 
-  <!-- 主体 -->
+  <!-- 主体布局 -->
   <main class="layout">
     <!-- 左侧信息 -->
     <aside class="sidebar card">
-      <img class="profile-avatar" src="asset/头像.jpg" alt="头像" style="width:150px;border-radius:50%;display:block;margin:0 auto 15px;" />
-      <h2 style="text-align:center">你的名字</h2>
-      <p class="muted" style="text-align:center">某某大学</p>
+      <img class="profile-avatar" src="assets/img/avatar.jpg" alt="头像" />
+      <h2 class="profile-name">你的名字 Your Name</h2>
+      <p class="muted">某某大学 · 研究生/博士</p>
+      <p class="muted">研究方向：联邦学习 · 边缘计算 · 强化学习</p>
     </aside>
 
-    <!-- 右侧简介 -->
+    <!-- 右侧主要内容 -->
     <section class="content">
       <section class="card">
-        <h2>个人简介</h2>
+        <h2>Biography</h2>
         <p>
-          我是某某大学计算机学院的一名研究生/博士，研究方向包括边缘计算、联邦学习和智能优化方法。
-          我的学术兴趣主要集中在如何利用分布式系统和人工智能解决大规模复杂问题。
+          我目前在 <b>某某大学</b> 攻读硕士/博士学位，研究方向包括 <b>联邦学习</b>、<b>边缘智能</b> 与 <b>深度强化学习</b>。我的研究目标是通过
+          分布式学习和资源优化来提升智能计算系统的性能与安全性。在科研过程中，我注重理论研究与实际应用相结合，
+          希望推动前沿技术在医疗检测、车联网和智能制造中的落地。
         </p>
       </section>
 
       <section class="card">
         <h2>教育经历</h2>
         <ul>
-          <li>硕士，计算机技术，某某大学，2023 - 至今</li>
-          <li>学士，信息工程，某某大学，2019 - 2023</li>
+          <li>2023 – 至今：硕士/博士，计算机科学与技术，某某大学</li>
+          <li>2019 – 2023：学士，信息工程，某某大学</li>
         </ul>
       </section>
 
       <section class="card">
-        <h2>技能</h2>
+        <h2>研究兴趣</h2>
         <ul>
-          <li>编程语言：Python, Java, C++</li>
-          <li>框架与工具：PyTorch, TensorFlow, SpringBoot</li>
-          <li>研究方法：联邦学习、强化学习、优化算法</li>
+          <li>联邦学习与模型隐私保护</li>
+          <li>边缘计算与云-端协同优化</li>
+          <li>深度强化学习与智能调度</li>
+          <li>多目标优化与分布式系统</li>
         </ul>
+      </section>
+
+      <section class="card">
+        <h2>联系方式</h2>
+        <p>Email: <a href="mailto:you@example.com">you@example.com</a></p>
+        <p>Google Scholar: <a href="https://scholar.google.com" target="_blank">链接</a></p>
+        <p>GitHub: <a href="https://github.com/yourname" target="_blank">yourname</a></p>
       </section>
     </section>
   </main>
