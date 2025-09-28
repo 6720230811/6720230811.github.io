@@ -5,79 +5,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>学术主页 - 个人简介</title>
   <link rel="stylesheet" href="assets/css/style.css">
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <style>
+    body { font-family: "Inter", Arial, sans-serif; margin: 0; background: #fff; color: #333; }
+    .site-header { background: #003366; color: #fff; padding: 12px 20px; }
+    .site-header .container { display: flex; justify-content: space-between; align-items: center; }
+    .brand { font-weight: bold; color: #fff; text-decoration: none; font-size: 1.2rem; }
+    .nav a { color: #fff; margin-left: 20px; text-decoration: none; }
+    .nav a.active { text-decoration: underline; }
+    .layout { display: flex; max-width: 1200px; margin: 30px auto; padding: 0 20px; gap: 30px; }
+    .sidebar { flex: 0 0 280px; }
+    .content { flex: 1; }
+    .card { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    h2 { color: #003366; border-left: 4px solid #003366; padding-left: 10px; }
+    .site-footer { text-align: center; padding: 20px; border-top: 1px solid #eee; font-size: 0.9rem; color: #666; }
+  </style>
 </head>
 <body>
+  <!-- 顶部导航 -->
   <header class="site-header">
-    <div class="container header-inner">
+    <div class="container">
       <a class="brand" href="index.html">Academic</a>
       <nav class="nav">
-        <a class="nav-link" href="index.html">首页</a>
-        <a class="nav-link" href="work.html">科研成果</a>
-        <a class="nav-link active" href="about.html">个人简介</a>
+        <a href="index.html">首页</a>
+        <a href="publications.html">科研成果</a>
+        <a class="active" href="about.html">个人简介</a>
       </nav>
     </div>
   </header>
 
-  <main class="container narrow">
-    <div class="about-layout">
-      <aside class="card section">
-        <h1>关于我</h1>
+  <!-- 主体 -->
+  <main class="layout">
+    <!-- 左侧信息 -->
+    <aside class="sidebar card">
+      <img class="profile-avatar" src="asset/头像.jpg" alt="头像" style="width:150px;border-radius:50%;display:block;margin:0 auto 15px;" />
+      <h2 style="text-align:center">你的名字</h2>
+      <p class="muted" style="text-align:center">某某大学</p>
+    </aside>
+
+    <!-- 右侧简介 -->
+    <section class="content">
+      <section class="card">
+        <h2>个人简介</h2>
         <p>
-          我是 XX 大学 XX 学院的 XX（研究生/教师）。研究兴趣包括 A、B、C，长期关注 X 与 Y 的交叉方向。
+          我是某某大学计算机学院的一名研究生/博士，研究方向包括边缘计算、联邦学习和智能优化方法。
+          我的学术兴趣主要集中在如何利用分布式系统和人工智能解决大规模复杂问题。
         </p>
-        <h2>联系方式</h2>
-        <ul class="bullets">
-          <li>邮箱：<a href="mailto:you@example.com">you@example.com</a></li>
-          <li>GitHub：<a href="https://github.com/yourname" target="_blank" rel="noopener">yourname</a></li>
-          <li>Google Scholar：<a href="https://scholar.google.com" target="_blank" rel="noopener">查看</a></li>
-        </ul>
-        <h2>技能</h2>
-        <ul class="bullets">
-          <li>编程：Python，C/C++，MATLAB，JavaScript</li>
-          <li>框架：PyTorch/TensorFlow，NumPy/SciPy</li>
-          <li>工具：LaTeX，Git，Docker</li>
-        </ul>
-      </aside>
+      </section>
 
-      <section class="card section">
-        <h2>教育背景</h2>
-        <ul class="bullets">
-          <li>2022.09 - 今：XX 大学，硕士/博士，XX 专业，导师：XXX 教授</li>
-          <li>2018.09 - 2022.06：XX 大学，本科，XX 专业</li>
-        </ul>
-
-        <h2>研究方向</h2>
-        <ul class="bullets">
-          <li>A：简述研究问题与方法栈</li>
-          <li>B：简述研究问题与方法栈</li>
-          <li>C：简述研究问题与方法栈</li>
-        </ul>
-
-        <h2>学术服务</h2>
-        <ul class="bullets">
-          <li>会议/期刊审稿：XXXX, YYYY</li>
-          <li>学术组织：IEEE/ACM 学生会员等</li>
-        </ul>
-
-        <h2>项目与经历</h2>
-        <ul class="bullets">
-          <li>2024 - 今：项目名称，职责与成果一句话</li>
-          <li>2023：实习/访学单位，方向与贡献一句话</li>
+      <section class="card">
+        <h2>教育经历</h2>
+        <ul>
+          <li>硕士，计算机技术，某某大学，2023 - 至今</li>
+          <li>学士，信息工程，某某大学，2019 - 2023</li>
         </ul>
       </section>
-    </div>
+
+      <section class="card">
+        <h2>技能</h2>
+        <ul>
+          <li>编程语言：Python, Java, C++</li>
+          <li>框架与工具：PyTorch, TensorFlow, SpringBoot</li>
+          <li>研究方法：联邦学习、强化学习、优化算法</li>
+        </ul>
+      </section>
+    </section>
   </main>
 
+  <!-- 页脚 -->
   <footer class="site-footer">
-    <div class="container">
-      <span>© <span id="year"></span> Your Name</span>
-      <span>· 本站托管于 GitHub Pages</span>
-    </div>
+    <span id="year"></span> © Your Name | 本站托管于 GitHub Pages
   </footer>
 
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
   </script>
 </body>
-</html> 
+</html>
