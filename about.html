@@ -18,6 +18,8 @@
     .profile-avatar { width: 180px; height: 180px; border-radius: 50%; display: block; margin: 0 auto 20px; }
     .profile-name { text-align: center; font-size: 1.5rem; font-weight: 600; margin: 10px 0; }
     .muted { text-align: center; color: #666; margin: 5px 0; }
+    .contact { margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee; font-size: 0.95rem; }
+    .contact p { margin: 6px 0; text-align: center; }
     .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 35px; margin-bottom: 45px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .card h2 { margin-top: 0; font-size: 1.6rem; color: #2a4d8f; border-left: 5px solid #2a4d8f; padding-left: 12px; margin-bottom: 20px; }
     .site-footer { text-align: center; padding: 40px 20px; border-top: 1px solid #ddd; font-size: 1rem; color: #555; margin-top: 50px; }
@@ -38,12 +40,18 @@
 
   <!-- 主体布局 -->
   <main class="layout">
-    <!-- 左侧信息 -->
+    <!-- 左侧信息 + 联系方式 -->
     <aside class="sidebar card">
       <img class="profile-avatar" src="asset/头像.jpg" alt="头像" />
       <h2 class="profile-name">你的名字 Your Name</h2>
       <p class="muted">某某大学 · 研究生/博士</p>
       <p class="muted">研究方向：联邦学习 · 边缘计算 · 强化学习</p>
+
+      <div class="contact">
+        <p><b>Email：</b><a href="mailto:you@example.com">you@example.com</a></p>
+        <p><b>Scholar：</b><a href="https://scholar.google.com" target="_blank">链接</a></p>
+        <p><b>GitHub：</b><a href="https://github.com/yourname" target="_blank">yourname</a></p>
+      </div>
     </aside>
 
     <!-- 右侧主要内容 -->
@@ -51,9 +59,9 @@
       <section class="card">
         <h2>Biography</h2>
         <p>
-          我目前在 <b>某某大学</b> 攻读硕士/博士学位，研究方向包括 <b>联邦学习</b>、<b>边缘智能</b> 与 <b>深度强化学习</b>。我的研究目标是通过
-          分布式学习和资源优化来提升智能计算系统的性能与安全性。在科研过程中，我注重理论研究与实际应用相结合，
-          希望推动前沿技术在医疗检测、车联网和智能制造中的落地。
+          我目前在 <b>某某大学</b> 攻读硕士/博士学位，研究方向包括 <b>联邦学习</b>、<b>边缘智能</b> 与 <b>深度强化学习</b>。
+          我的研究目标是通过分布式学习和资源优化来提升智能计算系统的性能与安全性。
+          在科研过程中，我注重理论研究与实际应用相结合，希望推动前沿技术在医疗检测、车联网和智能制造中的落地。
         </p>
       </section>
 
@@ -73,13 +81,6 @@
           <li>深度强化学习与智能调度</li>
           <li>多目标优化与分布式系统</li>
         </ul>
-      </section>
-
-      <section class="card">
-        <h2>联系方式</h2>
-        <p>Email: <a href="mailto:you@example.com">you@example.com</a></p>
-        <p>Google Scholar: <a href="https://scholar.google.com" target="_blank">链接</a></p>
-        <p>GitHub: <a href="https://github.com/yourname" target="_blank">yourname</a></p>
       </section>
     </section>
   </main>
