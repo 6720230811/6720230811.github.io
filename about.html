@@ -13,16 +13,93 @@
     .nav a { color: #333; margin-left: 30px; text-decoration: none; font-weight: 500; font-size: 1.1rem; position: relative; padding: 6px 0; }
     .nav a::after { content: ""; position: absolute; left: 0; bottom: -4px; width: 0; height: 3px; background: #2a4d8f; transition: width 0.3s; }
     .nav a:hover::after, .nav a.active::after { width: 100%; }
+
     .layout { display: flex; max-width: 1200px; margin: 60px auto; padding: 0 40px; gap: 50px; }
-    .sidebar { flex: 0 0 320px; }
-    .profile-avatar { width: 180px; height: 180px; border-radius: 50%; display: block; margin: 0 auto 20px; }
-    .profile-name { text-align: center; font-size: 1.5rem; font-weight: 600; margin: 10px 0; }
-    .muted { text-align: center; color: #666; margin: 5px 0; }
-    .contact { margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee; font-size: 0.95rem; }
-    .contact p { margin: 6px 0; text-align: center; }
-    .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 35px; margin-bottom: 45px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .card h2 { margin-top: 0; font-size: 1.6rem; color: #2a4d8f; border-left: 5px solid #2a4d8f; padding-left: 12px; margin-bottom: 20px; }
-    .site-footer { text-align: center; padding: 40px 20px; border-top: 1px solid #ddd; font-size: 1rem; color: #555; margin-top: 50px; }
+
+    /* 左侧卡片 */
+    .profile-card {
+      flex: 0 0 320px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 30px 20px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .profile-avatar {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      display: block;
+      margin: 0 auto 15px;
+      background: #f0f0f0;
+    }
+    .profile-name {
+      font-size: 1.4rem;
+      margin: 15px 0 5px;
+    }
+    .muted {
+      color: #666;
+      font-size: 1rem;
+      margin-bottom: 20px;
+    }
+
+    /* 小节标题 */
+    .profile-section {
+      text-align: left;
+      margin-top: 25px;
+    }
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #2a4d8f;
+      margin-bottom: 10px;
+      border-left: 4px solid #2a4d8f;
+      padding-left: 8px;
+    }
+
+    /* 列表 */
+    .profile-list {
+      list-style: disc;
+      padding-left: 20px;
+      color: #444;
+      font-size: 0.95rem;
+      margin: 0;
+    }
+    .profile-list li { margin-bottom: 6px; }
+
+    /* 联系方式 */
+    .profile-section p { margin: 6px 0; font-size: 0.95rem; }
+    .profile-section a { color: #2a4d8f; text-decoration: none; }
+    .profile-section a:hover { text-decoration: underline; }
+
+    /* 右侧卡片 */
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .card h2 {
+      margin-top: 0;
+      font-size: 1.4rem;
+      color: #2a4d8f;
+      border-left: 5px solid #2a4d8f;
+      padding-left: 12px;
+      margin-bottom: 20px;
+    }
+
+    /* 页脚 */
+    .site-footer {
+      text-align: center;
+      padding: 40px 20px;
+      border-top: 1px solid #ddd;
+      font-size: 1rem;
+      color: #555;
+      margin-top: 50px;
+    }
   </style>
 </head>
 <body>
@@ -34,53 +111,68 @@
         <a href="index.html">首页</a>
         <a class="active" href="about.html">个人简介</a>
         <a href="publications.html">科研成果</a>
+        
       </nav>
     </div>
   </header>
 
   <!-- 主体布局 -->
   <main class="layout">
-    <!-- 左侧信息 + 联系方式 -->
-    <aside class="sidebar card">
-      <img class="profile-avatar" src="asset/头像.jpg" alt="头像" />
+    <!-- 左侧 -->
+    <aside class="profile-card">
+      <img class="profile-avatar" src="asset/头像.jpg" alt="头像">
       <h2 class="profile-name">丁龙君</h2>
       <p class="muted">江西理工大学 · 研究生</p>
-      <p class="muted">研究方向：图像分割 · 目标检测 · 知识蒸馏</p>
 
-      <div class="contact">
-        <p><b>Email：</b><a href="mailto:you@example.com">6720230811@jxust.edu.com</a></p>
-        <p><b>GitHub：</b><a href="https://github.com/yourname" target="_blank">6720230811</a></p>
-      </div>
-    </aside>
-
-    <!-- 右侧主要内容 -->
-    <section class="content">
-      <section class="card">
-        <h2>Biography</h2>
-        <p>
-          我目前在 <b>某某大学</b> 攻读硕士/博士学位，研究方向包括 <b>联邦学习</b>、<b>边缘智能</b> 与 <b>深度强化学习</b>。
-          我的研究目标是通过分布式学习和资源优化来提升智能计算系统的性能与安全性。
-          在科研过程中，我注重理论研究与实际应用相结合，希望推动前沿技术在医疗检测、车联网和智能制造中的落地。
-        </p>
-      </section>
-
-      <section class="card">
-        <h2>教育经历</h2>
-        <ul>
-          <li>2023 – 至今：硕士，计算机技术，江西理工大学</li>
-          <li>2018 – 2022：学士，软件工程，江西理工大学</li>
-        </ul>
-      </section>
-
-      <section class="card">
-        <h2>研究兴趣</h2>
-        <ul>
+      <!-- 研究方向 -->
+      <div class="profile-section">
+        <h3 class="section-title">研究方向</h3>
+        <ul class="profile-list">
           <li>医学图像分割</li>
           <li>目标检测</li>
           <li>知识蒸馏</li>
           <li>多模态</li>
         </ul>
-      </section>
+      </div>
+
+      <!-- 联系方式 -->
+      <div class="profile-section">
+        <h3 class="section-title">联系方式</h3>
+        <p><strong>Email:</strong> <a href="mailto:6720230811@jxust.edu.cn">6720230811@jxust.edu.cn</a></p>
+        <p><strong>GitHub:</strong> <a href="https://github.com/6720230811" target="_blank">6720230811</a></p>
+      </div>
+    </aside>
+
+    <!-- 右侧 -->
+    <section style="flex:1;">
+      <div class="card">
+        <h2>Biography</h2>
+        <p>
+          我目前在 <strong>某某大学</strong> 攻读硕士/博士学位，研究方向包括 <strong>联邦学习</strong>、
+          <strong>边缘智能</strong> 与 <strong>深度强化学习</strong>。
+          我的研究目标是通过分布式学习和资源优化来提升智能计算系统的性能与安全性。
+          在科研和实践中，我注重理论与应用的结合，致力于推动前沿技术在医疗检测、
+          车联网和智能制造中的落地。
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>教育经历</h2>
+        <ul>
+          <li>2023 – 至今：硕士，计算机技术，江西理工大学</li>
+          <li>2018 – 2022：学士，软件工程，江西理工大学</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>研究兴趣</h2>
+        <ul>
+          <li>医学图像分割</li>
+          <li>目标检测</li>
+          <li>知识蒸馏</li>
+          <li>多模态学习</li>
+        </ul>
+      </div>
     </section>
   </main>
 
