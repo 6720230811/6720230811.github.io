@@ -4,88 +4,188 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>学术主页 - 首页</title>
-  <meta name="description" content="学术个人主页 - 简约风格，可部署到 GitHub Pages">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+  <meta name="description" content="学术个人主页 - 左右分布简约风格，可部署到 GitHub Pages">
   <link rel="stylesheet" href="assets/css/style.css">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <style>
+    body {
+      margin: 0;
+      font-family: "Inter", Arial, sans-serif;
+      background: #fff;
+      color: #333;
+    }
+    .site-header {
+      background: #003366;
+      color: #fff;
+      padding: 12px 20px;
+    }
+    .site-header .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand {
+      font-weight: bold;
+      color: #fff;
+      text-decoration: none;
+      font-size: 1.2rem;
+    }
+    .nav a {
+      color: #fff;
+      margin-left: 20px;
+      text-decoration: none;
+    }
+    .nav a.active {
+      text-decoration: underline;
+    }
+
+    /* 布局 */
+    .layout {
+      display: flex;
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 20px;
+      gap: 30px;
+    }
+    .sidebar {
+      flex: 0 0 280px;
+    }
+    .content {
+      flex: 1;
+    }
+
+    /* 卡片 */
+    .card {
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .profile-card {
+      text-align: center;
+    }
+    .profile-avatar {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 15px;
+    }
+    .profile-name {
+      font-size: 1.4rem;
+      font-weight: 600;
+    }
+    .muted {
+      color: #666;
+      font-size: 0.9rem;
+      margin: 2px 0;
+    }
+
+    .socials {
+      margin-top: 15px;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+    .icon-btn {
+      text-decoration: none;
+      font-size: 1rem;
+      color: #003366;
+    }
+
+    h2 {
+      color: #003366;
+      border-left: 4px solid #003366;
+      padding-left: 10px;
+    }
+
+    .pub-list li {
+      margin-bottom: 10px;
+    }
+
+    .site-footer {
+      text-align: center;
+      padding: 20px;
+      border-top: 1px solid #eee;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
+  <!-- 顶部导航栏 -->
   <header class="site-header">
-    <div class="container header-inner">
+    <div class="container">
       <a class="brand" href="index.html">Academic</a>
       <nav class="nav">
-        <a class="nav-link active" href="index.html">首页</a>
-        <a class="nav-link" href="publications.html">科研成果</a>
-        <a class="nav-link" href="about.html">个人简介</a>
+        <a class="active" href="index.html">首页</a>
+        <a href="work.html">科研成果</a>
+        <a href="about.html">个人简介</a>
       </nav>
     </div>
   </header>
 
-  <main class="container layout">
+  <!-- 主体布局：左右分布 -->
+  <main class="layout">
+    <!-- 左侧个人信息 -->
     <aside class="sidebar card profile-card">
-      <img class="avatar profile-avatar" src="asset/头像.jpg" alt="头像占位" />
+      <img class="profile-avatar" src="asset/头像.jpg" alt="头像" />
       <h1 class="profile-name">你的名字 Your Name</h1>
-      <p class="title">Postdoctoral Fellow</p>
-      <p class="muted">University/Institute</p>
+      <p class="muted">某某大学</p>
+      <p class="muted">学院/研究所</p>
       <p class="muted">城市，国家</p>
       <div class="socials">
-        <a class="icon-btn" href="mailto:you@example.com" title="Email"></a>
-        <a class="icon-btn" href="https://scholar.google.com" target="_blank" rel="noopener" title="Google Scholar"></a>
-        <a class="icon-btn" href="https://orcid.org" target="_blank" rel="noopener" title="ORCID"></a>
-        <a class="icon-btn" href="https://www.linkedin.com" target="_blank" rel="noopener" title="LinkedIn">in</a>
-        <a class="icon-btn" href="https://github.com/yourname" target="_blank" rel="noopener" title="GitHub"></a>
+        <a class="icon-btn" href="mailto:you@example.com">📧</a>
+        <a class="icon-btn" href="https://scholar.google.com" target="_blank">Scholar</a>
+        <a class="icon-btn" href="https://orcid.org" target="_blank">ORCID</a>
+        <a class="icon-btn" href="https://github.com/yourname" target="_blank">GitHub</a>
       </div>
     </aside>
 
+    <!-- 右侧主要内容 -->
     <section class="content">
-      <section class="card section home-hero">
+      <section class="card">
+        <h2>Biography</h2>
         <p>
-          我是某大学某研究组的博士后/研究人员，研究方向为多物理场数值模拟、高阶格式与高性能计算。我在此分享部分科研工作，并记录与科学和软件工程相关的思考。
+          我目前在某大学攻读硕士/博士学位，研究方向包括联邦学习、边缘计算与智能优化方法。致力于在分布式系统与人工智能交叉领域探索前沿问题。
         </p>
+        <ul>
+          <li><b>Federated/Split Learning</b></li>
+          <li><b>Edge Intelligence</b></li>
+          <li><b>Deep Reinforcement Learning</b></li>
+        </ul>
       </section>
 
-      <div class="home-two-col">
-        <section class="card section">
-          <h2>Interests</h2>
-          <ul class="bullets">
-            <li>Multiphysics simulations</li>
-            <li>Adaptive high-order schemes</li>
-            <li>Hierarchical mesh methods</li>
-            <li>High-performance computing</li>
-            <li>Applications in fluid mechanics, aeroacoustics</li>
-          </ul>
-        </section>
-        <section class="card section">
-          <h2>Education</h2>
-          <ul class="bullets">
-            <li>Dr.-Ing., Computational Engineering Science, 2017  RWTH Aachen University</li>
-            <li>Dipl.-Ing., Aerospace Engineering, 2011  University of Stuttgart</li>
-            <li>MS, Aerospace Engineering, 2010  Georgia Institute of Technology</li>
-          </ul>
-        </section>
-      </div>
+      <section class="card">
+        <h2>News</h2>
+        <ul>
+          <li>2025.04 🎉 论文接收于 IEEE TPDS</li>
+          <li>2024.10 🎉 论文接收于 Computer Networks</li>
+          <li>2024.07 获得研究生优秀奖学金</li>
+        </ul>
+      </section>
 
-      <section class="card section">
-        <h2>代表性论文</h2>
+      <section class="card">
+        <h2>Publications</h2>
         <ol class="pub-list">
           <li>
-            作者A, 作者B, 你的名字*. 论文标题. 会议/期刊, 年份.
-            <a href="#" class="btn-link">PDF</a>
-            <a href="#" class="btn-link">BibTeX</a>
-            <a href="publications.html" class="btn-link">更多</a>
+            你的名字, 合作者. <i>Decentralized QoS-Aware Model Inference using Federated Split Learning for Cloud-Edge Medical Detection</i>. IEEE TPDS, 2025.
+            <a href="#" class="icon-btn">[PDF]</a>
+            <a href="#" class="icon-btn">[BibTeX]</a>
+          </li>
+          <li>
+            你的名字, 合作者. <i>Joint client–server selection and resource allocation based on split federated learning in Edge-to-Cloud computing environments</i>. Computer Networks, 2024.
+            <a href="#" class="icon-btn">[PDF]</a>
           </li>
         </ol>
       </section>
     </section>
   </main>
 
+  <!-- 页脚 -->
   <footer class="site-footer">
-    <div class="container">
-      <span> <span id="year"></span> Your Name</span>
-      <span> 本站托管于 GitHub Pages</span>
-    </div>
+    <span id="year"></span> © Your Name | 本站托管于 GitHub Pages
   </footer>
 
   <script>
