@@ -1,1 +1,149 @@
-<h1>欢迎</h1>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学术主页 - adgo</title>
+    <style>
+        /* 全局样式 */
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #fdfdfd;
+            color: #222;
+            line-height: 1.6;
+        }
+
+        header {
+            background: #2c3e50;
+            color: #fff;
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        nav .logo {
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            gap: 1.5rem;
+            margin: 0;
+            padding: 0;
+        }
+
+        nav ul li a {
+            text-decoration: none;
+            color: #ecf0f1;
+            transition: color 0.2s;
+        }
+
+        nav ul li a:hover {
+            color: #1abc9c;
+        }
+
+        section {
+            max-width: 900px;
+            margin: 3rem auto;
+            padding: 0 1.5rem;
+        }
+
+        h1, h2 {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 1rem;
+            margin-top: 3rem;
+            background: #ecf0f1;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        .intro {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+
+        .intro p {
+            font-size: 1.1rem;
+            color: #444;
+        }
+
+        .papers ul {
+            padding-left: 1.2rem;
+        }
+
+        .papers li {
+            margin: 0.5rem 0;
+        }
+
+        .papers a {
+            color: #1abc9c;
+            text-decoration: none;
+        }
+
+        .papers a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部导航栏 -->
+    <header>
+        <nav>
+            <div class="logo">adgo's Homepage</div>
+            <ul>
+                <li><a href="#home">首页</a></li>
+                <li><a href="#about">个人简介</a></li>
+                <li><a href="#work">科研成果</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- 首页 -->
+    <section id="home" class="intro">
+        <h1>在读研究生</h1>
+        <p>你好，我是 <b>adgo</b>，一名计算机专业的研究生。我的研究方向包括
+           <i>边缘计算</i>、<i>联邦学习</i> 与 <i>强化学习</i>。我热衷于探索新技术，
+           并乐于分享学习过程中遇到的问题和解决方案。</p>
+    </section>
+
+    <!-- 个人简介 -->
+    <section id="about">
+        <h2>个人简介</h2>
+        <p>目前就读于江西理工大学，研究方向涵盖边缘计算、联邦学习和人工智能优化方法。
+           在科研过程中，我注重结合理论与实践，并积极发表相关论文。</p>
+    </section>
+
+    <!-- 科研成果 -->
+    <section id="work" class="papers">
+        <h2>科研成果</h2>
+        <ul>
+            <li>论文1：《Decentralized QoS-Aware Model Inference using Federated Split Learning for Cloud-Edge Medical Detection》，发表于 IEEE TPDS.</li>
+            <li>论文2：《Joint client–server selection and resource allocation based on split federated learning in Edge-to-Cloud computing environments》，发表于 Computer Networks.</li>
+            <li>更多成果请访问 <a href="https://github.com/你的GitHub用户名" target="_blank">我的GitHub</a></li>
+        </ul>
+    </section>
+
+    <!-- 页脚 -->
+    <footer>
+        &copy; 2025 adgo | 学术主页 | GitHub Pages 托管
+    </footer>
+
+</body>
+</html>
