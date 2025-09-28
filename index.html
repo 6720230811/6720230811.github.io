@@ -17,64 +17,60 @@
       <a class="brand" href="index.html">Academic</a>
       <nav class="nav">
         <a class="nav-link active" href="index.html">首页</a>
-        <a class="nav-link" href="work.html">科研成果</a>
+        <a class="nav-link" href="publications.html">科研成果</a>
         <a class="nav-link" href="about.html">个人简介</a>
       </nav>
     </div>
   </header>
 
   <main class="container layout">
-    <aside class="sidebar card">
-      <img class="avatar" src="assets/img/avatar.jpg" alt="头像占位" />
-      <h1 class="name">你的名字 Your Name</h1>
-      <p class="title">学校 · 学院 · 专业</p>
-      <ul class="info-list">
-        <li>📍 城市，国家</li>
-        <li>✉️ <a href="mailto:you@example.com">you@example.com</a></li>
-        <li>🔗 <a href="https://github.com/yourname" target="_blank" rel="noopener">GitHub</a></li>
-        <li>🎓 <a href="https://scholar.google.com" target="_blank" rel="noopener">Google Scholar</a></li>
-      </ul>
+    <aside class="sidebar card profile-card">
+      <img class="avatar profile-avatar" src="assets/img/avatar.jpg" alt="头像占位" />
+      <h1 class="profile-name">你的名字 Your Name</h1>
+      <p class="title">Postdoctoral Fellow · University/Institute</p>
+      <p class="muted">城市，国家</p>
+      <div class="socials">
+        <a class="icon-btn" href="mailto:you@example.com" title="Email">✉️</a>
+        <a class="icon-btn" href="https://scholar.google.com" target="_blank" rel="noopener" title="Google Scholar">🧠</a>
+        <a class="icon-btn" href="https://orcid.org" target="_blank" rel="noopener" title="ORCID">🆔</a>
+        <a class="icon-btn" href="https://www.linkedin.com" target="_blank" rel="noopener" title="LinkedIn">in</a>
+        <a class="icon-btn" href="https://github.com/yourname" target="_blank" rel="noopener" title="GitHub">🐙</a>
+      </div>
     </aside>
 
     <section class="content">
-      <section class="card section">
-        <h2>简介</h2>
+      <section class="card section home-hero">
         <p>
-          我是 XX 大学 XX 学院的研究生/教师，研究方向包括 A、B、C。目前关注 X 方向的可解释性与工程落地，欢迎交流与合作。
+          我是某大学某研究组的博士后/研究人员，研究方向为多物理场数值模拟、高阶格式与高性能计算。我在此分享部分科研工作，并记录与科学和软件工程相关的思考。
         </p>
       </section>
 
-      <section class="card section">
-        <h2>近期动态</h2>
-        <ul class="timeline">
-          <li><span class="time">2025-09</span> 一篇论文被 Journal/Conference 接收。</li>
-          <li><span class="time">2025-06</span> 在 Conference 作口头报告。</li>
-          <li><span class="time">2025-03</span> 获得奖学金/项目立项。</li>
-        </ul>
-      </section>
-
-      <section class="card section">
-        <h2>荣誉与奖励</h2>
-        <ul class="bullets">
-          <li>2024.12 PCIM Europe 2024 Conference, Student Travel Grant</li>
-          <li>2023.10 Northwestern Polytechnical University, Second Prize Scholarship</li>
-          <li>2022.10 Northwestern Polytechnical University, First Prize Scholarship</li>
-        </ul>
-      </section>
-
-      <section class="card section">
-        <h2>教育经历</h2>
-        <ul class="bullets">
-          <li>2022.09 - 今：XX 大学，硕士/博士，XX 专业</li>
-          <li>2018.09 - 2022.06：XX 大学，本科，XX 专业</li>
-        </ul>
-      </section>
+      <div class="home-two-col">
+        <section class="card section">
+          <h2>Interests</h2>
+          <ul class="bullets">
+            <li>Multiphysics simulations</li>
+            <li>Adaptive high-order schemes</li>
+            <li>Hierarchical mesh methods</li>
+            <li>High-performance computing</li>
+            <li>Applications in fluid mechanics, aeroacoustics</li>
+          </ul>
+        </section>
+        <section class="card section">
+          <h2>Education</h2>
+          <ul class="bullets">
+            <li>Dr.-Ing., Computational Engineering Science, 2017 — RWTH Aachen University</li>
+            <li>Dipl.-Ing., Aerospace Engineering, 2011 — University of Stuttgart</li>
+            <li>MS, Aerospace Engineering, 2010 — Georgia Institute of Technology</li>
+          </ul>
+        </section>
+      </div>
 
       <section class="card section">
         <h2>代表性论文</h2>
         <ol class="pub-list">
           <li>
-            作者A, 作者B, 你的名字*. 论文标题. 会议/期刊, 年份. 
+            作者A, 作者B, 你的名字*. 论文标题. 会议/期刊, 年份.
             <a href="#" class="btn-link">PDF</a>
             <a href="#" class="btn-link">BibTeX</a>
             <a href="publications.html" class="btn-link">更多</a>
