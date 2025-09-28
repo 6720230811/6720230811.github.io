@@ -2,29 +2,72 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>个人简介</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #f9f9f9; margin: 0; }
-    header { background: #003366; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; color: #fff; }
-    nav a { color: #fff; margin-left: 20px; text-decoration: none; }
-    nav a:hover { text-decoration: underline; }
-    section { max-width: 900px; margin: 50px auto; padding: 0 20px; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学术主页 - 个人简介</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 </head>
 <body>
-  <header>
-    <h1>学术主页</h1>
-    <nav>
-      <a href="index.html">首页</a>
-      <a href="about.html">个人简介</a>
-      <a href="work.html">科研成果</a>
-    </nav>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html">Academic</a>
+      <nav class="nav">
+        <a class="nav-link" href="index.html">首页</a>
+        <a class="nav-link" href="publications.html">科研成果</a>
+        <a class="nav-link active" href="about.html">个人简介</a>
+      </nav>
+    </div>
   </header>
 
-  <section>
-    <h2>个人简介</h2>
-    <p>我是一名计算机专业的研究生，目前研究方向包括边缘计算、联邦学习与深度强化学习。</p>
-    <p>我对科研与编程充满热情，致力于探索分布式智能计算的前沿问题。</p>
-  </section>
+  <main class="container narrow">
+    <article class="card section">
+      <h1>关于我</h1>
+      <p>
+        我是 XX 大学 XX 学院的 XX（研究生/教师）。研究兴趣包括 A、B、C，长期关注 X 与 Y 的交叉方向。
+      </p>
+
+      <h2>教育背景</h2>
+      <ul class="bullets">
+        <li>2022.09 - 今：XX 大学，硕士/博士，XX 专业，导师：XXX 教授</li>
+        <li>2018.09 - 2022.06：XX 大学，本科，XX 专业</li>
+      </ul>
+
+      <h2>研究方向</h2>
+      <ul class="bullets">
+        <li>A：简述研究问题与方法栈</li>
+        <li>B：简述研究问题与方法栈</li>
+        <li>C：简述研究问题与方法栈</li>
+      </ul>
+
+      <h2>学术服务</h2>
+      <ul class="bullets">
+        <li>会议/期刊审稿：XXXX, YYYY</li>
+        <li>学术组织：IEEE/ACM 学生会员等</li>
+      </ul>
+
+      <h2>项目与经历</h2>
+      <ul class="bullets">
+        <li>2024 - 今：项目名称，职责与成果一句话</li>
+        <li>2023：实习/访学单位，方向与贡献一句话</li>
+      </ul>
+
+      <h2>技能</h2>
+      <ul class="bullets">
+        <li>编程：Python，C/C++，MATLAB，JavaScript</li>
+        <li>工具：PyTorch/TensorFlow，LaTeX，Git</li>
+      </ul>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© <span id="year"></span> Your Name</span>
+      <span>· 本站托管于 GitHub Pages</span>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
 </body>
-</html>
+</html> 
