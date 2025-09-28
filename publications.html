@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -6,80 +5,83 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>学术主页 - 科研成果</title>
   <link rel="stylesheet" href="assets/css/style.css">
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <style>
+    body { font-family: "Inter", Arial, sans-serif; margin: 0; background: #fafafa; color: #222; font-size: 18px; line-height: 1.8; }
+    .site-header { background: #fff; border-bottom: 2px solid #eee; padding: 18px 40px; position: sticky; top: 0; z-index: 100; }
+    .site-header .container { display: flex; justify-content: space-between; align-items: center; }
+    .brand { font-weight: 700; font-size: 1.8rem; color: #2a4d8f; text-decoration: none; }
+    .nav a { color: #333; margin-left: 30px; text-decoration: none; font-weight: 500; font-size: 1.1rem; position: relative; padding: 6px 0; }
+    .nav a::after { content: ""; position: absolute; left: 0; bottom: -4px; width: 0; height: 3px; background: #2a4d8f; transition: width 0.3s; }
+    .nav a:hover::after, .nav a.active::after { width: 100%; }
+    .layout { max-width: 1200px; margin: 60px auto; padding: 0 40px; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 30px; margin-bottom: 40px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .card h2 { margin-top: 0; font-size: 1.6rem; color: #2a4d8f; border-left: 5px solid #2a4d8f; padding-left: 12px; margin-bottom: 20px; }
+    .pub-item { margin-bottom: 35px; }
+    .pub-title { font-size: 1.2rem; font-weight: 600; margin: 0; }
+    .pub-title a { text-decoration: none; color: #2a4d8f; }
+    .pub-title a:hover { text-decoration: underline; }
+    .pub-meta { font-size: 0.95rem; color: #555; margin: 8px 0 12px; }
+    .pub-desc { margin-bottom: 15px; }
+    .pub-img { max-width: 100%; border: 1px solid #eee; border-radius: 8px; margin-top: 10px; }
+    .site-footer { text-align: center; padding: 40px 20px; border-top: 1px solid #ddd; font-size: 1rem; color: #555; margin-top: 50px; }
+  </style>
 </head>
 <body>
+  <!-- 顶部导航 -->
   <header class="site-header">
-    <div class="container header-inner">
+    <div class="container">
       <a class="brand" href="index.html">Academic</a>
       <nav class="nav">
-        <a class="nav-link" href="index.html">首页</a>
-        <a class="nav-link active" href="publications.html">科研成果</a>
-        <a class="nav-link" href="about.html">个人简介</a>
+        <a href="index.html">首页</a>
+        <a class="active" href="publications.html">科研成果</a>
+        <a href="about.html">个人简介</a>
       </nav>
     </div>
   </header>
 
-  <main class="container narrow">
-    <section class="card section">
-      <h1>论文成果</h1>
-      <p class="muted">按年份倒序排列，可展开查看 BibTeX。</p>
+  <!-- 主体 -->
+  <main class="layout">
+    <section class="card">
+      <h2>科研成果 Publications</h2>
 
-      <h2 id="y2025">2025</h2>
-      <ol class="pub-list">
-        <li>
-          你的名字, 作者B, 作者C. 论文标题 A. Conference/Journal, 2025.
-          <span class="tags"><span class="tag">Top</span><span class="tag">Oral</span></span>
-          <div class="pub-links">
-            <a class="btn-link" href="#">PDF</a>
-            <a class="btn-link" href="#">Slides</a>
-            <button class="btn-link" data-bib="bib-a">BibTeX</button>
-            <a class="btn-link" href="#">代码</a>
-          </div>
-          <pre id="bib-a" class="bibtex" hidden>@inproceedings{yourname2025a,
-  title={Paper Title A},
-  author={Your Name and Author B and Author C},
-  booktitle={Top Conference},
-  year={2025}
-}</pre>
-        </li>
-      </ol>
+      <!-- 论文1 -->
+      <div class="pub-item">
+        <h3 class="pub-title">
+          <a href="https://doi.org/10.xxxx/tpds2025" target="_blank">
+            Decentralized QoS-Aware Model Inference using Federated Split Learning for Cloud-Edge Medical Detection
+          </a>
+        </h3>
+        <p class="pub-meta">IEEE Transactions on Parallel and Distributed Systems (TPDS), 2025</p>
+        <p class="pub-desc">
+          本文提出了一种去中心化的 QoS 感知模型推理框架，结合联邦分割学习和边缘智能，显著降低了延迟与错误率。
+        </p>
+        <img class="pub-img" src="assets/img/pub1.png" alt="论文图表示例">
+      </div>
 
-      <h2 id="y2024">2024</h2>
-      <ol class="pub-list">
-        <li>
-          你的名字, 合作者. 论文标题 B. Journal, 2024.
-          <div class="pub-links">
-            <a class="btn-link" href="#">PDF</a>
-            <button class="btn-link" data-bib="bib-b">BibTeX</button>
-          </div>
-          <pre id="bib-b" class="bibtex" hidden>@article{yourname2024b,
-  title={Paper Title B},
-  author={Your Name and Collaborator},
-  journal={Journal},
-  year={2024}
-}</pre>
-        </li>
-      </ol>
+      <!-- 论文2 -->
+      <div class="pub-item">
+        <h3 class="pub-title">
+          <a href="https://doi.org/10.xxxx/comnet2024" target="_blank">
+            Joint client–server selection and resource allocation based on split federated learning in Edge-to-Cloud computing environments
+          </a>
+        </h3>
+        <p class="pub-meta">Computer Networks, 2024</p>
+        <p class="pub-desc">
+          本研究提出了基于分割式联邦学习的客户端-服务器联合选择与资源分配方法，在多目标优化下实现了性能提升。
+        </p>
+        <img class="pub-img" src="assets/img/pub2.png" alt="论文图表示例">
+      </div>
+
     </section>
   </main>
 
+  <!-- 页脚 -->
   <footer class="site-footer">
-    <div class="container">
-      <span>© <span id="year"></span> Your Name</span>
-      <span>· 本站托管于 GitHub Pages</span>
-    </div>
+    <span id="year"></span> © Your Name | 本站托管于 GitHub Pages
   </footer>
 
   <script>
-    document.querySelectorAll('[data-bib]').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var id = this.getAttribute('data-bib');
-        var el = document.getElementById(id);
-        if (el) { el.hidden = !el.hidden; }
-      });
-    });
     document.getElementById('year').textContent = new Date().getFullYear();
   </script>
 </body>
-</html> 
+</html>
