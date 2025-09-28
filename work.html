@@ -1,1 +1,85 @@
 
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学术主页 - 科研成果</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html">Academic</a>
+      <nav class="nav">
+        <a class="nav-link" href="index.html">首页</a>
+        <a class="nav-link active" href="publications.html">科研成果</a>
+        <a class="nav-link" href="about.html">个人简介</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container narrow">
+    <section class="card section">
+      <h1>论文成果</h1>
+      <p class="muted">按年份倒序排列，可展开查看 BibTeX。</p>
+
+      <h2 id="y2025">2025</h2>
+      <ol class="pub-list">
+        <li>
+          你的名字, 作者B, 作者C. 论文标题 A. Conference/Journal, 2025.
+          <span class="tags"><span class="tag">Top</span><span class="tag">Oral</span></span>
+          <div class="pub-links">
+            <a class="btn-link" href="#">PDF</a>
+            <a class="btn-link" href="#">Slides</a>
+            <button class="btn-link" data-bib="bib-a">BibTeX</button>
+            <a class="btn-link" href="#">代码</a>
+          </div>
+          <pre id="bib-a" class="bibtex" hidden>@inproceedings{yourname2025a,
+  title={Paper Title A},
+  author={Your Name and Author B and Author C},
+  booktitle={Top Conference},
+  year={2025}
+}</pre>
+        </li>
+      </ol>
+
+      <h2 id="y2024">2024</h2>
+      <ol class="pub-list">
+        <li>
+          你的名字, 合作者. 论文标题 B. Journal, 2024.
+          <div class="pub-links">
+            <a class="btn-link" href="#">PDF</a>
+            <button class="btn-link" data-bib="bib-b">BibTeX</button>
+          </div>
+          <pre id="bib-b" class="bibtex" hidden>@article{yourname2024b,
+  title={Paper Title B},
+  author={Your Name and Collaborator},
+  journal={Journal},
+  year={2024}
+}</pre>
+        </li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© <span id="year"></span> Your Name</span>
+      <span>· 本站托管于 GitHub Pages</span>
+    </div>
+  </footer>
+
+  <script>
+    document.querySelectorAll('[data-bib]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var id = this.getAttribute('data-bib');
+        var el = document.getElementById(id);
+        if (el) { el.hidden = !el.hidden; }
+      });
+    });
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html> 
