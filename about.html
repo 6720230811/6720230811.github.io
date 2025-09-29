@@ -91,6 +91,28 @@
       margin-bottom: 20px;
     }
 .pub-abstract {text-align: justify; text-justify: inter-word; /* 让单词间距更自然 */line-height: 1.8;} 
+    /* 核心技能卡片 */
+.card ul {
+  list-style: none;       /* 去掉默认圆点 */
+  padding-left: 0;
+  margin: 0;
+}
+
+.card ul li {
+  text-align: justify;       /* 两端对齐 */
+  text-justify: inter-word;  /* 单词间距优化 */
+  margin-bottom: 12px;
+  line-height: 1.8;
+}
+
+/* 左侧关键词突出 */
+.card ul li::before {
+  content: attr(data-label) "：";  /* 取自 data-label */
+  font-weight: 600;
+  display: inline-block;
+  width: 90px;       /* 关键词宽度（可调） */
+  color: #222;
+}
     /* 页脚 */
     .site-footer {
       text-align: center;
@@ -188,12 +210,12 @@
 
     <div class="card">
       <h2>核心技能</h2>
-      <ul>
-         <li>语言证书: CET 4 ,CET 6</li>
-        <li>编程开发: 熟练运用 Python 完成数据处理、模型开发与实验代码优化，适配计算机视觉领域复杂研发需求</li>
-        <li>框架应用: 精通 PyTorch 实现视觉模型（分割 / 检测）搭建与调优，熟练使用 MMCV 生态（MMDetection/MMSegmentation）快速构建高精度实验流程</li>
-        <li>学术工具: 熟练用 LaTeX/Overleaf 完成 SCI 论文排版，善用 Python 可视化库（Matplotlib 等）及 Visio 制作实验图表与技术示意图，高效呈现研究成果</li>
-      </ul>
+        <ul>
+          <li data-label="语言证书">CET 4 , CET 6</li>
+          <li data-label="编程开发">熟练运用 Python 完成数据处理、模型开发与实验代码优化，适配计算机视觉领域复杂研发需求</li>
+          <li data-label="框架应用">精通 PyTorch 实现视觉模型（分割 / 检测）搭建与调优，熟练使用 MMCV 生态（MMDetection/MMSegmentation）快速构建高精度实验流程</li>
+          <li data-label="学术工具">熟练用 LaTeX/Overleaf 完成 SCI 论文排版，善用 Python 可视化库（Matplotlib 等）及 Visio 制作实验图表与技术示意图，高效呈现研究成果</li>
+        </ul>
     </div>
     </section>
   </main>
