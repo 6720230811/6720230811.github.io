@@ -2,6 +2,7 @@
 import type { Profile } from '../data/profile';
 import { visibleSections } from '../data/sections';
 import { useTranslations, type Locale } from '../i18n/ui';
+import Icon from './Icon.astro';
 import LangSwitcher from './LangSwitcher.astro';
 import ThemeToggle from './ThemeToggle.astro';
 
@@ -20,7 +21,10 @@ const items = visibleSections(profile);
 <header class="navbar">
   <div class="navbar__card">
     <div class="navbar__inner">
-      <a class="navbar__brand" href="#top">{profile.name}</a>
+      <a class="navbar__brand" href="#top">
+        <Icon name="home" />
+        <span>{profile.name}</span>
+      </a>
 
       <nav class="navbar__nav" aria-label={t('nav.aria')}>
         {items.map((s) => <a class="navbar__link nav-anchor" href={`#${s.id}`}>{t(s.key)}</a>)}
@@ -29,14 +33,35 @@ const items = visibleSections(profile);
       <div class="navbar__tools">
         <ThemeToggle locale={locale} />
         <LangSwitcher />
+        <button
+          class="navbar__menu"
+          type="button"
+          id="nav-menu-switch"
+          aria-label={t('nav.menu')}
+          aria-expanded="false"
+          aria-controls="nav-menu-panel"
+        >
+          <Icon name="menu" />
+        </button>
       </div>
     </div>
+
+    {/* 窄屏下拉面板：顶栏放不下链接时收进这里 */}
+    <nav class="nav-menu nav-menu--closed" id="nav-menu-panel" aria-label={t('nav.aria')}>
+      {
+        items.map((s) => (
+          <a class="nav-menu__link nav-anchor" href={`#${s.id}`}>
+            {t(s.key)}
+          </a>
+        ))
+      }
+    </nav>
   </div>
 </header>
 
 <script>
   // 滚动高亮：视口上部的窄带内、文档顺序最靠前的板块即为当前板块。
-  // 顶栏 / 侧栏导航卡 / 右侧目录三处锚点共用 .nav-anchor，所以会同步高亮。
+  // 顶栏 / 侧栏导航卡 / 右侧目录 / 窄屏菜单四处锚点共用 .nav-anchor，会同步高亮。
   const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.nav-anchor'));
   // sections 按 DOM 顺序独立取，不从 links 反推（否则某一处多一个锚点就会错位）
   const sections = Array.from(document.querySelectorAll<HTMLElement>('.section[id]'));
@@ -68,4 +93,22 @@ const items = visibleSections(profile);
   );
 
   for (const section of sections) observer.observe(section);
+
+  // 窄屏导航菜单的开合
+  const menuBtn = document.getElementById('nav-menu-switch');
+  const menuPanel = document.getElementById('nav-menu-panel');
+
+  const setMenu = (open: boolean) => {
+    menuPanel?.classList.toggle('nav-menu--closed', !open);
+    menuBtn?.setAttribute('aria-expanded', String(open));
+  };
+
+  menuBtn?.addEventListener('click', () => {
+    setMenu(menuPanel?.classList.contains('nav-menu--closed') ?? false);
+  });
+
+  // 选中某一项后收起菜单
+  for (const link of menuPanel?.querySelectorAll('a') ?? []) {
+    link.addEventListener('click', () => setMenu(false));
+  }
 </script>

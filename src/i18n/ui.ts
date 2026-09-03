@@ -12,6 +12,7 @@ const zh = {
 
   // 导航栏
   'nav.aria': '页面板块导航',
+  'nav.menu': '打开导航菜单',
 
   // 卡片与目录
   'widget.sections': '板块导航',
@@ -58,6 +59,7 @@ const en: Record<keyof typeof zh, string> = {
 
   // 导航栏
   'nav.aria': 'Section navigation',
+  'nav.menu': 'Open navigation menu',
 
   // 卡片与目录
   'widget.sections': 'Sections',

@@ -62,7 +62,7 @@
   --banner-overlap: 3.5rem;
 
   /* 尺寸 */
-  --nav-h: 4rem;
+  --nav-h: 4.5rem; /* Fuwari 的顶栏高度 */
   --page-max: 75rem;
   --sidebar-w: 17.5rem;
   --radius: 0.625rem; /* 小圆角：按钮、标签、嵌套卡片 */
@@ -184,6 +184,7 @@ h4 {
 }
 
 .navbar__card {
+  position: relative; /* 窄屏菜单面板相对它定位 */
   height: var(--nav-h);
   max-width: var(--page-max);
   margin: 0 auto;
@@ -197,68 +198,181 @@ h4 {
 .navbar__inner {
   display: flex;
   align-items: center;
-  gap: 1.4rem;
+  justify-content: space-between;
+  gap: 1rem;
   height: 100%;
-  padding: 0 1.25rem;
+  padding: 0 0.75rem;
 }
 
-/* 右侧工具区（主题切换 + 语言切换） */
+/* 右侧工具区（主题切换 + 语言切换 + 窄屏菜单按钮） */
 .navbar__tools {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.4rem;
 }
 
-.navbar__brand {
-  flex: none;
-  font-size: 0.98rem;
-  font-weight: 700;
-  color: var(--c-text);
-  white-space: nowrap;
-}
-
-.navbar__brand:hover {
-  color: var(--c-accent);
-  text-decoration: none;
-}
-
-/* 窄屏放不下时横向滚动，不换行 */
-.navbar__nav {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 1.15rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.navbar__nav::-webkit-scrollbar {
-  display: none;
-}
-
+/* 品牌 / 链接都是 Fuwari 的 btn-plain：无底的圆角胶囊，
+   hover 时 ::before 从 85% 放大到 100% 铺出底色 */
+.navbar__brand,
 .navbar__link {
-  flex: none;
-  padding: 0.2rem 0;
-  font-size: 0.85rem;
-  font-weight: 600;
+  position: relative;
+  z-index: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.75rem;
+  padding: 0 0.9rem;
+  border-radius: var(--radius);
+  font-weight: 700;
   white-space: nowrap;
   color: var(--c-text-muted);
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.15s ease;
 }
 
+.navbar__brand::before,
+.navbar__link::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: transparent;
+  transform: scale(0.85);
+  transition: transform 0.15s ease-out, background-color 0.15s ease-out;
+}
+
+.navbar__brand:hover::before,
+.navbar__link:hover::before {
+  transform: scale(1);
+  background: var(--c-bg-soft);
+}
+
+.navbar__brand:hover,
 .navbar__link:hover {
   color: var(--c-accent);
   text-decoration: none;
 }
 
+.navbar__brand {
+  flex: none;
+  color: var(--c-accent);
+  font-size: 0.98rem;
+}
+
+.navbar__brand svg {
+  width: 19px;
+  height: 19px;
+}
+
+/* 链接居中 */
+.navbar__nav {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+}
+
+.navbar__link {
+  font-size: 0.88rem;
+}
+
 /* 当前板块（由 IntersectionObserver 设置 aria-current） */
 .navbar__link[aria-current='location'] {
   color: var(--c-accent);
-  border-bottom-color: var(--c-accent);
+}
+
+.navbar__link[aria-current='location']::before {
+  transform: scale(1);
+  background: var(--c-accent-soft);
+}
+
+/* ---------- 窄屏：链接收进汉堡菜单 ---------- */
+.navbar__menu {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  cursor: pointer;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  color: var(--c-text-muted);
+  background: var(--c-bg-soft);
+  transition: all 0.15s ease;
+}
+
+.navbar__menu:hover {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.navbar__menu svg {
+  width: 17px;
+  height: 17px;
+}
+
+.nav-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem;
+  background: var(--c-card);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px -8px var(--c-shadow-md);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.nav-menu--closed {
+  opacity: 0;
+  transform: translateY(-0.5rem);
+  pointer-events: none;
+}
+
+.nav-menu__link {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.nav-menu__link:hover {
+  color: var(--c-accent);
+  background: var(--c-bg-soft);
+  text-decoration: none;
+}
+
+.nav-menu__link[aria-current='location'] {
+  color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+/* 菜单按钮与面板只在顶栏放不下链接时出现 */
+@media (max-width: 1024px) {
+  .navbar__nav {
+    display: none;
+  }
+
+  .navbar__menu {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 1025px) {
+  .nav-menu {
+    display: none;
+  }
 }
 
 /* 顶栏里不需要侧边栏版本的上边距 */
@@ -1054,17 +1168,8 @@ h4 {
     grid-template-columns: 1fr;
   }
 
-  .navbar__inner {
-    gap: 0.9rem;
-    padding: 0 1rem;
-  }
-
-  .navbar__nav {
-    gap: 1rem;
-  }
-
-  /* 姓名已出现在下方堆叠的资料卡里，顶栏优先留给导航链接和按钮 */
-  .navbar__brand {
+  /* 品牌在窄屏只留图标，把横向空间让给工具按钮 */
+  .navbar__brand span {
     display: none;
   }
 

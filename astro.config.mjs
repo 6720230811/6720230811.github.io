@@ -19,4 +19,13 @@ export default defineConfig({
       prefixDefaultLocale: false,
     },
   },
+
+  // 让 esbuild 保留传统的 @media (max-width: …) 写法。
+  // 默认它会转写成较新的范围语法 @media (width<=1024px)，Safari 16.4 以下直接忽略，
+  // 窄屏就会既没有汉堡菜单、又塞不下导航链接。
+  vite: {
+    build: {
+      cssTarget: 'safari15',
+    },
+  },
 });
