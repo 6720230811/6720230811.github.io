@@ -44,6 +44,9 @@ const enAbs = siteOrigin ? new URL(getRelativeLocaleUrl('en'), siteOrigin).toStr
   <body id="top">
     <Navbar profile={profile} locale={locale} />
 
+    {/* 装饰性横幅，玻璃面板会压在它下半部分 */}
+    <div class="hero" aria-hidden="true"></div>
+
     <div class="layout">
       <Sidebar profile={profile} locale={locale} />
       <main class="main">

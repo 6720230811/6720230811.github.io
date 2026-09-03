@@ -17,6 +17,17 @@
   --c-tag-bg: #f1f3f5;
   --c-tag-text: #495057;
 
+  /* 毛玻璃面板（横幅之上） */
+  --c-glass: rgba(255, 255, 255, 0.72);
+  --c-glass-strong: rgba(255, 255, 255, 0.88);
+
+  /* 顶部横幅 */
+  --banner-h: clamp(170px, 21vw, 280px);
+  --banner-base: linear-gradient(160deg, #eef2ff, #f8fafc);
+  --banner-blob-1: rgba(37, 99, 235, 0.2);
+  --banner-blob-2: rgba(139, 92, 246, 0.18);
+  --banner-blob-3: rgba(14, 165, 233, 0.16);
+
   /* 尺寸 */
   --nav-h: 56px;
   --page-max: 1240px;
@@ -46,6 +57,24 @@
     --c-accent-soft: #16243a;
     --c-tag-bg: #21262d;
     --c-tag-text: #adb7c2;
+
+    /* 毛玻璃面板（横幅之上） */
+    --c-glass: rgba(22, 27, 34, 0.62);
+    --c-glass-strong: rgba(22, 27, 34, 0.82);
+
+    /* 顶部横幅 */
+    --banner-base: linear-gradient(160deg, #0d1117, #141d33);
+    --banner-blob-1: rgba(88, 166, 255, 0.26);
+    --banner-blob-2: rgba(167, 139, 250, 0.22);
+    --banner-blob-3: rgba(45, 212, 191, 0.16);
+  }
+}
+
+/* 不支持 backdrop-filter 时退回不透明背景，保证文字对比度 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --c-glass: var(--c-bg);
+    --c-glass-strong: var(--c-bg-elevated);
   }
 }
 
@@ -61,6 +90,8 @@
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
+  /* 下半页做极轻的明暗过渡，避免大片纯色 */
+  background: linear-gradient(180deg, var(--c-bg) 0%, var(--c-bg) 40%, var(--c-bg-soft) 100%);
 }
 
 body {
@@ -69,7 +100,7 @@ body {
   font-size: 15.5px;
   line-height: 1.75;
   color: var(--c-text);
-  background: var(--c-bg);
+  background: transparent;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -111,8 +142,10 @@ h4 {
   top: 0;
   z-index: 20;
   height: var(--nav-h);
-  border-bottom: 1px solid var(--c-border);
-  background: var(--c-bg);
+  border-bottom: 1px solid var(--c-border-soft);
+  background: var(--c-glass-strong);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
 }
 
 .navbar__inner {
@@ -183,13 +216,50 @@ h4 {
 }
 
 /* ============================================================
+   顶部横幅（Fuwari 风格）
+   ============================================================ */
+/* 想换成真实照片横幅：把图片放到 public/banner.jpg，然后把 --banner-base 改成
+   url('/banner.jpg') center/cover no-repeat（子路径部署时写成 ${base}banner.jpg） */
+.hero {
+  position: relative;
+  z-index: 0;
+  height: var(--banner-h);
+  /* 负值让下方内容压住横幅底部，玻璃面板才有东西可透 */
+  margin-bottom: calc(-0.45 * var(--banner-h));
+  background-image: var(--banner-base);
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(58% 130% at 12% 18%, var(--banner-blob-1), transparent 62%),
+    radial-gradient(52% 120% at 82% 8%, var(--banner-blob-2), transparent 58%),
+    radial-gradient(70% 130% at 58% 96%, var(--banner-blob-3), transparent 60%);
+}
+
+/* 底部渐隐到页面底色，避免与内容区出现硬边 */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 40%;
+  background: linear-gradient(to bottom, transparent, var(--c-bg));
+}
+
+/* ============================================================
    整体布局：侧边栏 + 主内容
    ============================================================ */
 .layout {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
+  gap: 1.5rem;
   max-width: var(--page-max);
   margin: 0 auto;
+  padding: 0 1.5rem;
 }
 
 /* ---------- 侧边栏 ---------- */
@@ -201,8 +271,10 @@ h4 {
   height: calc(100vh - var(--nav-h));
   overflow-y: auto;
   padding: 2.5rem 1.75rem;
-  border-right: 1px solid var(--c-border);
-  background: var(--c-bg);
+  border-right: 1px solid var(--c-border-soft);
+  background: var(--c-glass);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
 }
 
 .sidebar__avatar {
@@ -386,8 +458,14 @@ h4 {
 .main {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 2.5rem 3rem 5rem;
   max-width: var(--content-max);
+  padding: 2.25rem 2.5rem 3rem;
+  background: var(--c-glass);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 10px 28px -14px rgba(0, 0, 0, 0.12);
 }
 
 /* ============================================================
@@ -680,7 +758,7 @@ h4 {
   padding: 1.1rem 1.25rem;
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
-  background: var(--c-bg-elevated);
+  background: var(--c-glass-strong);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -769,8 +847,15 @@ h4 {
    响应式：窄屏时侧边栏堆叠到顶部
    ============================================================ */
 @media (max-width: 900px) {
+  :root {
+    /* 窄屏横幅压矮，给堆叠的侧边栏留位置 */
+    --banner-h: clamp(120px, 26vw, 180px);
+  }
+
   .layout {
     flex-direction: column;
+    gap: 0;
+    padding: 0 1rem;
   }
 
   .navbar__inner {
@@ -782,19 +867,23 @@ h4 {
     gap: 1rem;
   }
 
+  /* 侧边栏与主内容在窄屏拼成一整块玻璃卡片 */
   .sidebar {
     position: static;
     width: 100%;
     height: auto;
     flex: none;
-    border-right: none;
-    border-bottom: 1px solid var(--c-border);
+    border-right: 1px solid var(--c-border-soft);
+    border-bottom: 1px solid var(--c-border-soft);
+    border-radius: var(--radius) var(--radius) 0 0;
     padding: 2rem 1.4rem 1.6rem;
   }
 
   .main {
     max-width: 100%;
     padding: 1.8rem 1.4rem 3.5rem;
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
   }
 
   .footer {
@@ -836,6 +925,7 @@ h4 {
 
 /* 打印：隐藏侧边栏，只留内容（方便直接打印成 CV） */
 @media print {
+  .hero,
   .navbar,
   .sidebar,
   .footer,
@@ -843,8 +933,18 @@ h4 {
     display: none;
   }
 
+  .layout {
+    padding: 0;
+  }
+
   .main {
     max-width: 100%;
     padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
