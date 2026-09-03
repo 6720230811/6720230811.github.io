@@ -1,0 +1,62 @@
+---
+import '../styles/global.css';
+import '../styles/admin.css';
+import TokenBar from '../components/admin/TokenBar.astro';
+import PostEditor from '../components/admin/PostEditor.astro';
+import ProfileEditor from '../components/admin/ProfileEditor.astro';
+import FriendsEditor from '../components/admin/FriendsEditor.astro';
+
+// 后台不进导航、不进站点地图，也不要被 pagefind 索引
+---
+
+<!doctype html>
+<html lang="zh" data-pagefind-ignore>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>后台 · 写文章</title>
+    <link rel="icon" type="image/svg+xml" href={`${import.meta.env.BASE_URL}favicon.svg`} />
+
+    {/* 与前台一致：先定好 data-theme，避免深色模式下闪一下白。 */}
+    <script is:inline>
+      try {
+        var saved = localStorage.getItem('theme');
+        if (saved !== 'dark' && saved !== 'light') {
+          saved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = saved;
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
+  </head>
+
+  <body>
+    <header class="admin-top">
+      <h1>后台</h1>
+      <code class="admin-top__path">/{'admin'}</code>
+    </header>
+
+    <div class="admin-wrap">
+      <TokenBar />
+
+      <p id="status" class="status" role="status" hidden></p>
+      <p id="draft-notice" class="status status--info" hidden></p>
+
+      <nav class="tabs" aria-label="后台分区">
+        <button class="tab" type="button" data-tab="post" aria-current="page">文章</button>
+        <button class="tab" type="button" data-tab="profile">个人信息</button>
+        <button class="tab" type="button" data-tab="friends">友链</button>
+      </nav>
+
+      <div class="tab-panel" data-panel="post"><PostEditor /></div>
+      <div class="tab-panel" data-panel="profile" hidden><ProfileEditor /></div>
+      <div class="tab-panel" data-panel="friends" hidden><FriendsEditor /></div>
+    </div>
+
+    <script>
+      import '../lib/admin/main';
+    </script>
+  </body>
+</html>

@@ -1,0 +1,52 @@
+---
+import { repo } from '../../data/admin';
+
+interface Props {
+  /** 仓库信息，仅用于展示，让用户确认自己发的是哪个仓库 */
+  owner?: string;
+  name?: string;
+  branch?: string;
+}
+
+const { owner = repo.owner, name = repo.repo, branch = repo.branch } = Astro.props;
+---
+
+<section class="panel token-bar">
+  <div class="token-bar__main">
+    <label class="field">
+      <span class="field__label">
+        GitHub Token
+        <span class="field__hint">fine-grained PAT，只给这一个仓库的 Contents 读写权限</span>
+      </span>
+      <input
+        id="token-input"
+        class="input"
+        type="password"
+        placeholder="github_pat_…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </label>
+
+    <div class="token-bar__actions">
+      <button id="token-save" class="btn btn--primary" type="button">保存 Token</button>
+      <button id="token-clear" class="btn" type="button">清除</button>
+    </div>
+  </div>
+
+  <p class="token-bar__meta">
+    目标仓库：<code>{owner}/{name}</code>（分支 <code>{branch}</code>）
+    · Token 只保存在这台浏览器的 localStorage 里，不会上传任何服务器
+  </p>
+
+  <details class="help">
+    <summary>怎么申请 Token？</summary>
+    <ol>
+      <li>打开 GitHub → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token</li>
+      <li>Resource owner 选自己，Repository access 选 <b>Only select repositories</b> → 只勾这一个仓库</li>
+      <li>Permissions → Repository permissions → <b>Contents</b> 设为 <b>Read and write</b>（其它都不要给）</li>
+      <li>生成后复制粘贴到上面。建议设 90 天过期，到期重新生成一个</li>
+    </ol>
+    <p class="help__warn">不要在公共电脑上使用：拿到这个 token 的人就能改这个仓库。</p>
+  </details>
+</section>

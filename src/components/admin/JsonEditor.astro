@@ -1,0 +1,19 @@
+---
+interface Props {
+  id: string;
+  label: string;
+  hint?: string;
+  rows?: number;
+}
+
+const { id, label, hint, rows = 8 } = Astro.props;
+---
+
+<div class="field">
+  <label class="field__label" for={id}>
+    <code>{label}</code>
+    {hint && <span class="field__hint">{hint}</span>}
+  </label>
+  <textarea id={id} class="input input--code" rows={rows} spellcheck="false"></textarea>
+  <p class="field__error" id={`e-${id}`} hidden></p>
+</div>

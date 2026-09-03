@@ -1,0 +1,27 @@
+---
+import JsonEditor from './JsonEditor.astro';
+---
+
+<section class="panel">
+  <div class="panel__head">
+    <h2>友链</h2>
+    <div class="panel__tools">
+      <label class="inline">
+        语言
+        <select id="friends-lang" class="input input--sm">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <button id="friends-reload" class="btn" type="button">重新载入</button>
+      <button id="friends-save" class="btn btn--primary" type="button">保存到仓库</button>
+    </div>
+  </div>
+
+  <p class="panel__hint">
+    编辑 <code>src/data/friends.json</code> 里当前语言的那一份；每条结构
+    <code>{'{ name, url, desc }'}</code>。
+  </p>
+
+  <JsonEditor id="friends-json" label="friends" hint="数组，可直接增删条目" rows={14} />
+</section>

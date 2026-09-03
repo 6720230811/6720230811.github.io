@@ -1,0 +1,102 @@
+---
+interface Props {
+  id?: string;
+}
+
+const { id = 'post-preview' } = Astro.props;
+---
+
+<section class="panel">
+  <div class="panel__head">
+    <h2>文章</h2>
+    <div class="panel__tools">
+      <label class="inline">
+        语言
+        <select id="post-lang" class="input input--sm">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <select id="post-file" class="input input--sm"></select>
+      <button id="post-reload" class="btn" type="button">重新载入</button>
+      <button id="post-save" class="btn btn--primary" type="button">发布</button>
+    </div>
+  </div>
+
+  <p class="panel__hint">
+    写回 <code id="post-path">src/content/posts/zh/</code>；发布后 Actions 会自动构建，大约 1 分钟后线上生效。
+  </p>
+
+  <div class="grid">
+    <label class="field">
+      <span class="field__label">
+        <code>title</code>
+        <span class="field__hint">标题</span>
+      </span>
+      <input id="post-title" class="input" type="text" spellcheck="false" />
+    </label>
+
+    <label class="field">
+      <span class="field__label">
+        <code>slug</code>
+        <span class="field__hint">文件名，只能用小写字母/数字/连字符；新建时必填</span>
+      </span>
+      <input id="post-slug" class="input" type="text" spellcheck="false" placeholder="my-new-post" />
+    </label>
+
+    <label class="field">
+      <span class="field__label">
+        <code>date</code>
+        <span class="field__hint">YYYY-MM-DD</span>
+      </span>
+      <input id="post-date" class="input" type="date" />
+    </label>
+
+    <label class="field">
+      <span class="field__label">
+        <code>category</code>
+        <span class="field__hint">单个分类</span>
+      </span>
+      <input id="post-category" class="input" type="text" spellcheck="false" />
+    </label>
+
+    <label class="field">
+      <span class="field__label">
+        <code>tags</code>
+        <span class="field__hint">逗号分隔</span>
+      </span>
+      <input id="post-tags" class="input" type="text" spellcheck="false" />
+    </label>
+
+    <label class="field field--check">
+      <input id="post-draft" type="checkbox" />
+      <span><code>draft</code> 草稿（线上不显示）</span>
+    </label>
+  </div>
+
+  <label class="field">
+    <span class="field__label">
+      <code>description</code>
+      <span class="field__hint">列表页与搜索结果里显示的摘要</span>
+    </span>
+    <input id="post-desc" class="input" type="text" spellcheck="false" />
+  </label>
+
+  <div class="editor">
+    <div class="editor__pane">
+      <div class="editor__label">Markdown 正文</div>
+      <textarea
+        id="post-body"
+        class="input input--code editor__area"
+        spellcheck="false"
+        placeholder="# 标题&#10;&#10;正文…"></textarea>
+    </div>
+
+    <div class="editor__pane">
+      <div class="editor__label">预览（不含代码高亮）</div>
+      <iframe id={id} class="editor__preview" title="预览" sandbox="allow-same-origin"></iframe>
+    </div>
+  </div>
+
+  <p class="field__error" id="post-error" hidden></p>
+</section>

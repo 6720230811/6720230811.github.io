@@ -1,0 +1,323 @@
+/* ============================================================
+   /admin 后台样式
+
+   复用 global.css 的 --c-* 变量，所以后台也会跟随站点的明暗主题。
+   这里只写后台特有的布局，能复用前台类（.btn / .input 之类）的就不重写。
+   ============================================================ */
+
+body {
+  background: var(--c-page);
+  color: var(--c-text);
+}
+
+.admin-top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 0.5rem;
+}
+
+.admin-top h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.admin-top__path {
+  font-size: 0.8rem;
+  color: var(--c-text-faint);
+}
+
+.admin-wrap {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.25rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ---------- 分区切换 ---------- */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  cursor: pointer;
+}
+
+.tab[aria-current='page'] {
+  color: var(--c-accent);
+  border-bottom-color: var(--c-accent);
+}
+
+/* ---------- 面板 ---------- */
+.panel {
+  padding: 1.1rem 1.25rem 1.4rem;
+  background: var(--c-card);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.panel__head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.panel__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.panel__hint {
+  margin: 0 0 1rem;
+  font-size: 0.82rem;
+  color: var(--c-text-faint);
+}
+
+.panel__sub {
+  margin: 1.4rem 0 0.7rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-text-faint);
+}
+
+.panel__sub:first-of-type {
+  margin-top: 0.5rem;
+}
+
+/* ---------- 表单 ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.field__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.field__label code {
+  font-size: 0.82rem;
+  color: var(--c-text);
+}
+
+.field__hint {
+  font-weight: 400;
+  font-size: 0.76rem;
+  color: var(--c-text-faint);
+}
+
+.field__error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #d92d20;
+}
+
+.field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-page);
+  color: var(--c-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.input:focus {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -1px;
+}
+
+.input:disabled {
+  color: var(--c-text-faint);
+  background: var(--c-bg-soft);
+}
+
+.input--sm {
+  width: auto;
+  padding: 0.32rem 0.5rem;
+  font-size: 0.84rem;
+}
+
+.input--code {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.json-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--c-text-muted);
+}
+
+/* ---------- 正文编辑 + 预览 ---------- */
+.editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.editor__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.editor__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--c-text-faint);
+}
+
+.editor__area {
+  min-height: 24rem;
+}
+
+.editor__preview {
+  width: 100%;
+  min-height: 24rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg-soft);
+}
+
+@media (max-width: 900px) {
+  .editor {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- 状态条 ---------- */
+.status {
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--c-border);
+  background: var(--c-bg-soft);
+  font-size: 0.84rem;
+}
+
+.status--ok {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.status--error {
+  color: #d92d20;
+  border-color: #d92d20;
+}
+
+.status--info {
+  color: var(--c-text-muted);
+}
+
+.status--busy {
+  color: var(--c-text-muted);
+  opacity: 0.8;
+}
+
+/* ---------- Token 条 ---------- */
+.token-bar__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.token-bar__main .field {
+  flex: 1 1 18rem;
+}
+
+.token-bar__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.token-bar__meta {
+  margin: 0.7rem 0 0;
+  font-size: 0.78rem;
+  color: var(--c-text-faint);
+}
+
+/* ---------- 帮助 ---------- */
+.help {
+  margin-top: 0.9rem;
+  font-size: 0.82rem;
+  color: var(--c-text-muted);
+}
+
+.help summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.help ol {
+  margin: 0.6rem 0 0;
+  padding-left: 1.3rem;
+}
+
+.help li {
+  margin-bottom: 0.3rem;
+}
+
+.help__warn {
+  margin: 0.6rem 0 0;
+  color: #d92d20;
+}

@@ -1,0 +1,108 @@
+---
+import JsonEditor from './JsonEditor.astro';
+
+// 数组类字段：结构各异、条目会增减，用 JSON 编辑框比堆一堆表单省事
+const arrayFields = [
+  { id: 'news', label: 'news', hint: '动态；text 支持 <b>、<a href> 等行内 HTML，保存时会过滤白名单外的标签' },
+  { id: 'publications', label: 'publications', hint: '论文；selfIndex 是你在 authors 里的下标，从 0 开始' },
+  { id: 'research', label: 'research', hint: '科研经历' },
+  { id: 'skills', label: 'skills', hint: '技术栈分组' },
+  { id: 'projects', label: 'projects', hint: '项目' },
+  { id: 'internships', label: 'internships', hint: '实习经历' },
+  { id: 'education', label: 'education', hint: '教育背景' },
+  { id: 'awards', label: 'awards', hint: '荣誉奖项；text 是纯文本，不解析 HTML' },
+];
+
+const baseFields = [
+  { id: 'p-name', label: 'name', hint: '姓名' },
+  { id: 'p-title', label: 'title', hint: '身份头衔' },
+  { id: 'p-affiliation', label: 'affiliation', hint: '单位' },
+  { id: 'p-affiliationLink', label: 'affiliationLink', hint: '单位主页，可留空' },
+  { id: 'p-lab', label: 'lab', hint: '实验室/课题组，可留空' },
+  { id: 'p-location', label: 'location', hint: '所在地' },
+  { id: 'p-email', label: 'email', hint: '邮箱' },
+  { id: 'p-citationSummary', label: 'citationSummary', hint: '引用概览，如「Google Scholar 引用 120+」，留空不显示' },
+  { id: 'p-cvFile', label: 'cvFile', hint: '简历文件名，放在 public/cv/ 下' },
+];
+
+const linkFields = [
+  { id: 'p-link-github', label: 'github' },
+  { id: 'p-link-scholar', label: 'scholar' },
+  { id: 'p-link-linkedin', label: 'linkedin' },
+  { id: 'p-link-blog', label: 'blog' },
+];
+---
+
+<section class="panel">
+  <div class="panel__head">
+    <h2>个人信息（About 页）</h2>
+    <div class="panel__tools">
+      <label class="inline">
+        语言
+        <select id="profile-lang" class="input input--sm">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <button id="profile-reload" class="btn" type="button">重新载入</button>
+      <button id="profile-save" class="btn btn--primary" type="button">保存到仓库</button>
+    </div>
+  </div>
+
+  <p class="panel__hint">
+    写回 <code id="profile-path">src/data/profile.zh.json</code>；保存前会按 schema 校验，字段不对会直接拦下。
+  </p>
+
+  <h3 class="panel__sub">基本信息</h3>
+  <div class="grid">
+    {
+      baseFields.map((f) => (
+        <label class="field">
+          <span class="field__label">
+            <code>{f.label}</code>
+            <span class="field__hint">{f.hint}</span>
+          </span>
+          <input id={f.id} class="input" type="text" spellcheck="false" />
+        </label>
+      ))
+    }
+  </div>
+
+  <h3 class="panel__sub">社交链接（links）</h3>
+  <div class="grid">
+    {
+      linkFields.map((f) => (
+        <label class="field">
+          <span class="field__label">
+            <code>{f.label}</code>
+            <span class="field__hint">留空则隐藏该图标</span>
+          </span>
+          <input id={f.id} class="input" type="text" spellcheck="false" />
+        </label>
+      ))
+    }
+  </div>
+
+  <div class="grid">
+    <label class="field">
+      <span class="field__label">
+        <code>bio</code>
+        <span class="field__hint">个人简介，一行一段</span>
+      </span>
+      <textarea id="p-bio" class="input input--code" rows="5" spellcheck="false"></textarea>
+    </label>
+
+    <label class="field">
+      <span class="field__label">
+        <code>interests</code>
+        <span class="field__hint">研究方向，一行一条</span>
+      </span>
+      <textarea id="p-interests" class="input input--code" rows="5" spellcheck="false"></textarea>
+    </label>
+  </div>
+
+  <h3 class="panel__sub">板块内容（JSON 编辑）</h3>
+  <div class="json-grid">
+    {arrayFields.map((f) => <JsonEditor id={f.id} label={f.label} hint={f.hint} />)}
+  </div>
+</section>
