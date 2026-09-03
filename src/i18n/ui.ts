@@ -10,6 +10,9 @@ const zh = {
   'sidebar.cv': '下载简历',
   'sidebar.contact': '联系方式',
 
+  // 导航栏
+  'nav.aria': '页面板块导航',
+
   // 板块标题
   'section.about': '个人简介',
   'section.interests': '研究方向',
@@ -42,6 +45,9 @@ const en: Record<keyof typeof zh, string> = {
   'sidebar.status': 'Open to PhD & SWE Opportunities',
   'sidebar.cv': 'Download CV',
   'sidebar.contact': 'Contact',
+
+  // 导航栏
+  'nav.aria': 'Section navigation',
 
   // 板块标题
   'section.about': 'About',

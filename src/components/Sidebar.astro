@@ -2,7 +2,6 @@
 import type { Profile } from '../data/profile';
 import { useTranslations, type Locale } from '../i18n/ui';
 import Icon from './Icon.astro';
-import LangSwitcher from './LangSwitcher.astro';
 
 interface Props {
   profile: Profile;
@@ -93,6 +92,4 @@ const { links } = profile;
       {t('sidebar.cv')}
     </a>
   </div>
-
-  <LangSwitcher />
 </aside>

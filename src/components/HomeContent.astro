@@ -7,6 +7,7 @@ import TimelineItem from './TimelineItem.astro';
 import ProjectCard from './ProjectCard.astro';
 import SkillGroup from './SkillGroup.astro';
 import Icon from './Icon.astro';
+import { visibleSections } from '../data/sections';
 
 interface Props {
   profile: Profile;
@@ -16,6 +17,10 @@ interface Props {
 const { profile, locale } = Astro.props;
 const t = useTranslations(locale);
 const { links } = profile;
+
+// 与导航栏共用同一份显隐规则，保证导航锚点都有对应板块
+const visible = visibleSections(profile);
+const has = (id: string) => visible.some((s) => s.id === id);
 
 // 论文按年份倒序（最新在前）
 const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
@@ -43,7 +48,7 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 
 {/* ---------- 最新动态 ---------- */}
 {
-  profile.news.length > 0 && (
+  has('news') && (
     <Section title={t('section.news')} icon="📰" id="news">
       <ul class="news-list">
         {profile.news.map((n) => (
@@ -59,7 +64,7 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 
 {/* ---------- 论文发表（申博核心） ---------- */}
 {
-  sortedPubs.length > 0 && (
+  has('publications') && (
     <Section title={t('section.publications')} icon="📝" id="publications">
       <div class="pub-list">
         {sortedPubs.map((pub) => (
@@ -72,7 +77,7 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 
 {/* ---------- 科研经历（申博） ---------- */}
 {
-  profile.research.length > 0 && (
+  has('research') && (
     <Section title={t('section.research')} icon="🔬" id="research">
       <div class="timeline">
         {profile.research.map((entry) => (
@@ -85,7 +90,7 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 
 {/* ---------- 技术栈（就业核心） ---------- */}
 {
-  profile.skills.length > 0 && (
+  has('skills') && (
     <Section title={t('section.skills')} icon="🛠" id="skills">
       <div class="skills">
         {profile.skills.map((group) => (
@@ -98,7 +103,7 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 
 {/* ---------- 项目经历（就业核心） ---------- */}
 {
-  profile.projects.length > 0 && (
+  has('projects') && (
     <Section title={t('section.projects')} icon="🚀" id="projects">
       <div class="projects">
         {profile.projects.map((project) => (
@@ -111,7 +116,7 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 
 {/* ---------- 实习经历（就业） ---------- */}
 {
-  profile.internships.length > 0 && (
+  has('internships') && (
     <Section title={t('section.internships')} icon="💼" id="internships">
       <div class="timeline">
         {profile.internships.map((entry) => (
@@ -124,7 +129,7 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 
 {/* ---------- 教育背景 ---------- */}
 {
-  profile.education.length > 0 && (
+  has('education') && (
     <Section title={t('section.education')} icon="🎓" id="education">
       <div class="timeline">
         {profile.education.map((entry) => (
@@ -137,7 +142,7 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 
 {/* ---------- 荣誉奖项 ---------- */}
 {
-  profile.awards.length > 0 && (
+  has('awards') && (
     <Section title={t('section.awards')} icon="🏆" id="awards">
       <ul class="news-list">
         {profile.awards.map((a) => (

@@ -18,6 +18,8 @@
   --c-tag-text: #495057;
 
   /* 尺寸 */
+  --nav-h: 56px;
+  --page-max: 1240px;
   --sidebar-w: 300px;
   --content-max: 860px;
   --radius: 10px;
@@ -102,22 +104,101 @@ h4 {
 }
 
 /* ============================================================
+   顶部导航栏（sticky）
+   ============================================================ */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: var(--nav-h);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg);
+}
+
+.navbar__inner {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  height: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 1.75rem;
+}
+
+.navbar__brand {
+  flex: none;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--c-text);
+  white-space: nowrap;
+}
+
+.navbar__brand:hover {
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+/* 窄屏放不下时横向滚动，不换行 */
+.navbar__nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.navbar__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.navbar__link {
+  flex: none;
+  padding: 0.2rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--c-text-muted);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.navbar__link:hover {
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+/* 当前板块（由 IntersectionObserver 设置 aria-current） */
+.navbar__link[aria-current='location'] {
+  color: var(--c-accent);
+  border-bottom-color: var(--c-accent);
+}
+
+/* 顶栏里不需要侧边栏版本的上边距 */
+.navbar .lang-switch {
+  flex: none;
+  margin-top: 0;
+}
+
+/* ============================================================
    整体布局：侧边栏 + 主内容
    ============================================================ */
 .layout {
   display: flex;
   align-items: flex-start;
-  max-width: 1240px;
+  max-width: var(--page-max);
   margin: 0 auto;
 }
 
 /* ---------- 侧边栏 ---------- */
 .sidebar {
   position: sticky;
-  top: 0;
+  top: var(--nav-h);
   flex: 0 0 var(--sidebar-w);
   width: var(--sidebar-w);
-  height: 100vh;
+  height: calc(100vh - var(--nav-h));
   overflow-y: auto;
   padding: 2.5rem 1.75rem;
   border-right: 1px solid var(--c-border);
@@ -314,7 +395,8 @@ h4 {
    ============================================================ */
 .section {
   margin-bottom: 2.6rem;
-  scroll-margin-top: 1.5rem;
+  /* 锚点跳转时避开 sticky 顶栏 */
+  scroll-margin-top: calc(var(--nav-h) + 1.5rem);
 }
 
 .section__title {
@@ -691,6 +773,15 @@ h4 {
     flex-direction: column;
   }
 
+  .navbar__inner {
+    gap: 1rem;
+    padding: 0 1.4rem;
+  }
+
+  .navbar__nav {
+    gap: 1rem;
+  }
+
   .sidebar {
     position: static;
     width: 100%;
@@ -720,6 +811,18 @@ h4 {
   }
 }
 
+@media (max-width: 640px) {
+  /* 姓名已出现在下方堆叠的侧边栏里，顶栏优先留给导航链接 */
+  .navbar__brand {
+    display: none;
+  }
+
+  .navbar__inner {
+    gap: 0.8rem;
+    padding: 0 1.2rem;
+  }
+}
+
 @media (max-width: 520px) {
   body {
     font-size: 15px;
@@ -733,6 +836,7 @@ h4 {
 
 /* 打印：隐藏侧边栏，只留内容（方便直接打印成 CV） */
 @media print {
+  .navbar,
   .sidebar,
   .footer,
   .lang-switch {

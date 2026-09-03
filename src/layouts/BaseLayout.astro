@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import Navbar from '../components/Navbar.astro';
 import Sidebar from '../components/Sidebar.astro';
 import type { Profile } from '../data/profile';
 import type { Locale } from '../i18n/ui';
@@ -40,7 +41,9 @@ const enAbs = siteOrigin ? new URL(getRelativeLocaleUrl('en'), siteOrigin).toStr
     {enAbs && <link rel="alternate" hreflang="en" href={enAbs} />}
   </head>
 
-  <body>
+  <body id="top">
+    <Navbar profile={profile} locale={locale} />
+
     <div class="layout">
       <Sidebar profile={profile} locale={locale} />
       <main class="main">
