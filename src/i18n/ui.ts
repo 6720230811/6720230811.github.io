@@ -14,9 +14,6 @@ const zh = {
   'nav.aria': '主导航',
   'nav.menu': '打开导航菜单',
   'nav.home': '首页',
-  'nav.archive': '归档',
-  'nav.categories': '分类',
-  'nav.tags': '标签',
   'nav.friends': '友链',
   'nav.blog': '博客',
 
@@ -31,6 +28,7 @@ const zh = {
   'post.missingTranslation': '这篇文章还没有英文版。',
 
   // 归档 / 分类 / 标签
+  'browse.aria': '按归档、分类或标签浏览',
   'archive.title': '归档',
   'archive.count': '篇文章',
   'categories.title': '分类',
@@ -98,9 +96,6 @@ const en: Record<keyof typeof zh, string> = {
   'nav.aria': 'Main navigation',
   'nav.menu': 'Open navigation menu',
   'nav.home': 'Home',
-  'nav.archive': 'Archive',
-  'nav.categories': 'Categories',
-  'nav.tags': 'Tags',
   'nav.friends': 'Friends',
   'nav.blog': 'Blog',
 
@@ -115,6 +110,7 @@ const en: Record<keyof typeof zh, string> = {
   'post.missingTranslation': 'This post is not available in English yet.',
 
   // 归档 / 分类 / 标签
+  'browse.aria': 'Browse by archive, category or tag',
   'archive.title': 'Archive',
   'archive.count': 'posts',
   'categories.title': 'Categories',

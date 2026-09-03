@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PostList from '../../components/PostList.astro';
 import Section from '../../components/Section.astro';
+import PostBrowse from '../../components/PostBrowse.astro';
 import { profile } from '../../data/profile';
 import { postsOf } from '../../lib/posts';
 import { toLocale, useTranslations } from '../../i18n/ui';
@@ -17,6 +18,7 @@ const title = `${t('blog.title')} · ${p.name}`;
 
 <BaseLayout profile={p} locale={locale} title={title} description={t('blog.title')}>
   <Section title={t('blog.title')} icon="✍️">
+    <PostBrowse locale={locale} />
     <PostList posts={posts} locale={locale} />
   </Section>
 </BaseLayout>

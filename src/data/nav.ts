@@ -10,12 +10,13 @@ export interface NavItem {
   path: string;
 }
 
-/** 顶栏导航项，顺序即展示顺序 */
+/**
+ * 顶栏导航项，顺序即展示顺序。
+ * 只放主要入口——归档 / 分类 / 标签是「翻找方式」而不是目的地，
+ * 它们的入口放在博客列表页顶部（见 PostBrowse 组件）。
+ */
 export const navItems: readonly NavItem[] = [
   { key: 'nav.home', path: '' },
-  { key: 'nav.archive', path: 'archive' },
-  { key: 'nav.categories', path: 'categories' },
-  { key: 'nav.tags', path: 'tags' },
-  { key: 'nav.friends', path: 'friends' },
   { key: 'nav.blog', path: 'blog' },
+  { key: 'nav.friends', path: 'friends' },
 ];

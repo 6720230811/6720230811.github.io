@@ -1,0 +1,22 @@
+---
+import { href } from '../lib/posts';
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+
+// 归档 / 分类 / 标签不占顶栏位置，放在博客列表页顶部当入口
+const links = [
+  { text: t('archive.title'), href: href(locale, 'archive') },
+  { text: t('categories.title'), href: href(locale, 'categories') },
+  { text: t('tags.title'), href: href(locale, 'tags') },
+];
+---
+
+<nav class="post-browse" aria-label={t('browse.aria')}>
+  {links.map((link) => <a class="term" href={link.href}>{link.text}</a>)}
+</nav>

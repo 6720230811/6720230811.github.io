@@ -1368,6 +1368,14 @@ h4 {
   font-variant-numeric: tabular-nums;
 }
 
+/* 博客列表页顶部：归档 / 分类 / 标签的入口（它们不占顶栏位置） */
+.post-browse {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+}
+
 .term-cloud {
   display: flex;
   flex-wrap: wrap;
