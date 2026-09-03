@@ -1,5 +1,6 @@
 ---
 import type { Profile } from '../data/profile';
+import { visibleSections } from '../data/sections';
 import { useTranslations, type Locale } from '../i18n/ui';
 import Icon from './Icon.astro';
 
@@ -17,79 +18,102 @@ const avatarUrl = `${base}avatar.jpg`;
 const cvUrl = `${base}cv/${profile.cvFile}`;
 
 const { links } = profile;
+
+// 与正文共用同一份显隐规则
+const items = visibleSections(profile);
 ---
 
 <aside class="sidebar">
-  <img class="sidebar__avatar" src={avatarUrl} alt={profile.name} width="128" height="128" />
+  {/* ---------- 资料卡 ---------- */}
+  <div class="card card--hover card--profile">
+    <img class="sidebar__avatar" src={avatarUrl} alt={profile.name} width="128" height="128" />
 
-  <h1 class="sidebar__name">{profile.name}</h1>
-  <div class="sidebar__title">{profile.title}</div>
+    <div class="sidebar__name">{profile.name}</div>
+    <div class="profile__divider"></div>
+    <div class="sidebar__title">{profile.title}</div>
 
-  <div><span class="sidebar__status">{t('sidebar.status')}</span></div>
+    <div><span class="sidebar__status">{t('sidebar.status')}</span></div>
 
-  <div class="sidebar__meta">
-    <div class="meta-row">
+    <div class="sidebar__meta">
+      <div class="meta-row">
+        {
+          profile.affiliationLink ? (
+            <a href={profile.affiliationLink} target="_blank" rel="noopener noreferrer">
+              {profile.affiliation}
+            </a>
+          ) : (
+            <span>{profile.affiliation}</span>
+          )
+        }
+      </div>
+
+      {profile.lab && <div class="meta-row">{profile.lab}</div>}
+
+      <div class="meta-row">
+        <Icon name="location" />
+        <span>{profile.location}</span>
+      </div>
+
+      <div class="meta-row">
+        <Icon name="email" />
+        <a href={`mailto:${profile.email}`}>{profile.email}</a>
+      </div>
+
+      {profile.citationSummary && <div class="meta-row meta-row--muted">{profile.citationSummary}</div>}
+    </div>
+
+    <div class="sidebar__links">
       {
-        profile.affiliationLink ? (
-          <a href={profile.affiliationLink} target="_blank" rel="noopener noreferrer">
-            {profile.affiliation}
+        links.github && (
+          <a class="icon-link" href={links.github} target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">
+            <Icon name="github" />
           </a>
-        ) : (
-          <span>{profile.affiliation}</span>
+        )
+      }
+      {
+        links.scholar && (
+          <a class="icon-link" href={links.scholar} target="_blank" rel="noopener noreferrer" aria-label="Google Scholar" title="Google Scholar">
+            <Icon name="scholar" />
+          </a>
+        )
+      }
+      {
+        links.linkedin && (
+          <a class="icon-link" href={links.linkedin} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn">
+            <Icon name="linkedin" />
+          </a>
+        )
+      }
+      {
+        links.blog && (
+          <a class="icon-link" href={links.blog} target="_blank" rel="noopener noreferrer" aria-label="Blog" title="Blog">
+            <Icon name="blog" />
+          </a>
         )
       }
     </div>
 
-    {profile.lab && <div class="meta-row">{profile.lab}</div>}
-
-    <div class="meta-row">
-      <Icon name="location" />
-      <span>{profile.location}</span>
+    <div class="sidebar__actions">
+      <a class="btn btn--primary" href={cvUrl} target="_blank" rel="noopener noreferrer">
+        <Icon name="download" />
+        {t('sidebar.cv')}
+      </a>
     </div>
-
-    <div class="meta-row">
-      <Icon name="email" />
-      <a href={`mailto:${profile.email}`}>{profile.email}</a>
-    </div>
-
-    {profile.citationSummary && <div class="meta-row meta-row--muted">{profile.citationSummary}</div>}
   </div>
 
-  <div class="sidebar__links">
-    {
-      links.github && (
-        <a class="icon-link" href={links.github} target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">
-          <Icon name="github" />
-        </a>
-      )
-    }
-    {
-      links.scholar && (
-        <a class="icon-link" href={links.scholar} target="_blank" rel="noopener noreferrer" aria-label="Google Scholar" title="Google Scholar">
-          <Icon name="scholar" />
-        </a>
-      )
-    }
-    {
-      links.linkedin && (
-        <a class="icon-link" href={links.linkedin} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn">
-          <Icon name="linkedin" />
-        </a>
-      )
-    }
-    {
-      links.blog && (
-        <a class="icon-link" href={links.blog} target="_blank" rel="noopener noreferrer" aria-label="Blog" title="Blog">
-          <Icon name="blog" />
-        </a>
-      )
-    }
-  </div>
-
-  <div class="sidebar__actions">
-    <a class="btn btn--primary" href={cvUrl} target="_blank" rel="noopener noreferrer">
-      <Icon name="download" />
-      {t('sidebar.cv')}
-    </a>
-  </div>
+  {/* ---------- 板块导航卡（窄屏隐藏，顶栏已有同样锚点） ---------- */}
+  <nav class="card card--hover card--nav" aria-label={t('nav.aria')}>
+    <div class="card__title">{t('widget.sections')}</div>
+    <ul class="side-nav">
+      {
+        items.map((s) => (
+          <li>
+            <a class="side-nav__link nav-anchor" href={`#${s.id}`}>
+              {t(s.key)}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </nav>
 </aside>

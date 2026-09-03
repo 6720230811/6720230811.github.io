@@ -1,11 +1,19 @@
 /* ============================================================
    设计 Token
+
+   配色层级（Fuwari 的观感核心）：--c-page 是带色调的页面底色，
+   卡片用 --c-card 浮在它上面，卡片内的次级面用 --c-bg-soft。
+
+   明暗由 <html data-theme="light|dark"> 决定，属性由 BaseLayout 里
+   的 head 内联脚本在首次绘制前写好，所以这里只有一份暗色变量。
+   （代价：禁用 JS 时固定为亮色，不再跟随系统）
    ============================================================ */
 :root {
-  /* 配色（亮色） */
-  --c-bg: #ffffff;
-  --c-bg-soft: #f7f8fa;
-  --c-bg-elevated: #ffffff;
+  /* 亮色 */
+  --c-page: #f0f2f5; /* 页面底色 */
+  --c-card: #ffffff; /* 卡片 */
+  --c-card-hover: #fbfcfd;
+  --c-bg-soft: #f2f4f7; /* 卡片内的次级底色：嵌套卡片、标签、按钮 */
   --c-text: #1f2328;
   --c-text-muted: #656d76;
   --c-text-faint: #8b949e;
@@ -16,58 +24,55 @@
   --c-accent-soft: #eff4ff;
   --c-tag-bg: #f1f3f5;
   --c-tag-text: #495057;
+  --c-note-text: #b45309; /* 论文备注徽章 Oral / Spotlight */
+  --c-note-bg: #fef3c7;
+  /* 阴影：暗色下需要更重的阴影，否则卡片浮不起来 */
+  --c-shadow-sm: rgba(15, 23, 42, 0.05);
+  --c-shadow-md: rgba(15, 23, 42, 0.12);
 
-  /* 毛玻璃面板（横幅之上） */
-  --c-glass: rgba(255, 255, 255, 0.72);
-  --c-glass-strong: rgba(255, 255, 255, 0.88);
+  color-scheme: light;
+}
 
-  /* 顶部横幅 */
-  --banner-h: clamp(170px, 21vw, 280px);
+:root[data-theme='dark'] {
+  --c-page: #15181d;
+  --c-card: #23262b;
+  --c-card-hover: #2a2e34;
+  --c-bg-soft: #2b2f35;
+  --c-text: #e6edf3;
+  --c-text-muted: #9198a1;
+  --c-text-faint: #6e7681;
+  --c-border: #363b42;
+  --c-border-soft: #2e3238;
+  --c-accent: #58a6ff;
+  --c-accent-hover: #79b8ff;
+  --c-accent-soft: #16243a;
+  --c-tag-bg: #2b2f35;
+  --c-tag-text: #adb7c2;
+  --c-note-text: #fbbf24;
+  --c-note-bg: #3a2e0d;
+  --c-shadow-sm: rgba(0, 0, 0, 0.3);
+  --c-shadow-md: rgba(0, 0, 0, 0.45);
+
+  color-scheme: dark;
+}
+
+:root {
+  /* 顶部横幅：--banner-overlap 是主内容盖住横幅的高度（Fuwari 的 3.5rem） */
+  --banner-h: clamp(200px, 35vh, 380px);
+  --banner-overlap: 3.5rem;
 
   /* 尺寸 */
-  --nav-h: 56px;
-  --page-max: 1240px;
-  --sidebar-w: 300px;
-  --content-max: 860px;
-  --radius: 10px;
+  --nav-h: 4rem;
+  --page-max: 75rem;
+  --sidebar-w: 17.5rem;
+  --radius: 0.625rem; /* 小圆角：按钮、标签、嵌套卡片 */
   --radius-sm: 6px;
+  --radius-lg: 1rem; /* 大圆角：卡片 */
 
   /* 字体 */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --c-bg: #0d1117;
-    --c-bg-soft: #161b22;
-    --c-bg-elevated: #161b22;
-    --c-text: #e6edf3;
-    --c-text-muted: #9198a1;
-    --c-text-faint: #6e7681;
-    --c-border: #30363d;
-    --c-border-soft: #21262d;
-    --c-accent: #58a6ff;
-    --c-accent-hover: #79b8ff;
-    --c-accent-soft: #16243a;
-    --c-tag-bg: #21262d;
-    --c-tag-text: #adb7c2;
-
-    /* 毛玻璃面板（横幅之上） */
-    --c-glass: rgba(22, 27, 34, 0.62);
-    --c-glass-strong: rgba(22, 27, 34, 0.82);
-
-    /* 顶部横幅 */
-  }
-}
-
-/* 不支持 backdrop-filter 时退回不透明背景，保证文字对比度 */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root {
-    --c-glass: var(--c-bg);
-    --c-glass-strong: var(--c-bg-elevated);
-  }
 }
 
 /* ============================================================
@@ -82,8 +87,7 @@
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
-  /* 下半页做极轻的明暗过渡，避免大片纯色 */
-  background: linear-gradient(180deg, var(--c-bg) 0%, var(--c-bg) 40%, var(--c-bg-soft) 100%);
+  background: var(--c-page);
 }
 
 body {
@@ -92,7 +96,7 @@ body {
   font-size: 15.5px;
   line-height: 1.75;
   color: var(--c-text);
-  background: transparent;
+  background: var(--c-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -127,17 +131,67 @@ h4 {
 }
 
 /* ============================================================
+   卡片（对应 Fuwari 的 card-base）
+   主内容的每个 .section 也是一张卡片，样式与 .card 共用
+   ============================================================ */
+.card,
+.section {
+  background: var(--c-card);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px var(--c-shadow-sm);
+}
+
+/* 可交互卡片：hover 轻微上浮（仅侧栏卡片 / 项目卡 / 论文条目用） */
+.card--hover {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.card--hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px -4px var(--c-shadow-md);
+  background: var(--c-card-hover);
+}
+
+/* 卡片标题：左侧一根主色小竖条（Fuwari 的 widget 标题） */
+.card__title,
+.section__title {
+  position: relative;
+  margin-left: 1.5rem;
+}
+
+.card__title::before,
+.section__title::before {
+  content: '';
+  position: absolute;
+  left: -1rem;
+  top: 0.42em;
+  width: 0.25rem;
+  height: 1rem;
+  border-radius: 0.125rem;
+  background: var(--c-accent);
+}
+
+/* ============================================================
    顶部导航栏（sticky）
+   Fuwari 的做法：顶栏不是通栏条，而是页面宽度内的一张卡片，
+   上角方（贴着视口顶边）、下角圆
    ============================================================ */
 .navbar {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 30;
+}
+
+.navbar__card {
   height: var(--nav-h);
-  border-bottom: 1px solid var(--c-border-soft);
-  background: var(--c-glass-strong);
-  backdrop-filter: blur(12px) saturate(1.2);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  max-width: var(--page-max);
+  margin: 0 auto;
+  background: var(--c-card);
+  border: 1px solid var(--c-border-soft);
+  border-top: none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  box-shadow: 0 1px 2px var(--c-shadow-sm), 0 6px 16px -10px var(--c-shadow-md);
 }
 
 .navbar__inner {
@@ -145,9 +199,15 @@ h4 {
   align-items: center;
   gap: 1.4rem;
   height: 100%;
-  max-width: var(--page-max);
-  margin: 0 auto;
-  padding: 0 1.75rem;
+  padding: 0 1.25rem;
+}
+
+/* 右侧工具区（主题切换 + 语言切换） */
+.navbar__tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .navbar__brand {
@@ -215,8 +275,8 @@ h4 {
   position: relative;
   z-index: 0;
   height: var(--banner-h);
-  /* 负值让下方内容压住横幅底部，玻璃面板才有东西可透 */
-  margin-bottom: calc(-0.45 * var(--banner-h));
+  /* 负值让下方内容盖住横幅底部，盖住的高度即 --banner-overlap */
+  margin-bottom: calc(-1 * var(--banner-overlap));
   /* 深色兜底：万一图片缺失不至于出现亮带 */
   background-color: #1e2a3a;
   background-image: var(--banner-img);
@@ -230,64 +290,81 @@ h4 {
   position: absolute;
   inset: auto 0 0 0;
   height: 40%;
-  background: linear-gradient(to bottom, transparent, var(--c-bg));
+  background: linear-gradient(to bottom, transparent, var(--c-page));
 }
 
 /* ============================================================
    整体布局：侧边栏 + 主内容
+   .page 是 TOC 的定位容器（TOC 要挂在它右侧的留白里）
    ============================================================ */
-.layout {
+.page {
   position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  gap: 1.5rem;
+  z-index: 10;
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 1rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  gap: 1rem;
 }
 
 /* ---------- 侧边栏 ---------- */
 .sidebar {
+  /* grid 子项默认 stretch，会让 sticky 失效，必须显式 start */
+  align-self: start;
   position: sticky;
-  top: var(--nav-h);
-  flex: 0 0 var(--sidebar-w);
-  width: var(--sidebar-w);
-  height: calc(100vh - var(--nav-h));
+  top: calc(var(--nav-h) + 1rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: calc(100vh - var(--nav-h) - 2rem);
   overflow-y: auto;
-  padding: 2.5rem 1.75rem;
-  border-right: 1px solid var(--c-border-soft);
-  background: var(--c-glass);
-  backdrop-filter: blur(16px) saturate(1.15);
-  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  scrollbar-width: thin;
+}
+
+/* 资料卡：内容居中（Fuwari 的 Profile 卡片） */
+.card--profile {
+  padding: 1.5rem 1.25rem 1.25rem;
+  text-align: center;
 }
 
 .sidebar__avatar {
-  width: 128px;
-  height: 128px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   object-fit: cover;
-  margin-bottom: 1.1rem;
+  margin: 0 auto 0.9rem;
   border: 1px solid var(--c-border);
   background: var(--c-bg-soft);
 }
 
 .sidebar__name {
-  font-size: 1.6rem;
+  font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
+/* 姓名下的主色短横条（Fuwari 标志元素） */
+.profile__divider {
+  width: 1.25rem;
+  height: 0.25rem;
+  margin: 0.4rem auto 0.55rem;
+  border-radius: 999px;
+  background: var(--c-accent);
+}
+
 .sidebar__title {
-  margin-top: 0.3rem;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   color: var(--c-text-muted);
   line-height: 1.55;
 }
 
 .sidebar__status {
   display: inline-block;
-  margin-top: 0.85rem;
+  margin-top: 0.7rem;
   padding: 0.28rem 0.7rem;
   font-size: 0.78rem;
   font-weight: 600;
@@ -298,7 +375,7 @@ h4 {
 
 .sidebar__meta {
   margin-top: 0.9rem;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   color: var(--c-text-muted);
   line-height: 1.7;
 }
@@ -315,6 +392,7 @@ h4 {
 .meta-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
 }
 
@@ -335,8 +413,45 @@ h4 {
 .sidebar__links {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.5rem;
-  margin-top: 1.15rem;
+  margin-top: 1.1rem;
+}
+
+/* ---------- 侧栏「板块导航」卡片 ---------- */
+.card--nav {
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+
+.side-nav {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.side-nav__link {
+  display: block;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.side-nav__link:hover {
+  color: var(--c-accent);
+  background: var(--c-bg-soft);
+  text-decoration: none;
+}
+
+/* 当前板块（由 IntersectionObserver 设置 aria-current） */
+.side-nav__link[aria-current='location'] {
+  color: var(--c-accent);
+  background: var(--c-accent-soft);
 }
 
 .icon-link {
@@ -348,7 +463,7 @@ h4 {
   border-radius: var(--radius-sm);
   border: 1px solid var(--c-border);
   color: var(--c-text-muted);
-  background: var(--c-bg);
+  background: var(--c-bg-soft);
   transition: all 0.15s ease;
 }
 
@@ -366,10 +481,14 @@ h4 {
 
 /* 侧边栏按钮 */
 .sidebar__actions {
-  margin-top: 1.4rem;
+  margin-top: 1.2rem;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+}
+
+.sidebar__actions .btn {
+  width: 100%;
 }
 
 .btn {
@@ -383,7 +502,7 @@ h4 {
   border-radius: var(--radius-sm);
   border: 1px solid var(--c-border);
   color: var(--c-text);
-  background: var(--c-bg);
+  background: var(--c-bg-soft);
   transition: all 0.15s ease;
 }
 
@@ -425,7 +544,7 @@ h4 {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--c-text-muted);
-  background: var(--c-bg);
+  background: var(--c-bg-soft);
   transition: all 0.15s ease;
 }
 
@@ -441,41 +560,31 @@ h4 {
 
 /* ---------- 主内容 ---------- */
 .main {
-  flex: 1 1 auto;
   min-width: 0;
-  max-width: var(--content-max);
-  padding: 2.25rem 2.5rem 3rem;
-  background: var(--c-glass);
-  backdrop-filter: blur(16px) saturate(1.15);
-  -webkit-backdrop-filter: blur(16px) saturate(1.15);
-  border: 1px solid var(--c-border-soft);
-  border-radius: var(--radius);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 10px 28px -14px rgba(0, 0, 0, 0.12);
 }
 
 /* ============================================================
-   板块
+   板块：每个板块一张卡片
    ============================================================ */
 .section {
-  margin-bottom: 2.6rem;
+  margin-bottom: 1rem;
+  padding: 1.5rem 1.75rem 1.75rem;
   /* 锚点跳转时避开 sticky 顶栏 */
-  scroll-margin-top: calc(var(--nav-h) + 1.5rem);
+  scroll-margin-top: calc(var(--nav-h) + 1rem);
 }
 
 .section__title {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  font-size: 1.22rem;
+  gap: 0.5rem;
+  font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  padding-bottom: 0.6rem;
   margin-bottom: 1.15rem;
-  border-bottom: 1px solid var(--c-border);
 }
 
 .section__title .icon {
-  font-size: 1.05rem;
+  font-size: 1rem;
   line-height: 1;
 }
 
@@ -549,9 +658,17 @@ h4 {
   gap: 1.15rem;
 }
 
+/* 论文条目：hover 时整条轻微上浮（.card--hover 的变体，不做背景变化） */
 .pub {
-  padding-left: 0.95rem;
+  padding: 0.35rem 0 0.35rem 0.95rem;
   border-left: 2px solid var(--c-border-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.pub:hover {
+  transform: translateY(-2px);
+  border-left-color: var(--c-accent);
 }
 
 .pub__title {
@@ -593,17 +710,10 @@ h4 {
   margin-left: 0.4rem;
   font-size: 0.72rem;
   font-weight: 700;
-  color: #b45309;
-  background: #fef3c7;
+  color: var(--c-note-text);
+  background: var(--c-note-bg);
   border-radius: 4px;
   vertical-align: 1px;
-}
-
-@media (prefers-color-scheme: dark) {
-  .pub__note {
-    color: #fbbf24;
-    background: #3a2e0d;
-  }
 }
 
 .pub__citations {
@@ -739,17 +849,19 @@ h4 {
   gap: 1.1rem;
 }
 
+/* 嵌在板块卡片里，所以用次级底色跟卡片区分开，避免双重白底 */
 .project {
   padding: 1.1rem 1.25rem;
-  border: 1px solid var(--c-border);
+  border: 1px solid var(--c-border-soft);
   border-radius: var(--radius);
-  background: var(--c-glass-strong);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background: var(--c-bg-soft);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 .project:hover {
+  transform: translateY(-2px);
   border-color: var(--c-accent);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 14px -4px var(--c-shadow-md);
 }
 
 .project__head {
@@ -818,14 +930,113 @@ h4 {
 }
 
 /* ============================================================
+   主题切换按钮
+   ============================================================ */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  cursor: pointer;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  color: var(--c-text-muted);
+  background: var(--c-bg-soft);
+  transition: all 0.15s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.theme-toggle svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* 只显示与当前主题相反的那个图标（点它就是切到另一种） */
+.theme-toggle__icon--moon {
+  display: none;
+}
+
+:root[data-theme='dark'] .theme-toggle__icon--moon {
+  display: block;
+}
+
+:root[data-theme='dark'] .theme-toggle__icon--sun {
+  display: none;
+}
+
+/* ============================================================
    页脚
    ============================================================ */
 .footer {
-  padding: 2rem 3rem;
-  border-top: 1px solid var(--c-border);
+  padding: 1.5rem 1rem 2.5rem;
   font-size: 0.84rem;
   color: var(--c-text-faint);
   text-align: center;
+}
+
+/* ============================================================
+   右侧目录 TOC（只在超宽屏显示，挂在 .page 右侧的留白里）
+   用 .page 做定位容器 + left:100%，而不是 fixed + 50vw：
+   50vw 含滚动条宽、50% 不含，会偏几个像素且滚动条出现时跳动
+   ============================================================ */
+.toc {
+  display: none;
+}
+
+@media (min-width: 1536px) {
+  .toc {
+    display: block;
+    position: absolute;
+    left: 100%;
+    top: 0;
+    margin-left: 1rem;
+    /* 页面右侧留白宽度 - 两侧各留 1rem，最多 14rem */
+    width: min(14rem, calc(50vw - 37.5rem - 2rem));
+  }
+
+  .toc__inner {
+    position: sticky;
+    top: calc(var(--nav-h) + 1rem);
+    max-height: calc(100vh - var(--nav-h) - 2rem);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
+
+.toc__list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.toc__link {
+  display: block;
+  padding: 0.3rem 0.6rem;
+  border-left: 2px solid var(--c-border);
+  font-size: 0.85rem;
+  color: var(--c-text-muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.toc__link:hover {
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+.toc__link[aria-current='location'] {
+  color: var(--c-accent);
+  border-left-color: var(--c-accent);
+  font-weight: 600;
 }
 
 /* ============================================================
@@ -838,41 +1049,40 @@ h4 {
   }
 
   .layout {
-    flex-direction: column;
-    gap: 0;
-    padding: 0 1rem;
+    grid-template-columns: 1fr;
   }
 
   .navbar__inner {
-    gap: 1rem;
-    padding: 0 1.4rem;
+    gap: 0.9rem;
+    padding: 0 1rem;
   }
 
   .navbar__nav {
     gap: 1rem;
   }
 
-  /* 侧边栏与主内容在窄屏拼成一整块玻璃卡片 */
-  .sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
-    flex: none;
-    border-right: 1px solid var(--c-border-soft);
-    border-bottom: 1px solid var(--c-border-soft);
-    border-radius: var(--radius) var(--radius) 0 0;
-    padding: 2rem 1.4rem 1.6rem;
+  /* 姓名已出现在下方堆叠的资料卡里，顶栏优先留给导航链接和按钮 */
+  .navbar__brand {
+    display: none;
   }
 
-  .main {
-    max-width: 100%;
-    padding: 1.8rem 1.4rem 3.5rem;
-    border-top: none;
-    border-radius: 0 0 var(--radius) var(--radius);
+  .sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* 顶栏已有同样 6 个锚点，窄屏不必重复 */
+  .card--nav {
+    display: none;
+  }
+
+  .section {
+    padding: 1.25rem 1.25rem 1.4rem;
   }
 
   .footer {
-    padding: 1.6rem 1.4rem;
+    padding: 1.5rem 1rem 2rem;
   }
 
   .tl-item {
@@ -882,18 +1092,6 @@ h4 {
 
   .tl-item__period {
     flex: none;
-  }
-}
-
-@media (max-width: 640px) {
-  /* 姓名已出现在下方堆叠的侧边栏里，顶栏优先留给导航链接 */
-  .navbar__brand {
-    display: none;
-  }
-
-  .navbar__inner {
-    gap: 0.8rem;
-    padding: 0 1.2rem;
   }
 }
 
@@ -908,28 +1106,78 @@ h4 {
   }
 }
 
-/* 打印：隐藏侧边栏，只留内容（方便直接打印成 CV） */
+/* 尊重系统的「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .card--hover,
+  .card--hover:hover,
+  .project,
+  .project:hover,
+  .pub,
+  .pub:hover {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* 打印：保留资料卡（姓名/邮箱/单位是 CV 关键信息），只去掉装饰与导航 */
 @media print {
   .hero,
   .navbar,
-  .sidebar,
+  .toc,
+  .card--nav,
   .footer,
-  .lang-switch {
+  .lang-switch,
+  .theme-toggle {
     display: none;
   }
 
-  .layout {
+  .page {
+    max-width: 100%;
     padding: 0;
   }
 
-  .main {
-    max-width: 100%;
-    padding: 0;
+  .layout {
+    display: block;
+  }
+
+  .sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    margin-bottom: 1rem;
+  }
+
+  /* 卡片在纸上变成普通区块，避免一块块灰底 */
+  .card,
+  .section {
+    background: none;
     border: none;
     border-radius: 0;
     box-shadow: none;
-    background: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    padding: 0;
+    margin-bottom: 1.2rem;
+    break-inside: avoid;
+  }
+
+  .card--profile {
+    text-align: left;
+  }
+
+  .meta-row {
+    justify-content: flex-start;
+  }
+
+  .sidebar__links,
+  .sidebar__actions {
+    justify-content: flex-start;
+  }
+
+  .project:hover,
+  .pub:hover {
+    transform: none;
   }
 }

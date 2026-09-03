@@ -1,0 +1,41 @@
+---
+import { useTranslations, type Locale } from '../i18n/ui';
+import Icon from './Icon.astro';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+---
+
+{/*
+  按钮里同时放了太阳和月亮两个图标，由 CSS 按 <html data-theme> 决定显示哪一个。
+  点击后读当前 data-theme 取反、写回 <html> 与 localStorage（切页面/刷新都记住）。
+*/}
+<button
+  class="theme-toggle"
+  type="button"
+  id="theme-toggle"
+  aria-label={t('theme.toggle')}
+  title={t('theme.toggle')}
+>
+  <Icon name="sun" />
+  <Icon name="moon" />
+</button>
+
+<script>
+  const btn = document.getElementById('theme-toggle');
+
+  btn?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem('theme', next);
+    } catch (e) {
+      // 隐私模式下 localStorage 会抛异常，忽略即可，本次切换仍生效
+    }
+  });
+</script>

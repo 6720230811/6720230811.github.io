@@ -3,6 +3,7 @@ import type { Profile } from '../data/profile';
 import { visibleSections } from '../data/sections';
 import { useTranslations, type Locale } from '../i18n/ui';
 import LangSwitcher from './LangSwitcher.astro';
+import ThemeToggle from './ThemeToggle.astro';
 
 interface Props {
   profile: Profile;
@@ -17,23 +18,28 @@ const items = visibleSections(profile);
 ---
 
 <header class="navbar">
-  <div class="navbar__inner">
-    <a class="navbar__brand" href="#top">{profile.name}</a>
+  <div class="navbar__card">
+    <div class="navbar__inner">
+      <a class="navbar__brand" href="#top">{profile.name}</a>
 
-    <nav class="navbar__nav" aria-label={t('nav.aria')}>
-      {items.map((s) => <a class="navbar__link" href={`#${s.id}`}>{t(s.key)}</a>)}
-    </nav>
+      <nav class="navbar__nav" aria-label={t('nav.aria')}>
+        {items.map((s) => <a class="navbar__link nav-anchor" href={`#${s.id}`}>{t(s.key)}</a>)}
+      </nav>
 
-    <LangSwitcher />
+      <div class="navbar__tools">
+        <ThemeToggle locale={locale} />
+        <LangSwitcher />
+      </div>
+    </div>
   </div>
 </header>
 
 <script>
-  // 滚动高亮：视口上部的窄带内、文档顺序最靠前的板块即为当前板块
-  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.navbar__link'));
-  const sections = links
-    .map((link) => document.getElementById(link.hash.slice(1)))
-    .filter((el): el is HTMLElement => !!el);
+  // 滚动高亮：视口上部的窄带内、文档顺序最靠前的板块即为当前板块。
+  // 顶栏 / 侧栏导航卡 / 右侧目录三处锚点共用 .nav-anchor，所以会同步高亮。
+  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.nav-anchor'));
+  // sections 按 DOM 顺序独立取，不从 links 反推（否则某一处多一个锚点就会错位）
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('.section[id]'));
 
   const setActive = (id: string) => {
     for (const link of links) {
@@ -55,9 +61,10 @@ const items = visibleSections(profile);
         else inBand.delete(entry.target.id);
       }
       const current = sections.find((s) => inBand.has(s.id));
+      // 都不在带内时保留上一次结果，避免高亮闪断
       if (current) setActive(current.id);
     },
-    { rootMargin: '-20% 0px -70% 0px' }
+    { rootMargin: '-20% 0px -60% 0px' }
   );
 
   for (const section of sections) observer.observe(section);

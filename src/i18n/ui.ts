@@ -13,6 +13,16 @@ const zh = {
   // 导航栏
   'nav.aria': '页面板块导航',
 
+  // 卡片与目录
+  'widget.sections': '板块导航',
+  'widget.contents': '目录',
+  'toc.aria': '页面目录导航',
+
+  // 主题切换
+  'theme.toggle': '切换深浅色主题',
+  'theme.light': '浅色模式',
+  'theme.dark': '深色模式',
+
   // 板块标题
   'section.about': '个人简介',
   'section.interests': '研究方向',
@@ -48,6 +58,16 @@ const en: Record<keyof typeof zh, string> = {
 
   // 导航栏
   'nav.aria': 'Section navigation',
+
+  // 卡片与目录
+  'widget.sections': 'Sections',
+  'widget.contents': 'Contents',
+  'toc.aria': 'Table of contents',
+
+  // 主题切换
+  'theme.toggle': 'Toggle color theme',
+  'theme.light': 'Light mode',
+  'theme.dark': 'Dark mode',
 
   // 板块标题
   'section.about': 'About',

@@ -4,6 +4,8 @@ import Navbar from '../components/Navbar.astro';
 import Sidebar from '../components/Sidebar.astro';
 import type { Profile } from '../data/profile';
 import type { Locale } from '../i18n/ui';
+import { visibleSections } from '../data/sections';
+import { useTranslations } from '../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
 interface Props {
@@ -15,11 +17,15 @@ interface Props {
 
 const { profile, locale, title, description } = Astro.props;
 const base = import.meta.env.BASE_URL;
+const t = useTranslations(locale);
 
 // 双语 SEO：标注两种语言的互链关系
 const siteOrigin = Astro.site?.origin;
 const zhAbs = siteOrigin ? new URL(getRelativeLocaleUrl('zh'), siteOrigin).toString() : undefined;
 const enAbs = siteOrigin ? new URL(getRelativeLocaleUrl('en'), siteOrigin).toString() : undefined;
+
+// 右侧目录复用与导航相同的板块列表
+const items = visibleSections(profile);
 ---
 
 <!doctype html>
@@ -30,6 +36,20 @@ const enAbs = siteOrigin ? new URL(getRelativeLocaleUrl('en'), siteOrigin).toStr
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+
+    {/* 必须在样式生效前定好 data-theme，否则会闪一下亮色。
+        localStorage 里没有选择时跟随系统；禁用 JS 时固定亮色。 */}
+    <script is:inline>
+      try {
+        var saved = localStorage.getItem('theme');
+        if (saved !== 'dark' && saved !== 'light') {
+          saved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = saved;
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
 
     <!-- Open Graph -->
     <meta property="og:type" content="profile" />
@@ -44,18 +64,34 @@ const enAbs = siteOrigin ? new URL(getRelativeLocaleUrl('en'), siteOrigin).toStr
   <body id="top">
     <Navbar profile={profile} locale={locale} />
 
-    {/* 装饰性横幅，玻璃面板会压在它下半部分 */}
-    <div
-      class="hero"
-      aria-hidden="true"
-      style={`--banner-img: url('${base}banner.jpg')`}
-    ></div>
+    {/* 装饰性横幅，下方 .page 会盖住它的底部 --banner-overlap */}
+    <div class="hero" aria-hidden="true" style={`--banner-img: url('${base}banner.jpg')`}></div>
 
-    <div class="layout">
-      <Sidebar profile={profile} locale={locale} />
-      <main class="main">
-        <slot />
-      </main>
+    <div class="page">
+      <div class="layout">
+        <Sidebar profile={profile} locale={locale} />
+        <main class="main">
+          <slot />
+        </main>
+      </div>
+
+      {/* 右侧目录：只在超宽屏显示（见 global.css 的 1536px 断点） */}
+      <aside class="toc" aria-label={t('toc.aria')}>
+        <nav class="toc__inner">
+          <div class="card__title">{t('widget.contents')}</div>
+          <ul class="toc__list">
+            {
+              items.map((s) => (
+                <li>
+                  <a class="toc__link nav-anchor" href={`#${s.id}`}>
+                    {t(s.key)}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+      </aside>
     </div>
 
     <footer class="footer">
