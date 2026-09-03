@@ -1,0 +1,160 @@
+/* ============================================================
+   Markdown 正文排版
+
+   项目里没有 typography 插件，正文样式自己写一份，颜色全部走
+   --c-* 变量，所以明暗主题自动跟随。
+
+   代码块的配色不在这里手写：astro.config 里给 Shiki 配了
+   github-light / github-dark 双主题，它会把两套颜色都输出成
+   --shiki-light / --shiki-dark 变量，这里只负责选一套。
+   ============================================================ */
+.prose {
+  color: var(--c-text);
+  line-height: 1.8;
+  overflow-wrap: break-word;
+}
+
+/* 正文与卡片内边距之间不该有额外空隙 */
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin: 1.8em 0 0.7em;
+  font-weight: 700;
+  line-height: 1.35;
+  /* 目录锚点跳转时避开 sticky 顶栏 */
+  scroll-margin-top: calc(var(--nav-h) + 1rem);
+}
+
+.prose h2 {
+  font-size: 1.3rem;
+}
+
+.prose h3 {
+  font-size: 1.1rem;
+}
+
+.prose h4 {
+  font-size: 1rem;
+}
+
+.prose p {
+  margin: 0 0 1.1rem;
+}
+
+.prose ul,
+.prose ol {
+  margin: 0 0 1.1rem;
+  padding-left: 1.4em;
+}
+
+.prose li {
+  margin-bottom: 0.35rem;
+}
+
+.prose li::marker {
+  color: var(--c-text-faint);
+}
+
+.prose a {
+  color: var(--c-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--c-border);
+}
+
+.prose a:hover {
+  text-decoration-color: var(--c-accent);
+}
+
+.prose strong {
+  font-weight: 700;
+}
+
+.prose blockquote {
+  margin: 0 0 1.1rem;
+  padding: 0.2rem 0 0.2rem 1rem;
+  border-left: 3px solid var(--c-accent);
+  color: var(--c-text-muted);
+}
+
+.prose blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.prose hr {
+  margin: 2rem 0;
+  border: none;
+  border-top: 1px solid var(--c-border);
+}
+
+/* 行内代码：给底色，但别撑高行高 */
+.prose :not(pre) > code {
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  color: var(--c-text);
+  background: var(--c-bg-soft);
+  border-radius: var(--radius-sm);
+}
+
+.prose pre {
+  margin: 0 0 1.1rem;
+  padding: 0.9rem 1.1rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  /* Shiki 双主题：默认用亮色那套 */
+  color: var(--shiki-light);
+  background: var(--shiki-light-bg);
+}
+
+.prose pre code {
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+}
+
+:root[data-theme='dark'] .prose pre {
+  color: var(--shiki-dark);
+  background: var(--shiki-dark-bg);
+}
+
+/* 表格：窄屏横向滚动，别把卡片撑破 */
+.prose table {
+  width: 100%;
+  margin: 0 0 1.1rem;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  display: block;
+  overflow-x: auto;
+}
+
+.prose th,
+.prose td {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--c-border);
+  text-align: left;
+}
+
+.prose th {
+  background: var(--c-bg-soft);
+  font-weight: 700;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}

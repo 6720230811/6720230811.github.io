@@ -10,9 +10,47 @@ const zh = {
   'sidebar.cv': '下载简历',
   'sidebar.contact': '联系方式',
 
-  // 导航栏
-  'nav.aria': '页面板块导航',
+  // 导航栏（跨页面链接）
+  'nav.aria': '主导航',
   'nav.menu': '打开导航菜单',
+  'nav.home': '首页',
+  'nav.archive': '归档',
+  'nav.categories': '分类',
+  'nav.tags': '标签',
+  'nav.friends': '友链',
+  'nav.blog': '博客',
+
+  // 博客与文章
+  'blog.title': '博客',
+  'blog.empty': '还没有文章，写完第一篇就会出现在这里。',
+  'post.published': '发布于',
+  'post.updated': '更新于',
+  'post.minRead': '分钟阅读',
+  'post.next': '下一篇',
+  'post.prev': '上一篇',
+  'post.missingTranslation': '这篇文章还没有英文版。',
+
+  // 归档 / 分类 / 标签
+  'archive.title': '归档',
+  'archive.count': '篇文章',
+  'categories.title': '分类',
+  'tags.title': '标签',
+  'tag.label': '标签',
+  'category.label': '分类',
+
+  // 友链
+  'friends.title': '友链',
+  'friends.desc': '下面是一些常看的博客，排名不分先后。',
+  'friends.empty': '还没有添加友链。',
+
+  // 搜索（pagefind）
+  'search.open': '搜索文章',
+  'search.placeholder': '搜索文章标题与正文…',
+  'search.empty': '没有匹配的文章，换个关键词试试。',
+  'search.hint': '输入关键词开始搜索',
+  'search.results': '找到 {n} 条结果',
+  'search.devOnly': '搜索索引在构建时生成，开发模式下不可用。',
+  'search.failed': '搜索索引加载失败，请稍后重试。',
 
   // 卡片与目录
   'widget.contents': '目录',
@@ -56,9 +94,47 @@ const en: Record<keyof typeof zh, string> = {
   'sidebar.cv': 'Download CV',
   'sidebar.contact': 'Contact',
 
-  // 导航栏
-  'nav.aria': 'Section navigation',
+  // 导航栏（跨页面链接）
+  'nav.aria': 'Main navigation',
   'nav.menu': 'Open navigation menu',
+  'nav.home': 'Home',
+  'nav.archive': 'Archive',
+  'nav.categories': 'Categories',
+  'nav.tags': 'Tags',
+  'nav.friends': 'Friends',
+  'nav.blog': 'Blog',
+
+  // 博客与文章
+  'blog.title': 'Blog',
+  'blog.empty': 'No posts yet — the first one will show up here.',
+  'post.published': 'Published',
+  'post.updated': 'Updated',
+  'post.minRead': 'min read',
+  'post.next': 'Next',
+  'post.prev': 'Previous',
+  'post.missingTranslation': 'This post is not available in English yet.',
+
+  // 归档 / 分类 / 标签
+  'archive.title': 'Archive',
+  'archive.count': 'posts',
+  'categories.title': 'Categories',
+  'tags.title': 'Tags',
+  'tag.label': 'Tag',
+  'category.label': 'Category',
+
+  // 友链
+  'friends.title': 'Friends',
+  'friends.desc': 'Blogs I read regularly, in no particular order.',
+  'friends.empty': 'No links yet.',
+
+  // 搜索（pagefind）
+  'search.open': 'Search posts',
+  'search.placeholder': 'Search titles and content…',
+  'search.empty': 'No matching posts. Try another keyword.',
+  'search.hint': 'Type to start searching',
+  'search.results': '{n} result(s) found',
+  'search.devOnly': 'The search index is generated at build time and is unavailable in dev mode.',
+  'search.failed': 'Failed to load the search index. Please try again later.',
 
   // 卡片与目录
   'widget.contents': 'Contents',

@@ -1,0 +1,89 @@
+---
+import type { MarkdownHeading } from 'astro';
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  locale: Locale;
+  /**
+   * sections：观察 About 页的 .section[id]（与正文板块一一对应）
+   * headings：观察文章正文里的 h2/h3（由 Markdown 渲染结果给出）
+   */
+  mode: 'sections' | 'headings';
+  items?: readonly { id: string; text: string }[];
+  headings?: MarkdownHeading[];
+}
+
+const { locale, mode, items = [], headings = [] } = Astro.props;
+const t = useTranslations(locale);
+
+interface TocLink {
+  id: string;
+  text: string;
+  /** 文章的 Markdown 标题有层级，三级标题缩进一格 */
+  depth?: number;
+}
+
+// 目录条目：About 页用板块列表，文章页用正文的二三级标题（一级是文章标题本身）
+const links: readonly TocLink[] =
+  mode === 'sections'
+    ? items
+    : headings
+        .filter((h) => h.depth === 2 || h.depth === 3)
+        .map((h) => ({ id: h.slug, text: h.text, depth: h.depth }));
+---
+
+{
+  links.length > 0 && (
+    <aside class="toc" aria-label={t('toc.aria')}>
+      <nav class="toc__inner">
+        <div class="card__title">{t('widget.contents')}</div>
+        <ul class="toc__list">
+          {links.map((link) => (
+            <li class={link.depth === 3 ? 'toc__item toc__item--sub' : 'toc__item'}>
+              <a class="toc__link nav-anchor" href={`#${link.id}`}>
+                {link.text}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </aside>
+  )
+}
+
+<script>
+  // 滚动高亮：视口上部的窄带内、文档顺序最靠前的标题即为当前标题。
+  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.nav-anchor'));
+  // 标题按 DOM 顺序独立取，不从 links 反推
+  const targets = Array.from(
+    document.querySelectorAll<HTMLElement>('.section[id], .prose [id]')
+  );
+
+  const setActive = (id: string) => {
+    for (const link of links) {
+      if (link.hash.slice(1) === id) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
+    }
+  };
+
+  // 点击后立刻高亮，不等平滑滚动结束
+  for (const link of links) {
+    link.addEventListener('click', () => setActive(link.hash.slice(1)));
+  }
+
+  const inBand = new Set<string>();
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) inBand.add(entry.target.id);
+        else inBand.delete(entry.target.id);
+      }
+      const current = targets.find((el) => inBand.has(el.id));
+      // 都不在带内时保留上一次结果，避免高亮闪断
+      if (current) setActive(current.id);
+    },
+    { rootMargin: '-20% 0px -60% 0px' }
+  );
+
+  for (const target of targets) observer.observe(target);
+</script>

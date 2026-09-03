@@ -8,7 +8,7 @@ export interface SectionDef {
   key: UIKey;
 }
 
-/** 页面板块顺序：导航栏与正文共用，改动此处即可调整顺序 */
+/** About 页（`src/pages/index.astro`）的板块顺序：正文与右侧目录共用，改动此处即可调整顺序 */
 export const sections: readonly SectionDef[] = [
   { id: 'about', key: 'section.about' },
   { id: 'publications', key: 'section.publications' },

@@ -1,0 +1,181 @@
+---
+import { useTranslations, type Locale } from '../i18n/ui';
+import Icon from './Icon.astro';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+---
+
+<button
+  class="navbar__search"
+  type="button"
+  id="search-switch"
+  aria-label={t('search.open')}
+  aria-expanded="false"
+  aria-controls="search-panel"
+>
+  <Icon name="search" />
+</button>
+
+{/* 浮层面板：与窄屏导航菜单同一套 float-panel 样式 */}
+<div
+  class="float-panel float-panel--closed search-panel"
+  id="search-panel"
+  role="dialog"
+  aria-label={t('search.open')}
+  data-placeholder={t('search.placeholder')}
+  data-hint={t('search.hint')}
+  data-empty={t('search.empty')}
+  data-results={t('search.results')}
+  data-dev-only={t('search.devOnly')}
+  data-failed={t('search.failed')}
+  data-base={import.meta.env.BASE_URL}
+  data-prod={String(import.meta.env.PROD)}
+>
+  <div class="search-panel__field">
+    <Icon name="search" />
+    <input
+      class="search-panel__input"
+      id="search-input"
+      type="search"
+      placeholder={t('search.placeholder')}
+      autocomplete="off"
+      spellcheck="false"
+    />
+  </div>
+
+  <p class="search-panel__status" id="search-status">{t('search.hint')}</p>
+  <ul class="search-results" id="search-results"></ul>
+</div>
+
+{/*
+  这段脚本用 is:inline：pagefind 的索引是构建产物（/pagefind/pagefind.js），
+  dev 下不存在、也不能让 Vite 解析。交给打包器处理时，Vite 会给动态 import
+  套上 __vitePreload 并留下未定义的 __VITE_PRELOAD__ 占位符，运行时直接报错。
+  is:inline 让脚本原样输出，import() 保持浏览器原生行为。
+  代价：这里不能写 TS（不会被编译），需要的构建期信息由 data-* 属性传入。
+*/}
+<script is:inline>
+  (() => {
+    const btn = document.getElementById('search-switch');
+    const panel = document.getElementById('search-panel');
+    const input = document.getElementById('search-input');
+    const status = document.getElementById('search-status');
+    const list = document.getElementById('search-results');
+    if (!btn || !panel || !input || !status || !list) return;
+
+    const str = (name) => panel.getAttribute(name) || '';
+    const isProd = str('data-prod') === 'true';
+    let loading;
+
+    const load = () => {
+      // 必须是绝对路径：页面在 /blog/ 之类的子路径下，相对路径会被解析到
+      // /blog/pagefind/pagefind.js 而 404。
+      // 另外 BASE_URL 在无子路径时是 '/'，不去掉结尾斜杠会拼成 '//pagefind/…'，
+      // 浏览器会当成协议相对 URL、去解析 host 为 pagefind 的地址。
+      const base = str('data-base').replace(/\/$/, '');
+      loading =
+        loading ||
+        (async () => {
+          const mod = await import(base + '/pagefind/pagefind.js');
+          await mod.init();
+          return mod;
+        })();
+      return loading;
+    };
+
+    const setOpen = (open) => {
+      panel.classList.toggle('float-panel--closed', !open);
+      btn.setAttribute('aria-expanded', String(open));
+      if (open) input.focus();
+      else input.value = '';
+    };
+
+    btn.addEventListener('click', () => {
+      const willOpen = panel.classList.contains('float-panel--closed');
+      setOpen(willOpen);
+      // 面板一打开就预热索引，输入时不必再等
+      if (willOpen) load().catch(() => {});
+    });
+
+    // Esc 关闭；点击面板之外也关闭
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !panel.classList.contains('float-panel--closed')) {
+        setOpen(false);
+        btn.focus();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (panel.classList.contains('float-panel--closed')) return;
+      if (!panel.contains(e.target) && !btn.contains(e.target)) setOpen(false);
+    });
+
+    const render = (items) => {
+      list.textContent = '';
+      for (const item of items) {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.className = 'search-result';
+        a.href = item.url;
+
+        const title = document.createElement('div');
+        title.className = 'search-result__title';
+        title.textContent = item.title;
+
+        const excerpt = document.createElement('div');
+        excerpt.className = 'search-result__excerpt';
+        // pagefind 返回的摘要已转义，只含用于高亮的 <mark>
+        excerpt.innerHTML = item.excerpt;
+
+        a.append(title, excerpt);
+        li.append(a);
+        list.append(li);
+      }
+    };
+
+    const search = async (term) => {
+      const q = term.trim();
+      if (!q) {
+        status.textContent = str('data-hint');
+        render([]);
+        return;
+      }
+
+      status.textContent = '';
+      try {
+        const pf = await load();
+        // 不传 filters：pagefind 已按 <html lang> 选中对应语言的索引，
+        // 再按 lang 过滤只会与索引语言冲突、反而搜不到东西
+        const res = await pf.debouncedSearch(q, {}, 220);
+        // 被后续输入取代时返回 null，交给最后一次请求
+        if (!res) return;
+        if (res.results.length === 0) {
+          status.textContent = str('data-empty');
+          render([]);
+          return;
+        }
+        status.textContent = str('data-results').replace('{n}', String(res.results.length));
+        const items = await Promise.all(res.results.map((r) => r.data()));
+        render(
+          items.map((d) => ({
+            url: d.url,
+            title: d.meta.title || d.url,
+            excerpt: d.excerpt,
+          }))
+        );
+      } catch (e) {
+        // 索引缺失（例如 dev 下 /pagefind/ 404）时允许重试，清掉缓存的 Promise
+        loading = undefined;
+        status.textContent = isProd ? str('data-failed') : str('data-dev-only');
+        render([]);
+      }
+    };
+
+    input.addEventListener('input', () => search(input.value));
+  })();
+</script>

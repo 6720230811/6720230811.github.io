@@ -1,0 +1,43 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Section from '../components/Section.astro';
+import Icon from '../components/Icon.astro';
+import { friends } from '../data/friends';
+import { profile } from '../data/profile';
+import { toLocale, useTranslations } from '../i18n/ui';
+
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+
+const title = `${t('friends.title')} · ${p.name}`;
+---
+
+<BaseLayout profile={p} locale={locale} title={title} description={t('friends.desc')}>
+  <Section title={t('friends.title')} icon="🔗">
+    <p class="list-summary">{t('friends.desc')}</p>
+
+    {
+      friends[locale].length === 0 ? (
+        <p class="empty-hint">{t('friends.empty')}</p>
+      ) : (
+        <div class="friend-list">
+          {friends[locale].map((friend) => (
+            <a
+              class="friend"
+              href={friend.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="friend__name">
+                {friend.name}
+                <Icon name="external" />
+              </span>
+              <span class="friend__desc">{friend.desc}</span>
+            </a>
+          ))}
+        </div>
+      )
+    }
+  </Section>
+</BaseLayout>

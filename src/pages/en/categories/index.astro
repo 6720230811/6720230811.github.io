@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Section from '../../../components/Section.astro';
+import TermCloud from '../../../components/TermCloud.astro';
+import { profile } from '../../../data/profile';
+import { collectCategories, postsOf } from '../../../lib/posts';
+import { toLocale, useTranslations } from '../../../i18n/ui';
+
+const locale = toLocale('en');
+const t = useTranslations(locale);
+const p = profile[locale];
+const posts = await postsOf(locale);
+
+const title = `${t('categories.title')} · ${p.name}`;
+---
+
+<BaseLayout profile={p} locale={locale} title={title} description={t('categories.title')}>
+  <Section title={t('categories.title')} icon="📚">
+    <TermCloud terms={collectCategories(posts)} locale={locale} kind="categories" />
+  </Section>
+</BaseLayout>

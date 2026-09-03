@@ -1,3 +1,5 @@
+@import './prose.css';
+
 /* ============================================================
    设计 Token
 
@@ -14,7 +16,7 @@
   --c-card: #ffffff; /* 卡片 */
   --c-card-hover: #fbfcfd;
   --c-bg-soft: #f2f4f7; /* 卡片内的次级底色：嵌套卡片、标签、按钮 */
-  --c-float-panel: #ffffff; /* 浮层面板（窄屏导航菜单），比卡片再亮一档 */
+  --c-float-panel: #ffffff; /* 浮层面板（导航菜单、搜索面板） */
   --c-text: #1f2328;
   --c-text-muted: #656d76;
   --c-text-faint: #8b949e;
@@ -216,6 +218,7 @@ h4 {
 .navbar__brand,
 .navbar__link,
 .navbar__menu,
+.navbar__search,
 .navbar .theme-toggle,
 .navbar .lang-switch a {
   position: relative;
@@ -234,6 +237,7 @@ h4 {
 .navbar__brand::before,
 .navbar__link::before,
 .navbar__menu::before,
+.navbar__search::before,
 .navbar .theme-toggle::before,
 .navbar .lang-switch a::before {
   content: '';
@@ -249,6 +253,7 @@ h4 {
 .navbar__brand:hover::before,
 .navbar__link:hover::before,
 .navbar__menu:hover::before,
+.navbar__search:hover::before,
 .navbar .theme-toggle:hover::before,
 .navbar .lang-switch a:hover::before {
   transform: scale(1);
@@ -258,6 +263,7 @@ h4 {
 .navbar__brand:hover,
 .navbar__link:hover,
 .navbar__menu:hover,
+.navbar__search:hover,
 .navbar .theme-toggle:hover,
 .navbar .lang-switch a:hover {
   color: var(--c-accent);
@@ -297,12 +303,12 @@ h4 {
   padding: 0 1.25rem;
 }
 
-/* 当前板块（由 IntersectionObserver 设置 aria-current） */
-.navbar__link[aria-current='location'] {
+/* 当前页面（由 Navbar 按路径首段设置 aria-current="page"） */
+.navbar__link[aria-current] {
   color: var(--c-accent);
 }
 
-.navbar__link[aria-current='location']::before {
+.navbar__link[aria-current]::before {
   transform: scale(1);
   background: var(--c-accent-soft);
 }
@@ -326,8 +332,9 @@ h4 {
   transform: scale(0.9);
 }
 
-/* float-panel：fixed 于顶栏下方（top-[5.25rem]）、右侧留 1rem */
-.nav-menu {
+/* float-panel：fixed 于顶栏下方（top-[5.25rem]）、右侧留 1rem。
+   窄屏导航菜单与搜索面板共用这一层，各自再加 .nav-menu / .search-panel */
+.float-panel {
   position: fixed;
   top: 5.25rem;
   right: 1rem;
@@ -341,7 +348,7 @@ h4 {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-.nav-menu--closed {
+.float-panel--closed {
   opacity: 0;
   transform: translateY(-0.25rem);
   pointer-events: none;
@@ -373,11 +380,11 @@ h4 {
   color: var(--c-accent);
 }
 
-.nav-menu__link[aria-current='location'] {
+.nav-menu__link[aria-current] {
   color: var(--c-accent);
 }
 
-.nav-menu__link[aria-current='location']::before {
+.nav-menu__link[aria-current]::before {
   transform: scale(1);
   background: var(--c-accent-soft);
 }
@@ -392,8 +399,9 @@ h4 {
     display: none;
   }
 
-  /* 宽屏没有入口能打开面板，兜底隐藏，避免缩窗口后留下一个开着的面板 */
-  .nav-menu {
+  /* 宽屏没有入口能打开导航菜单，兜底隐藏，避免缩窗口后留下一个开着的面板。
+     用 id 而不是 .float-panel：搜索面板在宽屏也要能用 */
+  #nav-menu-panel {
     display: none;
   }
 }
@@ -1128,6 +1136,430 @@ h4 {
   color: var(--c-accent);
   border-left-color: var(--c-accent);
   font-weight: 600;
+}
+
+/* 文章目录里的三级标题缩进一格 */
+.toc__item--sub .toc__link {
+  padding-left: 1.3rem;
+  font-size: 0.82rem;
+}
+
+/* ============================================================
+   博客：文章列表与文章卡片
+   ============================================================ */
+.post-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 与 .project 一样是「卡片里的卡片」：用次级底色跟外层板块卡片区分开 */
+.post-card {
+  display: block;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  color: var(--c-text);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.post-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--c-accent);
+  box-shadow: 0 4px 14px -4px var(--c-shadow-md);
+  text-decoration: none;
+}
+
+.post-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.post-card__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.post-card:hover .post-card__title {
+  color: var(--c-accent);
+}
+
+.post-card__date {
+  flex: none;
+  font-size: 0.82rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.post-card__desc {
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+  color: var(--c-text-muted);
+}
+
+.post-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+  font-size: 0.8rem;
+}
+
+.post-card__tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.post-card__time {
+  margin-left: auto;
+  color: var(--c-text-faint);
+}
+
+/* 分类 / 标签小胶囊。列表里的胶囊本身是链接，但整体卡片也是链接，
+   所以这里只做视觉，不做 hover 位移，避免嵌套链接的点击区错位 */
+.post-chip {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.78rem;
+  color: var(--c-tag-text);
+  background: var(--c-tag-bg);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.post-chip--category {
+  color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+/* ============================================================
+   文章详情
+   ============================================================ */
+.post__head {
+  padding-bottom: 1rem;
+  margin-bottom: 1.2rem;
+  border-bottom: 1px solid var(--c-border-soft);
+}
+
+.post__title {
+  margin: 0 0 0.6rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.post__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  color: var(--c-text-faint);
+}
+
+.post__meta a {
+  color: var(--c-accent);
+}
+
+.post__head .tag-list {
+  margin-top: 0.7rem;
+}
+
+/* 上下篇：各占一半，下一篇靠右对齐 */
+.post-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--c-border-soft);
+}
+
+.post-nav__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.post-nav__item:hover {
+  border-color: var(--c-accent);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+.post-nav__item--next {
+  text-align: right;
+}
+
+.post-nav__label {
+  font-size: 0.78rem;
+  color: var(--c-text-faint);
+}
+
+.post-nav__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.post-nav__item:hover .post-nav__title {
+  color: var(--c-accent);
+}
+
+/* ============================================================
+   归档 / 分类 / 标签 / 友链
+   ============================================================ */
+/* 列表页顶部的一句话统计 */
+.list-summary {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--c-text-faint);
+}
+
+.empty-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  color: var(--c-text-faint);
+}
+
+.archive-group {
+  margin-bottom: 1.5rem;
+}
+
+.archive-year {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--c-accent);
+}
+
+.archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.archive-list li {
+  display: flex;
+  gap: 0.8rem;
+  font-size: 0.92rem;
+}
+
+/* 日期列定宽等宽，标题左边缘才能对齐 */
+.archive-list__date {
+  flex: none;
+  min-width: 4.2em;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.term-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.term {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  font-size: 0.88rem;
+  color: var(--c-text);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.term:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+.term__count {
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.friend-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.friend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.friend:hover {
+  border-color: var(--c-accent);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+.friend__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+  color: var(--c-text);
+}
+
+.friend__name svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  color: var(--c-text-faint);
+}
+
+.friend:hover .friend__name {
+  color: var(--c-accent);
+}
+
+.friend__desc {
+  font-size: 0.85rem;
+  color: var(--c-text-muted);
+}
+
+/* ============================================================
+   搜索（pagefind）
+   按钮与其它工具按钮同规格，面板复用 float-panel 的观感
+   ============================================================ */
+.navbar__search {
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  cursor: pointer;
+  border: none;
+}
+
+.navbar__search svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.navbar__search:active {
+  transform: scale(0.9);
+}
+
+.search-panel {
+  width: min(30rem, calc(100vw - 2rem));
+  gap: 0.25rem;
+}
+
+.search-panel__field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+}
+
+.search-panel__field svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: var(--c-text-faint);
+}
+
+.search-panel__input {
+  flex: 1;
+  min-width: 0;
+  height: 2.5rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.92rem;
+  color: var(--c-text);
+}
+
+.search-panel__input:focus {
+  outline: none;
+}
+
+.search-panel__status {
+  margin: 0;
+  padding: 0.25rem 0.25rem 0;
+  font-size: 0.8rem;
+  color: var(--c-text-faint);
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: min(24rem, 60vh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.search-result {
+  display: block;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius);
+  transition: background-color 0.15s ease;
+}
+
+.search-result:hover {
+  background: var(--c-bg-soft);
+  text-decoration: none;
+}
+
+.search-result__title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--c-text);
+}
+
+.search-result:hover .search-result__title {
+  color: var(--c-accent);
+}
+
+.search-result__excerpt {
+  font-size: 0.82rem;
+  color: var(--c-text-muted);
+  /* 摘要可能很长，最多三行 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* pagefind 用 <mark> 标记命中片段 */
+.search-result__excerpt mark {
+  padding: 0 0.1em;
+  color: var(--c-accent);
+  background: var(--c-accent-soft);
+  border-radius: 2px;
 }
 
 /* ============================================================

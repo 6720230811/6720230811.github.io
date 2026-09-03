@@ -1,0 +1,28 @@
+---
+import type { Term } from '../lib/posts';
+import { categoryHref, tagHref } from '../lib/posts';
+import type { Locale } from '../i18n/ui';
+
+interface Props {
+  terms: readonly Term[];
+  locale: Locale;
+  /** 决定链接指向 /tags/… 还是 /categories/… */
+  kind: 'tags' | 'categories';
+}
+
+const { terms, locale, kind } = Astro.props;
+---
+
+<div class="term-cloud">
+  {
+    terms.map((term) => (
+      <a
+        class="term"
+        href={kind === 'tags' ? tagHref(locale, term.name) : categoryHref(locale, term.name)}
+      >
+        <span class="term__name">{kind === 'tags' ? `#${term.name}` : term.name}</span>
+        <span class="term__count">{term.count}</span>
+      </a>
+    ))
+  }
+</div>

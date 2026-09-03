@@ -1,0 +1,23 @@
+---
+import type { Post } from '../lib/posts';
+import PostCard from './PostCard.astro';
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  posts: readonly Post[];
+  locale: Locale;
+}
+
+const { posts, locale } = Astro.props;
+const t = useTranslations(locale);
+---
+
+<div class="post-list">
+  {
+    posts.length === 0 ? (
+      <p class="empty-hint">{t('blog.empty')}</p>
+    ) : (
+      posts.map((post) => <PostCard post={post} locale={locale} />)
+    )
+  }
+</div>

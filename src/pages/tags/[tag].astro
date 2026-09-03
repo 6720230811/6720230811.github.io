@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/Section.astro';
+import PostList from '../../components/PostList.astro';
+import { profile } from '../../data/profile';
+import { collectTags, postsOf } from '../../lib/posts';
+import { toLocale, useTranslations } from '../../i18n/ui';
+
+export async function getStaticPaths() {
+  const locale = toLocale('zh');
+  const posts = await postsOf(locale);
+
+  return collectTags(posts).map(({ name: tag }) => ({
+    params: { tag },
+    props: { tag, locale },
+  }));
+}
+
+const { tag, locale } = Astro.props;
+const t = useTranslations(locale);
+const p = profile[locale];
+const posts = (await postsOf(locale)).filter((post) => post.data.tags.includes(tag));
+
+const title = `${t('tag.label')}：${tag} · ${p.name}`;
+---
+
+<BaseLayout profile={p} locale={locale} title={title} description={title}>
+  <Section title={`${t('tag.label')}：${tag}`} icon="🏷">
+    <p class="list-summary">{posts.length} {t('archive.count')}</p>
+    <PostList posts={posts} locale={locale} />
+  </Section>
+</BaseLayout>

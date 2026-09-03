@@ -1,9 +1,11 @@
 ---
 import type { Profile } from '../data/profile';
-import { visibleSections } from '../data/sections';
+import { navItems } from '../data/nav';
 import { useTranslations, type Locale } from '../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
 import Icon from './Icon.astro';
 import LangSwitcher from './LangSwitcher.astro';
+import Search from './Search.astro';
 import ThemeToggle from './ThemeToggle.astro';
 
 interface Props {
@@ -14,22 +16,45 @@ interface Props {
 const { profile, locale } = Astro.props;
 const t = useTranslations(locale);
 
-// 只列出内容非空的板块，锚点与正文一一对应
-const items = visibleSections(profile);
+// 导航项链接：getRelativeLocaleUrl 会补上语言前缀（/en/…）与 base 前缀
+const links = navItems.map((item) => ({
+  ...item,
+  href: getRelativeLocaleUrl(locale, item.path),
+}));
+
+// 当前页高亮：去掉 base 与语言前缀后取路径首段（首页是空串）。
+// getRelativeLocaleUrl(locale, '') 给出语言根（`/` 或 `/en/`，已含 base），
+// 直接拿它裁一刀，就不必自己判断语言前缀了。
+const localeRoot = getRelativeLocaleUrl(locale, '');
+const fullPath = Astro.url.pathname;
+const rest = fullPath.startsWith(localeRoot) ? fullPath.slice(localeRoot.length) : fullPath;
+const current = rest.split('/').filter(Boolean)[0] ?? '';
+const isCurrent = (path: string) => current === path;
 ---
 
 <header class="navbar">
   <div class="navbar__card">
-    <a class="navbar__brand" href="#top">
+    <a class="navbar__brand" href={getRelativeLocaleUrl(locale, '')}>
       <Icon name="home" />
       <span>{profile.name}</span>
     </a>
 
     <nav class="navbar__nav" aria-label={t('nav.aria')}>
-      {items.map((s) => <a class="navbar__link nav-anchor" href={`#${s.id}`}>{t(s.key)}</a>)}
+      {
+        links.map((item) => (
+          <a
+            class="navbar__link"
+            href={item.href}
+            aria-current={isCurrent(item.path) ? 'page' : undefined}
+          >
+            {t(item.key)}
+          </a>
+        ))
+      }
     </nav>
 
     <div class="navbar__tools">
+      <Search locale={locale} />
       <ThemeToggle locale={locale} />
       <LangSwitcher />
       <button
@@ -45,11 +70,15 @@ const items = visibleSections(profile);
     </div>
 
     {/* 窄屏下拉面板：结构与 Fuwari 的 NavMenuPanel 一致 */}
-    <nav class="nav-menu nav-menu--closed" id="nav-menu-panel" aria-label={t('nav.aria')}>
+    <nav class="float-panel float-panel--closed" id="nav-menu-panel" aria-label={t('nav.aria')}>
       {
-        items.map((s) => (
-          <a class="nav-menu__link nav-anchor" href={`#${s.id}`}>
-            <span class="nav-menu__text">{t(s.key)}</span>
+        links.map((item) => (
+          <a
+            class="nav-menu__link"
+            href={item.href}
+            aria-current={isCurrent(item.path) ? 'page' : undefined}
+          >
+            <span class="nav-menu__text">{t(item.key)}</span>
             <Icon name="chevron-right" />
           </a>
         ))
@@ -59,51 +88,17 @@ const items = visibleSections(profile);
 </header>
 
 <script>
-  // 滚动高亮：视口上部的窄带内、文档顺序最靠前的板块即为当前板块。
-  // 顶栏 / 右侧目录 / 窄屏菜单三处锚点共用 .nav-anchor，会同步高亮。
-  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.nav-anchor'));
-  // sections 按 DOM 顺序独立取，不从 links 反推（否则某一处多一个锚点就会错位）
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('.section[id]'));
-
-  const setActive = (id: string) => {
-    for (const link of links) {
-      if (link.hash.slice(1) === id) link.setAttribute('aria-current', 'location');
-      else link.removeAttribute('aria-current');
-    }
-  };
-
-  // 点击后立刻高亮，不等平滑滚动结束
-  for (const link of links) {
-    link.addEventListener('click', () => setActive(link.hash.slice(1)));
-  }
-
-  const inBand = new Set<string>();
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) inBand.add(entry.target.id);
-        else inBand.delete(entry.target.id);
-      }
-      const current = sections.find((s) => inBand.has(s.id));
-      // 都不在带内时保留上一次结果，避免高亮闪断
-      if (current) setActive(current.id);
-    },
-    { rootMargin: '-20% 0px -60% 0px' }
-  );
-
-  for (const section of sections) observer.observe(section);
-
   // 窄屏导航菜单的开合
   const menuBtn = document.getElementById('nav-menu-switch');
   const menuPanel = document.getElementById('nav-menu-panel');
 
   const setMenu = (open: boolean) => {
-    menuPanel?.classList.toggle('nav-menu--closed', !open);
+    menuPanel?.classList.toggle('float-panel--closed', !open);
     menuBtn?.setAttribute('aria-expanded', String(open));
   };
 
   menuBtn?.addEventListener('click', () => {
-    setMenu(menuPanel?.classList.contains('nav-menu--closed') ?? false);
+    setMenu(menuPanel?.classList.contains('float-panel--closed') ?? false);
   });
 
   // 选中某一项后收起菜单

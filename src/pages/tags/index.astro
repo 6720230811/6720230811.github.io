@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/Section.astro';
+import TermCloud from '../../components/TermCloud.astro';
+import { profile } from '../../data/profile';
+import { collectTags, postsOf } from '../../lib/posts';
+import { toLocale, useTranslations } from '../../i18n/ui';
+
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+const posts = await postsOf(locale);
+
+const title = `${t('tags.title')} · ${p.name}`;
+---
+
+<BaseLayout profile={p} locale={locale} title={title} description={t('tags.title')}>
+  <Section title={t('tags.title')} icon="🏷">
+    <TermCloud terms={collectTags(posts)} locale={locale} kind="tags" />
+  </Section>
+</BaseLayout>

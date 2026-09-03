@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostList from '../../components/PostList.astro';
+import Section from '../../components/Section.astro';
+import { profile } from '../../data/profile';
+import { postsOf } from '../../lib/posts';
+import { toLocale, useTranslations } from '../../i18n/ui';
+
+// 语言写死，不依赖 Astro.currentLocale（动态路由下不可靠）
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+const posts = await postsOf(locale);
+
+const title = `${t('blog.title')} · ${p.name}`;
+---
+
+<BaseLayout profile={p} locale={locale} title={title} description={t('blog.title')}>
+  <Section title={t('blog.title')} icon="✍️">
+    <PostList posts={posts} locale={locale} />
+  </Section>
+</BaseLayout>

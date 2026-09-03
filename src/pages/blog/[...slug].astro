@@ -1,0 +1,28 @@
+---
+import { render } from 'astro:content';
+import PostLayout from '../../layouts/PostLayout.astro';
+import { profile } from '../../data/profile';
+import { postPaths, postsOf } from '../../lib/posts';
+
+export const getStaticPaths = postPaths('zh');
+
+const { entry, locale } = Astro.props;
+const { Content, headings } = await render(entry);
+
+// 上下篇：postsOf 按日期倒序，所以 i-1 是更新的一篇、i+1 是更早的一篇
+const posts = await postsOf(locale);
+const index = posts.findIndex((p) => p.slug === entry.slug);
+const prev = index >= 0 ? posts[index + 1] : undefined;
+const next = index > 0 ? posts[index - 1] : undefined;
+---
+
+<PostLayout
+  entry={entry}
+  locale={locale}
+  profile={profile[locale]}
+  headings={headings}
+  prev={prev}
+  next={next}
+>
+  <Content />
+</PostLayout>

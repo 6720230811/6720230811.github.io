@@ -1,7 +1,9 @@
 ---
+import type { MarkdownHeading } from 'astro';
 import '../styles/global.css';
 import Navbar from '../components/Navbar.astro';
 import Sidebar from '../components/Sidebar.astro';
+import Toc from '../components/Toc.astro';
 import type { Profile } from '../data/profile';
 import type { Locale } from '../i18n/ui';
 import { visibleSections } from '../data/sections';
@@ -13,9 +15,16 @@ interface Props {
   locale: Locale;
   title: string;
   description: string;
+  /**
+   * 右侧目录：
+   * - 'sections'：About 页，目录列出正文板块
+   * - MarkdownHeading[]：文章页，目录列出正文的二三级标题
+   * - 省略：不显示目录（列表页、归档页等）
+   */
+  toc?: 'sections' | MarkdownHeading[];
 }
 
-const { profile, locale, title, description } = Astro.props;
+const { profile, locale, title, description, toc } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const t = useTranslations(locale);
 
@@ -24,8 +33,8 @@ const siteOrigin = Astro.site?.origin;
 const zhAbs = siteOrigin ? new URL(getRelativeLocaleUrl('zh'), siteOrigin).toString() : undefined;
 const enAbs = siteOrigin ? new URL(getRelativeLocaleUrl('en'), siteOrigin).toString() : undefined;
 
-// 右侧目录复用与导航相同的板块列表
-const items = visibleSections(profile);
+// 目录条目要在渲染前翻译好：SectionDef 里只有 i18n key
+const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.key) }));
 ---
 
 <!doctype html>
@@ -76,22 +85,13 @@ const items = visibleSections(profile);
       </div>
 
       {/* 右侧目录：只在超宽屏显示（见 global.css 的 1536px 断点） */}
-      <aside class="toc" aria-label={t('toc.aria')}>
-        <nav class="toc__inner">
-          <div class="card__title">{t('widget.contents')}</div>
-          <ul class="toc__list">
-            {
-              items.map((s) => (
-                <li>
-                  <a class="toc__link nav-anchor" href={`#${s.id}`}>
-                    {t(s.key)}
-                  </a>
-                </li>
-              ))
-            }
-          </ul>
-        </nav>
-      </aside>
+      {
+        toc === 'sections' ? (
+          <Toc locale={locale} mode="sections" items={sectionItems} />
+        ) : toc ? (
+          <Toc locale={locale} mode="headings" headings={toc} />
+        ) : null
+      }
     </div>
 
     <footer class="footer">

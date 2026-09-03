@@ -1,0 +1,42 @@
+---
+import type { Post } from '../lib/posts';
+import { formatDate, postHref, readingMinutes } from '../lib/posts';
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  post: Post;
+  locale: Locale;
+}
+
+const { post, locale } = Astro.props;
+const t = useTranslations(locale);
+const { title, description, date, category, tags } = post.data;
+---
+
+<a class="post-card" href={postHref(locale, post.slug)}>
+  <div class="post-card__head">
+    <h3 class="post-card__title">{title}</h3>
+    <time class="post-card__date" datetime={date.toISOString()}>{formatDate(date, locale)}</time>
+  </div>
+
+  {description && <p class="post-card__desc">{description}</p>}
+
+  {/*
+    胶囊只做展示，不能做成链接：整张卡片本身已经是 <a>，
+    HTML 不允许 <a> 套 <a>，浏览器解析时会把外层卡片拆成多个 <a>。
+    想按分类/标签筛选，可以从文章页底部或 /tags/、/categories/ 进入。
+  */}
+  <div class="post-card__foot">
+    <span class="post-chip post-chip--category">{category}</span>
+    {
+      tags.length > 0 && (
+        <span class="post-card__tags">
+          {tags.map((tag) => (
+            <span class="post-chip">#{tag}</span>
+          ))}
+        </span>
+      )
+    }
+    <span class="post-card__time">{readingMinutes(post)} {t('post.minRead')}</span>
+  </div>
+</a>

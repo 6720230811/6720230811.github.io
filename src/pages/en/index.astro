@@ -12,6 +12,12 @@ const title = `${p.name} · ${p.title}`;
 const description = p.bio[0]?.slice(0, 160) ?? '';
 ---
 
-<BaseLayout profile={p} locale={locale} title={title} description={description}>
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={title}
+  description={description}
+  toc="sections"
+>
   <HomeContent profile={p} locale={locale} />
 </BaseLayout>
