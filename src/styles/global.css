@@ -23,10 +23,6 @@
 
   /* 顶部横幅 */
   --banner-h: clamp(170px, 21vw, 280px);
-  --banner-base: linear-gradient(160deg, #eef2ff, #f8fafc);
-  --banner-blob-1: rgba(37, 99, 235, 0.2);
-  --banner-blob-2: rgba(139, 92, 246, 0.18);
-  --banner-blob-3: rgba(14, 165, 233, 0.16);
 
   /* 尺寸 */
   --nav-h: 56px;
@@ -63,10 +59,6 @@
     --c-glass-strong: rgba(22, 27, 34, 0.82);
 
     /* 顶部横幅 */
-    --banner-base: linear-gradient(160deg, #0d1117, #141d33);
-    --banner-blob-1: rgba(88, 166, 255, 0.26);
-    --banner-blob-2: rgba(167, 139, 250, 0.22);
-    --banner-blob-3: rgba(45, 212, 191, 0.16);
   }
 }
 
@@ -217,26 +209,19 @@ h4 {
 
 /* ============================================================
    顶部横幅（Fuwari 风格）
+   图片来自 Wikimedia Commons：Blue background 2022-05-23.png（CC0）
    ============================================================ */
-/* 想换成真实照片横幅：把图片放到 public/banner.jpg，然后把 --banner-base 改成
-   url('/banner.jpg') center/cover no-repeat（子路径部署时写成 ${base}banner.jpg） */
 .hero {
   position: relative;
   z-index: 0;
   height: var(--banner-h);
   /* 负值让下方内容压住横幅底部，玻璃面板才有东西可透 */
   margin-bottom: calc(-0.45 * var(--banner-h));
-  background-image: var(--banner-base);
-}
-
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(58% 130% at 12% 18%, var(--banner-blob-1), transparent 62%),
-    radial-gradient(52% 120% at 82% 8%, var(--banner-blob-2), transparent 58%),
-    radial-gradient(70% 130% at 58% 96%, var(--banner-blob-3), transparent 60%);
+  /* 深色兜底：万一图片缺失不至于出现亮带 */
+  background-color: #1e2a3a;
+  background-image: var(--banner-img);
+  background-size: cover;
+  background-position: center;
 }
 
 /* 底部渐隐到页面底色，避免与内容区出现硬边 */
