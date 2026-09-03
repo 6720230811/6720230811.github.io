@@ -325,23 +325,25 @@ h4 {
   scrollbar-width: thin;
 }
 
-/* 资料卡：内容居中（Fuwari 的 Profile 卡片） */
+/* 资料卡：头像通栏贴顶，姓名/简介/链接在头像下方居中（Fuwari Profile） */
 .card--profile {
-  padding: 1.5rem 1.25rem 1.25rem;
+  padding: 0 0 1.25rem;
+  overflow: hidden; /* 头像的圆角和卡片上沿一致，需要这里裁切 */
   text-align: center;
 }
 
 .sidebar__avatar {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
-  margin: 0 auto 0.9rem;
-  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--c-bg-soft);
 }
 
 .sidebar__name {
+  margin-top: 1.1rem;
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.01em;
