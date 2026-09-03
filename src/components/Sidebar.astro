@@ -1,6 +1,5 @@
 ---
 import type { Profile } from '../data/profile';
-import { visibleSections } from '../data/sections';
 import { useTranslations, type Locale } from '../i18n/ui';
 import Icon from './Icon.astro';
 
@@ -18,9 +17,6 @@ const avatarUrl = `${base}avatar.jpg`;
 const cvUrl = `${base}cv/${profile.cvFile}`;
 
 const { links } = profile;
-
-// 与正文共用同一份显隐规则
-const items = visibleSections(profile);
 ---
 
 <aside class="sidebar">
@@ -100,20 +96,4 @@ const items = visibleSections(profile);
       </a>
     </div>
   </div>
-
-  {/* ---------- 板块导航卡（窄屏隐藏，顶栏已有同样锚点） ---------- */}
-  <nav class="card card--hover card--nav" aria-label={t('nav.aria')}>
-    <div class="card__title">{t('widget.sections')}</div>
-    <ul class="side-nav">
-      {
-        items.map((s) => (
-          <li>
-            <a class="side-nav__link nav-anchor" href={`#${s.id}`}>
-              {t(s.key)}
-            </a>
-          </li>
-        ))
-      }
-    </ul>
-  </nav>
 </aside>

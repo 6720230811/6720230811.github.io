@@ -14,6 +14,7 @@
   --c-card: #ffffff; /* 卡片 */
   --c-card-hover: #fbfcfd;
   --c-bg-soft: #f2f4f7; /* 卡片内的次级底色：嵌套卡片、标签、按钮 */
+  --c-float-panel: #ffffff; /* 浮层面板（窄屏导航菜单），比卡片再亮一档 */
   --c-text: #1f2328;
   --c-text-muted: #656d76;
   --c-text-faint: #8b949e;
@@ -38,6 +39,8 @@
   --c-card: #23262b;
   --c-card-hover: #2a2e34;
   --c-bg-soft: #2b2f35;
+  /* 暗色下浮层要比卡片更深，否则面板和卡片糊在一起 */
+  --c-float-panel: #1c1f24;
   --c-text: #e6edf3;
   --c-text-muted: #9198a1;
   --c-text-faint: #6e7681;
@@ -174,8 +177,9 @@ h4 {
 
 /* ============================================================
    顶部导航栏（sticky）
-   Fuwari 的做法：顶栏不是通栏条，而是页面宽度内的一张卡片，
-   上角方（贴着视口顶边）、下角圆
+   逐条对齐 Fuwari 的 Navbar.astro / NavMenuPanel.astro：
+   页面宽度内的一张卡片，上角方（贴视口顶边）、下角圆，高 4.5rem、左右 px-4；
+   品牌与链接都是 btn-plain + scale-animation，768px 以下收进浮层面板
    ============================================================ */
 .navbar {
   position: sticky;
@@ -184,10 +188,14 @@ h4 {
 }
 
 .navbar__card {
-  position: relative; /* 窄屏菜单面板相对它定位 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   height: var(--nav-h);
   max-width: var(--page-max);
   margin: 0 auto;
+  /* Fuwari 的 px-4；面板要溢出到卡片外，所以不能裁切 */
+  padding: 0 1rem;
   background: var(--c-card);
   border: 1px solid var(--c-border-soft);
   border-top: none;
@@ -195,43 +203,39 @@ h4 {
   box-shadow: 0 1px 2px var(--c-shadow-sm), 0 6px 16px -10px var(--c-shadow-md);
 }
 
-.navbar__inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  height: 100%;
-  padding: 0 0.75rem;
-}
-
-/* 右侧工具区（主题切换 + 语言切换 + 窄屏菜单按钮） */
+/* 右侧工具区（主题切换 + 语言切换 + 窄屏菜单按钮），Fuwari 的 flex gap-0 */
 .navbar__tools {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0;
 }
 
-/* 品牌 / 链接都是 Fuwari 的 btn-plain：无底的圆角胶囊，
-   hover 时 ::before 从 85% 放大到 100% 铺出底色 */
+/* btn-plain + scale-animation（Fuwari 顶栏里所有可点元素共用的观感）：
+   自身无底色，hover 时 ::before 从 85% 放大到 100% 铺出底色，按下时整块缩小 */
 .navbar__brand,
-.navbar__link {
+.navbar__link,
+.navbar__menu,
+.navbar .theme-toggle,
+.navbar .lang-switch a {
   position: relative;
   z-index: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  height: 2.75rem;
-  padding: 0 0.9rem;
-  border-radius: var(--radius);
+  justify-content: center;
+  border-radius: 0.5rem;
   font-weight: 700;
   white-space: nowrap;
   color: var(--c-text-muted);
-  transition: color 0.15s ease;
+  background: none;
+  transition: color 0.15s ease, transform 0.15s ease;
 }
 
 .navbar__brand::before,
-.navbar__link::before {
+.navbar__link::before,
+.navbar__menu::before,
+.navbar .theme-toggle::before,
+.navbar .lang-switch a::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -243,39 +247,54 @@ h4 {
 }
 
 .navbar__brand:hover::before,
-.navbar__link:hover::before {
+.navbar__link:hover::before,
+.navbar__menu:hover::before,
+.navbar .theme-toggle:hover::before,
+.navbar .lang-switch a:hover::before {
   transform: scale(1);
   background: var(--c-bg-soft);
 }
 
 .navbar__brand:hover,
-.navbar__link:hover {
+.navbar__link:hover,
+.navbar__menu:hover,
+.navbar .theme-toggle:hover,
+.navbar .lang-switch a:hover {
   color: var(--c-accent);
   text-decoration: none;
 }
 
+/* h-[3.25rem] px-5：品牌比链接更高一档，图标 1.75rem */
 .navbar__brand {
   flex: none;
+  height: 3.25rem;
+  padding: 0 1.25rem;
+  font-size: 1rem;
   color: var(--c-accent);
-  font-size: 0.98rem;
 }
 
 .navbar__brand svg {
-  width: 19px;
-  height: 19px;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-right: 0.5rem;
+  margin-bottom: 0.25rem; /* Fuwari 的 mb-1，把图标抬到与文字视觉齐平 */
 }
 
-/* 链接居中 */
+.navbar__brand:active,
+.navbar__link:active {
+  transform: scale(0.95);
+}
+
+/* 链接组：Fuwari 是 hidden md:flex，768px 以下收进菜单面板 */
 .navbar__nav {
-  flex: 1 1 auto;
-  display: flex;
+  display: none;
   align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
 }
 
+/* h-11 px-5 */
 .navbar__link {
-  font-size: 0.88rem;
+  height: 2.75rem;
+  padding: 0 1.25rem;
 }
 
 /* 当前板块（由 IntersectionObserver 设置 aria-current） */
@@ -289,60 +308,54 @@ h4 {
 }
 
 /* ---------- 窄屏：链接收进汉堡菜单 ---------- */
+/* w-11 h-11，Fuwari 的 active:scale-90 */
 .navbar__menu {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 2.75rem;
+  height: 2.75rem;
   padding: 0;
   cursor: pointer;
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-sm);
-  color: var(--c-text-muted);
-  background: var(--c-bg-soft);
-  transition: all 0.15s ease;
-}
-
-.navbar__menu:hover {
-  color: var(--c-accent);
-  border-color: var(--c-accent);
-  background: var(--c-accent-soft);
+  border: none;
 }
 
 .navbar__menu svg {
-  width: 17px;
-  height: 17px;
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
+.navbar__menu:active {
+  transform: scale(0.9);
+}
+
+/* float-panel：fixed 于顶栏下方（top-[5.25rem]）、右侧留 1rem */
 .nav-menu {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0.75rem;
-  left: 0.75rem;
+  position: fixed;
+  top: 5.25rem;
+  right: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
   padding: 0.5rem;
-  background: var(--c-card);
-  border: 1px solid var(--c-border-soft);
+  overflow: hidden;
+  background: var(--c-float-panel);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 24px -8px var(--c-shadow-md);
+  box-shadow: 0 12px 32px -8px var(--c-shadow-md);
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .nav-menu--closed {
   opacity: 0;
-  transform: translateY(-0.5rem);
+  transform: translateY(-0.25rem);
   pointer-events: none;
 }
 
+/* py-2 pl-3 pr-1，文字与右侧箭头之间留 gap-8 */
 .nav-menu__link {
-  display: block;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 0.5rem 0.25rem 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-weight: 700;
   color: var(--c-text-muted);
   transition: color 0.15s ease, background-color 0.15s ease;
 }
@@ -353,32 +366,36 @@ h4 {
   text-decoration: none;
 }
 
+.nav-menu__link svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--c-accent);
+}
+
 .nav-menu__link[aria-current='location'] {
   color: var(--c-accent);
+}
+
+.nav-menu__link[aria-current='location']::before {
+  transform: scale(1);
   background: var(--c-accent-soft);
 }
 
-/* 菜单按钮与面板只在顶栏放不下链接时出现 */
-@media (max-width: 1024px) {
+/* Fuwari 的 md 断点 = 768px：以上是横排链接，以下是汉堡菜单 */
+@media (min-width: 768px) {
   .navbar__nav {
-    display: none;
+    display: flex;
   }
 
   .navbar__menu {
-    display: inline-flex;
+    display: none;
   }
-}
 
-@media (min-width: 1025px) {
+  /* 宽屏没有入口能打开面板，兜底隐藏，避免缩窗口后留下一个开着的面板 */
   .nav-menu {
     display: none;
   }
-}
-
-/* 顶栏里不需要侧边栏版本的上边距 */
-.navbar .lang-switch {
-  flex: none;
-  margin-top: 0;
 }
 
 /* ============================================================
@@ -535,41 +552,6 @@ h4 {
 }
 
 /* ---------- 侧栏「板块导航」卡片 ---------- */
-.card--nav {
-  padding: 1.1rem 1.25rem 1.25rem;
-}
-
-.side-nav {
-  list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.side-nav__link {
-  display: block;
-  padding: 0.35rem 0.6rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--c-text-muted);
-  transition: color 0.15s ease, background-color 0.15s ease;
-}
-
-.side-nav__link:hover {
-  color: var(--c-accent);
-  background: var(--c-bg-soft);
-  text-decoration: none;
-}
-
-/* 当前板块（由 IntersectionObserver 设置 aria-current） */
-.side-nav__link[aria-current='location'] {
-  color: var(--c-accent);
-  background: var(--c-accent-soft);
-}
-
 .icon-link {
   display: inline-flex;
   align-items: center;
@@ -649,29 +631,30 @@ h4 {
 /* 语言切换 */
 .lang-switch {
   display: inline-flex;
-  margin-top: 1.4rem;
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  align-items: center;
+  height: 2.75rem;
 }
 
 .lang-switch a {
-  padding: 0.32rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 0.75rem;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--c-text-muted);
-  background: var(--c-bg-soft);
-  transition: all 0.15s ease;
+  background: none;
+  border-radius: 0.5rem;
 }
 
-.lang-switch a:hover {
-  text-decoration: none;
-  background: var(--c-bg-soft);
-}
-
+/* 当前语言：底色常驻（对应 Fuwari 的 .current-theme-btn） */
 .lang-switch a[aria-current='page'] {
-  color: #fff;
-  background: var(--c-accent);
+  color: var(--c-accent);
+}
+
+.lang-switch a[aria-current='page']::before {
+  transform: scale(1);
+  background: var(--c-accent-soft);
 }
 
 /* ---------- 主内容 ---------- */
@@ -1048,30 +1031,22 @@ h4 {
 /* ============================================================
    主题切换按钮
    ============================================================ */
+/* 与顶栏其它按钮同规格：w-11 h-11 的 btn-plain（具体观感见顶栏那一段） */
 .theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 2.75rem;
+  height: 2.75rem;
   padding: 0;
   cursor: pointer;
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-sm);
-  color: var(--c-text-muted);
-  background: var(--c-bg-soft);
-  transition: all 0.15s ease;
-}
-
-.theme-toggle:hover {
-  color: var(--c-accent);
-  border-color: var(--c-accent);
-  background: var(--c-accent-soft);
+  border: none;
 }
 
 .theme-toggle svg {
-  width: 17px;
-  height: 17px;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.theme-toggle:active {
+  transform: scale(0.9);
 }
 
 /* 只显示与当前主题相反的那个图标（点它就是切到另一种） */
@@ -1179,11 +1154,6 @@ h4 {
     overflow: visible;
   }
 
-  /* 顶栏已有同样 6 个锚点，窄屏不必重复 */
-  .card--nav {
-    display: none;
-  }
-
   .section {
     padding: 1.25rem 1.25rem 1.4rem;
   }
@@ -1235,7 +1205,6 @@ h4 {
   .hero,
   .navbar,
   .toc,
-  .card--nav,
   .footer,
   .lang-switch,
   .theme-toggle {

@@ -15,7 +15,6 @@ const zh = {
   'nav.menu': '打开导航菜单',
 
   // 卡片与目录
-  'widget.sections': '板块导航',
   'widget.contents': '目录',
   'toc.aria': '页面目录导航',
 
@@ -62,7 +61,6 @@ const en: Record<keyof typeof zh, string> = {
   'nav.menu': 'Open navigation menu',
 
   // 卡片与目录
-  'widget.sections': 'Sections',
   'widget.contents': 'Contents',
   'toc.aria': 'Table of contents',
 

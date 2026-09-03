@@ -20,38 +20,37 @@ const items = visibleSections(profile);
 
 <header class="navbar">
   <div class="navbar__card">
-    <div class="navbar__inner">
-      <a class="navbar__brand" href="#top">
-        <Icon name="home" />
-        <span>{profile.name}</span>
-      </a>
+    <a class="navbar__brand" href="#top">
+      <Icon name="home" />
+      <span>{profile.name}</span>
+    </a>
 
-      <nav class="navbar__nav" aria-label={t('nav.aria')}>
-        {items.map((s) => <a class="navbar__link nav-anchor" href={`#${s.id}`}>{t(s.key)}</a>)}
-      </nav>
+    <nav class="navbar__nav" aria-label={t('nav.aria')}>
+      {items.map((s) => <a class="navbar__link nav-anchor" href={`#${s.id}`}>{t(s.key)}</a>)}
+    </nav>
 
-      <div class="navbar__tools">
-        <ThemeToggle locale={locale} />
-        <LangSwitcher />
-        <button
-          class="navbar__menu"
-          type="button"
-          id="nav-menu-switch"
-          aria-label={t('nav.menu')}
-          aria-expanded="false"
-          aria-controls="nav-menu-panel"
-        >
-          <Icon name="menu" />
-        </button>
-      </div>
+    <div class="navbar__tools">
+      <ThemeToggle locale={locale} />
+      <LangSwitcher />
+      <button
+        class="navbar__menu"
+        type="button"
+        id="nav-menu-switch"
+        aria-label={t('nav.menu')}
+        aria-expanded="false"
+        aria-controls="nav-menu-panel"
+      >
+        <Icon name="menu" />
+      </button>
     </div>
 
-    {/* 窄屏下拉面板：顶栏放不下链接时收进这里 */}
+    {/* 窄屏下拉面板：结构与 Fuwari 的 NavMenuPanel 一致 */}
     <nav class="nav-menu nav-menu--closed" id="nav-menu-panel" aria-label={t('nav.aria')}>
       {
         items.map((s) => (
           <a class="nav-menu__link nav-anchor" href={`#${s.id}`}>
-            {t(s.key)}
+            <span class="nav-menu__text">{t(s.key)}</span>
+            <Icon name="chevron-right" />
           </a>
         ))
       }
@@ -61,7 +60,7 @@ const items = visibleSections(profile);
 
 <script>
   // 滚动高亮：视口上部的窄带内、文档顺序最靠前的板块即为当前板块。
-  // 顶栏 / 侧栏导航卡 / 右侧目录 / 窄屏菜单四处锚点共用 .nav-anchor，会同步高亮。
+  // 顶栏 / 右侧目录 / 窄屏菜单三处锚点共用 .nav-anchor，会同步高亮。
   const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.nav-anchor'));
   // sections 按 DOM 顺序独立取，不从 links 反推（否则某一处多一个锚点就会错位）
   const sections = Array.from(document.querySelectorAll<HTMLElement>('.section[id]'));
