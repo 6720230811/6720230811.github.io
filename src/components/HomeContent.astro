@@ -1,0 +1,194 @@
+---
+import type { Profile } from '../data/profile';
+import { useTranslations, type Locale } from '../i18n/ui';
+import Section from './Section.astro';
+import PublicationItem from './PublicationItem.astro';
+import TimelineItem from './TimelineItem.astro';
+import ProjectCard from './ProjectCard.astro';
+import SkillGroup from './SkillGroup.astro';
+import Icon from './Icon.astro';
+
+interface Props {
+  profile: Profile;
+  locale: Locale;
+}
+
+const { profile, locale } = Astro.props;
+const t = useTranslations(locale);
+const { links } = profile;
+
+// 论文按年份倒序（最新在前）
+const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
+---
+
+{/* ---------- 个人简介 + 研究方向 ---------- */}
+<Section title={t('section.about')} icon="👤" id="about">
+  <div class="bio">
+    {profile.bio.map((para) => <p>{para}</p>)}
+  </div>
+
+  {
+    profile.interests.length > 0 && (
+      <>
+        <h3 class="sub-title">{t('section.interests')}</h3>
+        <ul class="interest-list">
+          {profile.interests.map((item) => (
+            <li>{item}</li>
+          ))}
+        </ul>
+      </>
+    )
+  }
+</Section>
+
+{/* ---------- 最新动态 ---------- */}
+{
+  profile.news.length > 0 && (
+    <Section title={t('section.news')} icon="📰" id="news">
+      <ul class="news-list">
+        {profile.news.map((n) => (
+          <li>
+            <span class="news-list__date">{n.date}</span>
+            <span set:html={n.text} />
+          </li>
+        ))}
+      </ul>
+    </Section>
+  )
+}
+
+{/* ---------- 论文发表（申博核心） ---------- */}
+{
+  sortedPubs.length > 0 && (
+    <Section title={t('section.publications')} icon="📝" id="publications">
+      <div class="pub-list">
+        {sortedPubs.map((pub) => (
+          <PublicationItem pub={pub} locale={locale} />
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+{/* ---------- 科研经历（申博） ---------- */}
+{
+  profile.research.length > 0 && (
+    <Section title={t('section.research')} icon="🔬" id="research">
+      <div class="timeline">
+        {profile.research.map((entry) => (
+          <TimelineItem entry={entry} />
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+{/* ---------- 技术栈（就业核心） ---------- */}
+{
+  profile.skills.length > 0 && (
+    <Section title={t('section.skills')} icon="🛠" id="skills">
+      <div class="skills">
+        {profile.skills.map((group) => (
+          <SkillGroup category={group.category} items={group.items} />
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+{/* ---------- 项目经历（就业核心） ---------- */}
+{
+  profile.projects.length > 0 && (
+    <Section title={t('section.projects')} icon="🚀" id="projects">
+      <div class="projects">
+        {profile.projects.map((project) => (
+          <ProjectCard project={project} />
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+{/* ---------- 实习经历（就业） ---------- */}
+{
+  profile.internships.length > 0 && (
+    <Section title={t('section.internships')} icon="💼" id="internships">
+      <div class="timeline">
+        {profile.internships.map((entry) => (
+          <TimelineItem entry={entry} />
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+{/* ---------- 教育背景 ---------- */}
+{
+  profile.education.length > 0 && (
+    <Section title={t('section.education')} icon="🎓" id="education">
+      <div class="timeline">
+        {profile.education.map((entry) => (
+          <TimelineItem entry={entry} />
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+{/* ---------- 荣誉奖项 ---------- */}
+{
+  profile.awards.length > 0 && (
+    <Section title={t('section.awards')} icon="🏆" id="awards">
+      <ul class="news-list">
+        {profile.awards.map((a) => (
+          <li>
+            <span class="news-list__date">{a.date}</span>
+            <span>{a.text}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  )
+}
+
+{/* ---------- 联系方式 ---------- */}
+<Section title={t('section.contact')} icon="✉️" id="contact">
+  <div class="contact-grid">
+    <a href={`mailto:${profile.email}`}>
+      <Icon name="email" />
+      {profile.email}
+    </a>
+    {
+      links.github && (
+        <a href={links.github} target="_blank" rel="noopener noreferrer">
+          <Icon name="github" />
+          GitHub
+        </a>
+      )
+    }
+    {
+      links.scholar && (
+        <a href={links.scholar} target="_blank" rel="noopener noreferrer">
+          <Icon name="scholar" />
+          Google Scholar
+        </a>
+      )
+    }
+    {
+      links.linkedin && (
+        <a href={links.linkedin} target="_blank" rel="noopener noreferrer">
+          <Icon name="linkedin" />
+          LinkedIn
+        </a>
+      )
+    }
+    {
+      links.blog && (
+        <a href={links.blog} target="_blank" rel="noopener noreferrer">
+          <Icon name="blog" />
+          Blog
+        </a>
+      )
+    }
+  </div>
+</Section>

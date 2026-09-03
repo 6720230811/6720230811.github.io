@@ -1,0 +1,15 @@
+---
+interface Props {
+  category: string;
+  items: string[];
+}
+
+const { category, items } = Astro.props;
+---
+
+<div class="skill-group">
+  <div class="skill-group__title">{category}</div>
+  <ul class="tag-list">
+    {items.map((item) => <li class="tag">{item}</li>)}
+  </ul>
+</div>

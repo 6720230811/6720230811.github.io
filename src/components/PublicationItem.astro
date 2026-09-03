@@ -1,0 +1,60 @@
+---
+import type { Publication } from '../data/profile';
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  pub: Publication;
+  locale: Locale;
+}
+
+const { pub, locale } = Astro.props;
+const t = useTranslations(locale);
+const { links } = pub;
+const lastIndex = pub.authors.length - 1;
+---
+
+<article class="pub">
+  <div class="pub__title">
+    {links?.pdf ? <a href={links.pdf} target="_blank" rel="noopener noreferrer">{pub.title}</a> : pub.title}
+  </div>
+
+  <div class="pub__authors">
+    {
+      pub.authors.map((author, i) => (
+        <span class={i === pub.selfIndex ? 'self' : undefined}>{author}{i < lastIndex ? ', ' : ''}</span>
+      ))
+    }
+  </div>
+
+  <div class="pub__venue">
+    <span>{pub.venue}</span>
+    {pub.note && <span class="pub__note">{pub.note}</span>}
+    {
+      pub.citations !== undefined && (
+        <span class="pub__citations">· {pub.citations} {t('label.citations')}</span>
+      )
+    }
+  </div>
+
+  {
+    links && (
+      <div class="pub__links">
+        {links.pdf && (
+          <a href={links.pdf} target="_blank" rel="noopener noreferrer">{t('link.pdf')}</a>
+        )}
+        {links.code && (
+          <a href={links.code} target="_blank" rel="noopener noreferrer">{t('link.code')}</a>
+        )}
+        {links.project && (
+          <a href={links.project} target="_blank" rel="noopener noreferrer">{t('link.project')}</a>
+        )}
+        {links.slides && (
+          <a href={links.slides} target="_blank" rel="noopener noreferrer">{t('link.slides')}</a>
+        )}
+        {links.video && (
+          <a href={links.video} target="_blank" rel="noopener noreferrer">{t('link.video')}</a>
+        )}
+      </div>
+    )
+  }
+</article>

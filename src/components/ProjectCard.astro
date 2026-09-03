@@ -1,0 +1,44 @@
+---
+import type { Project } from '../data/profile';
+
+interface Props {
+  project: Project;
+}
+
+const { project } = Astro.props;
+---
+
+<article class="project">
+  <div class="project__head">
+    <span class="project__name">
+      {
+        project.link ? (
+          <a href={project.link} target="_blank" rel="noopener noreferrer">
+            {project.name}
+          </a>
+        ) : (
+          project.name
+        )
+      }
+    </span>
+    {project.period && <span class="project__period">{project.period}</span>}
+  </div>
+
+  <p class="project__desc">{project.description}</p>
+
+  {
+    project.highlights && project.highlights.length > 0 && (
+      <ul class="project__highlights">
+        {project.highlights.map((h) => (
+          <li>{h}</li>
+        ))}
+      </ul>
+    )
+  }
+
+  <div class="project__stack">
+    <ul class="tag-list">
+      {project.stack.map((s) => <li class="tag">{s}</li>)}
+    </ul>
+  </div>
+</article>

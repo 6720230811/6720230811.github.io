@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import HomeContent from '../../components/HomeContent.astro';
+import { profile } from '../../data/profile';
+import { toLocale } from '../../i18n/ui';
+
+// 英文版：对应路由 `/en/`（Astro.currentLocale 会自动解析为 'en'）
+const locale = toLocale(Astro.currentLocale);
+const p = profile[locale];
+
+const title = `${p.name} · ${p.title}`;
+const description = p.bio[0]?.slice(0, 160) ?? '';
+---
+
+<BaseLayout profile={p} locale={locale} title={title} description={description}>
+  <HomeContent profile={p} locale={locale} />
+</BaseLayout>

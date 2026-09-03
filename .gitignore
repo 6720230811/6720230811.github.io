@@ -1,0 +1,15 @@
+# 构建产物
+dist/
+
+# 依赖
+node_modules/
+
+# Astro 自动生成的类型
+.astro/
+
+# 系统与编辑器
+.DS_Store
+.vscode/
+*.log
+.env
+.env.*

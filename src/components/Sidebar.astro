@@ -1,0 +1,98 @@
+---
+import type { Profile } from '../data/profile';
+import { useTranslations, type Locale } from '../i18n/ui';
+import Icon from './Icon.astro';
+import LangSwitcher from './LangSwitcher.astro';
+
+interface Props {
+  profile: Profile;
+  locale: Locale;
+}
+
+const { profile, locale } = Astro.props;
+const t = useTranslations(locale);
+
+// BASE_URL 会自动带上 astro.config 里的 base 前缀（部署到子路径时无需改代码）
+const base = import.meta.env.BASE_URL;
+const avatarUrl = `${base}avatar.jpg`;
+const cvUrl = `${base}cv/${profile.cvFile}`;
+
+const { links } = profile;
+---
+
+<aside class="sidebar">
+  <img class="sidebar__avatar" src={avatarUrl} alt={profile.name} width="128" height="128" />
+
+  <h1 class="sidebar__name">{profile.name}</h1>
+  <div class="sidebar__title">{profile.title}</div>
+
+  <div><span class="sidebar__status">{t('sidebar.status')}</span></div>
+
+  <div class="sidebar__meta">
+    <div class="meta-row">
+      {
+        profile.affiliationLink ? (
+          <a href={profile.affiliationLink} target="_blank" rel="noopener noreferrer">
+            {profile.affiliation}
+          </a>
+        ) : (
+          <span>{profile.affiliation}</span>
+        )
+      }
+    </div>
+
+    {profile.lab && <div class="meta-row">{profile.lab}</div>}
+
+    <div class="meta-row">
+      <Icon name="location" />
+      <span>{profile.location}</span>
+    </div>
+
+    <div class="meta-row">
+      <Icon name="email" />
+      <a href={`mailto:${profile.email}`}>{profile.email}</a>
+    </div>
+
+    {profile.citationSummary && <div class="meta-row meta-row--muted">{profile.citationSummary}</div>}
+  </div>
+
+  <div class="sidebar__links">
+    {
+      links.github && (
+        <a class="icon-link" href={links.github} target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">
+          <Icon name="github" />
+        </a>
+      )
+    }
+    {
+      links.scholar && (
+        <a class="icon-link" href={links.scholar} target="_blank" rel="noopener noreferrer" aria-label="Google Scholar" title="Google Scholar">
+          <Icon name="scholar" />
+        </a>
+      )
+    }
+    {
+      links.linkedin && (
+        <a class="icon-link" href={links.linkedin} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn">
+          <Icon name="linkedin" />
+        </a>
+      )
+    }
+    {
+      links.blog && (
+        <a class="icon-link" href={links.blog} target="_blank" rel="noopener noreferrer" aria-label="Blog" title="Blog">
+          <Icon name="blog" />
+        </a>
+      )
+    }
+  </div>
+
+  <div class="sidebar__actions">
+    <a class="btn btn--primary" href={cvUrl} target="_blank" rel="noopener noreferrer">
+      <Icon name="download" />
+      {t('sidebar.cv')}
+    </a>
+  </div>
+
+  <LangSwitcher />
+</aside>

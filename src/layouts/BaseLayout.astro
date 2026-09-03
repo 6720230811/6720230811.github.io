@@ -1,0 +1,57 @@
+---
+import '../styles/global.css';
+import Sidebar from '../components/Sidebar.astro';
+import type { Profile } from '../data/profile';
+import type { Locale } from '../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+interface Props {
+  profile: Profile;
+  locale: Locale;
+  title: string;
+  description: string;
+}
+
+const { profile, locale, title, description } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+// 双语 SEO：标注两种语言的互链关系
+const siteOrigin = Astro.site?.origin;
+const zhAbs = siteOrigin ? new URL(getRelativeLocaleUrl('zh'), siteOrigin).toString() : undefined;
+const enAbs = siteOrigin ? new URL(getRelativeLocaleUrl('en'), siteOrigin).toString() : undefined;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="profile" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+
+    <!-- 双语互链，便于搜索引擎正确收录对应语言版本 -->
+    {zhAbs && <link rel="alternate" hreflang="zh" href={zhAbs} />}
+    {enAbs && <link rel="alternate" hreflang="en" href={enAbs} />}
+  </head>
+
+  <body>
+    <div class="layout">
+      <Sidebar profile={profile} locale={locale} />
+      <main class="main">
+        <slot />
+      </main>
+    </div>
+
+    <footer class="footer">
+      <div>
+        © {new Date().getFullYear()} {profile.name}
+      </div>
+    </footer>
+  </body>
+</html>

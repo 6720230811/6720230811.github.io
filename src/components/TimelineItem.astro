@@ -1,0 +1,41 @@
+---
+import type { TimelineEntry } from '../data/profile';
+
+interface Props {
+  entry: TimelineEntry;
+}
+
+const { entry } = Astro.props;
+---
+
+<article class="tl-item">
+  <div class="tl-item__period">{entry.period}</div>
+
+  <div class="tl-item__body">
+    <div class="tl-item__role">{entry.role}</div>
+
+    <div class="tl-item__org">
+      {
+        entry.orgLink ? (
+          <a href={entry.orgLink} target="_blank" rel="noopener noreferrer">
+            {entry.org}
+          </a>
+        ) : (
+          <span>{entry.org}</span>
+        )
+      }
+    </div>
+
+    {entry.extra && <div class="tl-item__extra">{entry.extra}</div>}
+
+    {
+      entry.details && entry.details.length > 0 && (
+        <ul class="tl-item__details">
+          {entry.details.map((d) => (
+            <li>{d}</li>
+          ))}
+        </ul>
+      )
+    }
+  </div>
+</article>

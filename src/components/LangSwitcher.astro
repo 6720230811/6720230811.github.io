@@ -1,0 +1,15 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { toLocale } from '../i18n/ui';
+
+const current = toLocale(Astro.currentLocale);
+
+// prefixDefaultLocale: false → 中文返回 `/`，英文返回 `/en/`（自动带上 base 前缀）
+const zhUrl = getRelativeLocaleUrl('zh');
+const enUrl = getRelativeLocaleUrl('en');
+---
+
+<nav class="lang-switch" aria-label="Language switch">
+  <a href={zhUrl} aria-current={current === 'zh' ? 'page' : undefined} hreflang="zh">中文</a>
+  <a href={enUrl} aria-current={current === 'en' ? 'page' : undefined} hreflang="en">EN</a>
+</nav>
