@@ -1,0 +1,259 @@
+{
+  "name": "San Zhang",
+  "title": "Master's Student · Computer Science & Technology",
+  "affiliation": "XX University",
+  "affiliationLink": "https://example.edu.cn",
+  "lab": "XX Lab",
+  "location": "Beijing · China",
+  "email": "your.email@example.com",
+  "bio": [
+    "I am a Master's student in Computer Science at XX University, advised by Prof. XX. My research focuses on efficient machine learning and large language model inference optimization.",
+    "My work aims to improve LLM inference efficiency under limited compute, spanning memory management, scheduling strategies, and distributed inference system design.",
+    "I am currently preparing for PhD applications while also exploring industry opportunities. Feel free to reach out regarding research collaboration or job openings."
+  ],
+  "interests": [
+    "LLM Inference Optimization",
+    "Distributed Systems",
+    "Machine Learning Systems (MLSys)",
+    "High-Performance Computing"
+  ],
+  "links": {
+    "github": "https://github.com/GITHUB_ID",
+    "scholar": "https://scholar.google.com/citations?user=SCHOLAR_ID",
+    "linkedin": "https://www.linkedin.com/in/LINKEDIN_ID",
+    "blog": "https://example.com"
+  },
+  "citationSummary": "Google Scholar Citations 120+",
+  "cvFile": "cv-en.pdf",
+  "news": [
+    {
+      "date": "2025.12",
+      "text": "Our paper \"XXX\" has been accepted by <b>MLSys 2025</b>."
+    },
+    {
+      "date": "2025.09",
+      "text": "Awarded the <b>National Scholarship</b>."
+    },
+    {
+      "date": "2025.06",
+      "text": "Started an internship at XX, working on LLM inference engine optimization."
+    }
+  ],
+  "publications": [
+    {
+      "title": "Efficient KV Cache Management for Long-Context LLM Inference",
+      "authors": [
+        "San Zhang",
+        "Si Li",
+        "Wu Wang"
+      ],
+      "selfIndex": 0,
+      "venue": "MLSys 2025",
+      "year": 2025,
+      "note": "Oral",
+      "citations": 42,
+      "links": {
+        "pdf": "https://example.com/paper.pdf",
+        "code": "https://github.com/GITHUB_ID/project"
+      }
+    },
+    {
+      "title": "A Scheduling Framework for Heterogeneous GPU Clusters",
+      "authors": [
+        "San Zhang",
+        "Wu Wang"
+      ],
+      "selfIndex": 0,
+      "venue": "IEEE TPDS 2024",
+      "year": 2024,
+      "citations": 18,
+      "links": {
+        "pdf": "https://example.com/paper2.pdf"
+      }
+    },
+    {
+      "title": "Rethinking Memory Allocation in Distributed Training",
+      "authors": [
+        "Si Li",
+        "San Zhang",
+        "Wu Wang"
+      ],
+      "selfIndex": 1,
+      "venue": "arXiv preprint",
+      "year": 2024,
+      "links": {
+        "pdf": "https://example.com/paper3.pdf",
+        "code": "https://github.com/GITHUB_ID/project3"
+      }
+    }
+  ],
+  "research": [
+    {
+      "period": "2023.09 — Present",
+      "org": "XX Lab · XX University",
+      "orgLink": "https://example.edu.cn",
+      "role": "Research Assistant / Master Student",
+      "extra": "Advisor: Prof. XX",
+      "details": [
+        "Studied KV cache memory management for long-context LLMs; proposed a tiered caching strategy reducing memory footprint by 35%.",
+        "Designed a scheduling framework for heterogeneous GPU clusters, improving throughput by 2.1×."
+      ]
+    },
+    {
+      "period": "2022.03 — 2023.06",
+      "org": "XX Group · XX University",
+      "role": "Undergraduate Research Assistant",
+      "extra": "Advisor: Prof. XX",
+      "details": [
+        "Worked on memory optimization for distributed training frameworks; results published in IEEE TPDS."
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "category": "Languages",
+      "items": [
+        "Python",
+        "C++",
+        "CUDA",
+        "Rust",
+        "Go",
+        "SQL"
+      ]
+    },
+    {
+      "category": "Machine Learning",
+      "items": [
+        "PyTorch",
+        "vLLM",
+        "TensorRT",
+        "Transformers",
+        "DeepSpeed"
+      ]
+    },
+    {
+      "category": "Systems & Tools",
+      "items": [
+        "Linux",
+        "Docker",
+        "Kubernetes",
+        "Ray",
+        "CUDA Profiling",
+        "Git"
+      ]
+    },
+    {
+      "category": "Domains",
+      "items": [
+        "LLM Inference",
+        "Distributed Systems",
+        "Performance Profiling",
+        "Compiler Optimization"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "FastInfer — High-Performance LLM Inference Engine",
+      "link": "https://github.com/GITHUB_ID/fastinfer",
+      "description": "An LLM inference acceleration engine for long-context scenarios, featuring paged memory management and continuous batching.",
+      "stack": [
+        "C++",
+        "CUDA",
+        "Python",
+        "PyTorch"
+      ],
+      "highlights": [
+        "Implemented a PagedAttention variant, reducing memory footprint by 35% on long-context workloads",
+        "Continuous batching scheduler improved throughput by 2.1×",
+        "400+ GitHub stars; integrated into 3 open-source projects"
+      ],
+      "period": "2024.03 — 2025.06"
+    },
+    {
+      "name": "ClusterScheduler — Heterogeneous GPU Cluster Scheduler",
+      "link": "https://github.com/GITHUB_ID/cluster-scheduler",
+      "description": "A GPU cluster scheduler supporting multi-priority and preemption for mixed heterogeneous GPU deployments.",
+      "stack": [
+        "Go",
+        "Kubernetes",
+        "gRPC",
+        "Prometheus"
+      ],
+      "highlights": [
+        "Implemented custom scheduling policies via a Kubernetes Operator",
+        "Raised overall cluster GPU utilization from 58% to 81%"
+      ]
+    },
+    {
+      "name": "PaperNote — Paper Management & Knowledge Graph Tool",
+      "link": "https://github.com/GITHUB_ID/papernote",
+      "description": "A personal academic paper management tool with citation graph visualization and note search.",
+      "stack": [
+        "TypeScript",
+        "React",
+        "Neo4j"
+      ],
+      "highlights": [
+        "Automatically crawls citation relations and builds a knowledge graph"
+      ]
+    }
+  ],
+  "internships": [
+    {
+      "period": "2025.06 — 2025.12",
+      "org": "XX Technology",
+      "orgLink": "https://example.com",
+      "role": "Algorithm Engineering Intern · LLM Inference Team",
+      "extra": "Supervisor: XX",
+      "details": [
+        "Optimized memory usage of the in-house inference engine, reducing online P99 latency by 22%.",
+        "Built an inference performance regression pipeline covering 12 mainstream models."
+      ]
+    },
+    {
+      "period": "2024.07 — 2024.12",
+      "org": "XX Research Institute",
+      "role": "Systems Development Intern",
+      "details": [
+        "Developed fault-tolerance and elastic scaling modules for distributed training jobs."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "period": "2023.09 — 2026.06 (Expected)",
+      "org": "XX University",
+      "orgLink": "https://example.edu.cn",
+      "role": "M.Eng. in Computer Science & Technology",
+      "extra": "Advisor: Prof. XX",
+      "details": [
+        "GPA: 3.9/4.0",
+        "Core courses: Advanced Algorithms, Distributed Systems, Machine Learning Systems"
+      ]
+    },
+    {
+      "period": "2019.09 — 2023.06",
+      "org": "XX University",
+      "role": "B.Eng. in Computer Science & Technology",
+      "details": [
+        "GPA: 3.8/4.0",
+        "Outstanding Graduate"
+      ]
+    }
+  ],
+  "awards": [
+    {
+      "date": "2025.09",
+      "text": "National Scholarship"
+    },
+    {
+      "date": "2024.11",
+      "text": "First Prize, XX Academic Competition"
+    },
+    {
+      "date": "2023.06",
+      "text": "Outstanding Graduate"
+    }
+  ]
+}

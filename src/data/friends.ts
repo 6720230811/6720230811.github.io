@@ -1,37 +1,25 @@
-export interface Friend {
-  name: string;
-  url: string;
-  /** 一句话介绍 */
-  desc: string;
-}
+import friendsJson from './friends.json';
+import { FriendsSchema, formatIssues } from './profile.schema';
+import type { Friend } from './profile.schema';
+import type { Locale } from '../i18n/ui';
 
 /**
- * 友链：中英文各一份（内容不同就分开写，相同的可以共用）。
- * 目前是占位示例，替换成你自己的链接即可。
+ * 友链数据放在 `src/data/friends.json`，后台 /admin 也是读写这个文件。
+ * 结构在 `profile.schema.ts` 的 FriendsSchema 里（name / url / desc 三个必填字符串）。
  */
+function load(locale: Locale, raw: unknown): readonly Friend[] {
+  const result = FriendsSchema.array().safeParse(raw);
+  if (!result.success) {
+    throw new Error(
+      `src/data/friends.json 的 ${locale} 部分不符合 FriendsSchema：\n${formatIssues(result.error)}`
+    );
+  }
+  return result.data;
+}
+
+export type { Friend };
+
 export const friends: Record<'zh' | 'en', readonly Friend[]> = {
-  zh: [
-    {
-      name: 'Astro 官方文档',
-      url: 'https://docs.astro.build',
-      desc: '这个站点用的框架，文档写得比大多数框架都清楚。',
-    },
-    {
-      name: 'Fuwari',
-      url: 'https://github.com/saicaca/fuwari',
-      desc: '本博客的布局与观感参考来源。',
-    },
-  ],
-  en: [
-    {
-      name: 'Astro Docs',
-      url: 'https://docs.astro.build',
-      desc: 'The framework behind this site — better docs than most.',
-    },
-    {
-      name: 'Fuwari',
-      url: 'https://github.com/saicaca/fuwari',
-      desc: 'Where this blog took its layout and visual language from.',
-    },
-  ],
+  zh: load('zh', friendsJson.zh),
+  en: load('en', friendsJson.en),
 };

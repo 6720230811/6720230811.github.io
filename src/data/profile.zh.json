@@ -1,0 +1,259 @@
+{
+  "name": "张三",
+  "title": "计算机科学与技术 · 硕士研究生",
+  "affiliation": "XX 大学",
+  "affiliationLink": "https://example.edu.cn",
+  "lab": "XX 实验室",
+  "location": "中国 · 北京",
+  "email": "your.email@example.com",
+  "bio": [
+    "我是 XX 大学计算机科学与技术专业的硕士研究生，师从 XX 教授，主要研究方向为高效机器学习与大模型推理优化。",
+    "我的研究关注如何在受限算力下提升大模型的推理效率，包括显存管理、调度策略与分布式推理系统设计。",
+    "目前我正在同时准备博士申请与工业界求职，欢迎就科研合作、实习与工作机会与我联系。"
+  ],
+  "interests": [
+    "大模型推理优化",
+    "分布式系统",
+    "机器学习系统（MLSys）",
+    "高性能计算"
+  ],
+  "links": {
+    "github": "https://github.com/GITHUB_ID",
+    "scholar": "https://scholar.google.com/citations?user=SCHOLAR_ID",
+    "linkedin": "https://www.linkedin.com/in/LINKEDIN_ID",
+    "blog": "https://example.com"
+  },
+  "citationSummary": "Google Scholar 引用 120+",
+  "cvFile": "cv-zh.pdf",
+  "news": [
+    {
+      "date": "2025.12",
+      "text": "论文《XXX》被 <b>MLSys 2025</b> 接收。"
+    },
+    {
+      "date": "2025.09",
+      "text": "获得 <b>国家奖学金</b>。"
+    },
+    {
+      "date": "2025.06",
+      "text": "开始在 XX 公司实习，参与大模型推理引擎优化。"
+    }
+  ],
+  "publications": [
+    {
+      "title": "Efficient KV Cache Management for Long-Context LLM Inference",
+      "authors": [
+        "San Zhang",
+        "Si Li",
+        "Wu Wang"
+      ],
+      "selfIndex": 0,
+      "venue": "MLSys 2025",
+      "year": 2025,
+      "note": "Oral",
+      "citations": 42,
+      "links": {
+        "pdf": "https://example.com/paper.pdf",
+        "code": "https://github.com/GITHUB_ID/project"
+      }
+    },
+    {
+      "title": "A Scheduling Framework for Heterogeneous GPU Clusters",
+      "authors": [
+        "San Zhang",
+        "Wu Wang"
+      ],
+      "selfIndex": 0,
+      "venue": "IEEE TPDS 2024",
+      "year": 2024,
+      "citations": 18,
+      "links": {
+        "pdf": "https://example.com/paper2.pdf"
+      }
+    },
+    {
+      "title": "Rethinking Memory Allocation in Distributed Training",
+      "authors": [
+        "Si Li",
+        "San Zhang",
+        "Wu Wang"
+      ],
+      "selfIndex": 1,
+      "venue": "arXiv preprint",
+      "year": 2024,
+      "links": {
+        "pdf": "https://example.com/paper3.pdf",
+        "code": "https://github.com/GITHUB_ID/project3"
+      }
+    }
+  ],
+  "research": [
+    {
+      "period": "2023.09 — 至今",
+      "org": "XX 实验室 · XX 大学",
+      "orgLink": "https://example.edu.cn",
+      "role": "科研助理 / 硕士研究生",
+      "extra": "导师：XX 教授",
+      "details": [
+        "研究长上下文大语言模型的 KV Cache 显存管理，提出分层缓存策略，显存占用降低 35%。",
+        "设计面向异构 GPU 集群的推理任务调度框架，吞吐量提升 2.1 倍。"
+      ]
+    },
+    {
+      "period": "2022.03 — 2023.06",
+      "org": "XX 课题组 · XX 大学",
+      "role": "本科科研助理",
+      "extra": "导师：XX 教授",
+      "details": [
+        "参与分布式训练框架的内存优化工作，相关成果发表于 IEEE TPDS。"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "category": "编程语言",
+      "items": [
+        "Python",
+        "C++",
+        "CUDA",
+        "Rust",
+        "Go",
+        "SQL"
+      ]
+    },
+    {
+      "category": "机器学习",
+      "items": [
+        "PyTorch",
+        "vLLM",
+        "TensorRT",
+        "Transformers",
+        "DeepSpeed"
+      ]
+    },
+    {
+      "category": "系统与工具",
+      "items": [
+        "Linux",
+        "Docker",
+        "Kubernetes",
+        "Ray",
+        "CUDA Profiling",
+        "Git"
+      ]
+    },
+    {
+      "category": "领域方向",
+      "items": [
+        "大模型推理优化",
+        "分布式系统",
+        "性能剖析",
+        "编译器优化"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "FastInfer —— 高性能大模型推理引擎",
+      "link": "https://github.com/GITHUB_ID/fastinfer",
+      "description": "面向长上下文场景的 LLM 推理加速引擎，核心为分页显存管理与批处理调度。",
+      "stack": [
+        "C++",
+        "CUDA",
+        "Python",
+        "PyTorch"
+      ],
+      "highlights": [
+        "实现 PagedAttention 变体，长文本场景显存占用降低 35%",
+        "连续批处理调度使吞吐提升 2.1 倍",
+        "GitHub 400+ stars，被 3 个开源项目集成"
+      ],
+      "period": "2024.03 — 2025.06"
+    },
+    {
+      "name": "ClusterScheduler —— 异构 GPU 集群调度器",
+      "link": "https://github.com/GITHUB_ID/cluster-scheduler",
+      "description": "支持多优先级与抢占的 GPU 集群任务调度系统，适配异构显卡混部场景。",
+      "stack": [
+        "Go",
+        "Kubernetes",
+        "gRPC",
+        "Prometheus"
+      ],
+      "highlights": [
+        "基于 Kubernetes Operator 实现自定义调度策略",
+        "集群整体 GPU 利用率从 58% 提升至 81%"
+      ]
+    },
+    {
+      "name": "PaperNote —— 论文管理与知识图谱工具",
+      "link": "https://github.com/GITHUB_ID/papernote",
+      "description": "个人学术论文管理工具，支持引用关系可视化与笔记检索。",
+      "stack": [
+        "TypeScript",
+        "React",
+        "Neo4j"
+      ],
+      "highlights": [
+        "自动抓取论文引用关系并构建知识图谱"
+      ]
+    }
+  ],
+  "internships": [
+    {
+      "period": "2025.06 — 2025.12",
+      "org": "XX 科技有限公司",
+      "orgLink": "https://example.com",
+      "role": "算法工程实习生 · 大模型推理组",
+      "extra": "主管：XX",
+      "details": [
+        "参与公司自研推理引擎的显存优化，线上服务 P99 延迟下降 22%。",
+        "搭建推理性能回归测试流水线，覆盖 12 个主流模型。"
+      ]
+    },
+    {
+      "period": "2024.07 — 2024.12",
+      "org": "XX 研究院",
+      "role": "系统研发实习生",
+      "details": [
+        "负责分布式训练任务的容错与弹性伸缩模块开发。"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "period": "2023.09 — 2026.06（预期）",
+      "org": "XX 大学",
+      "orgLink": "https://example.edu.cn",
+      "role": "工学硕士 · 计算机科学与技术",
+      "extra": "导师：XX 教授",
+      "details": [
+        "GPA：3.9/4.0",
+        "核心课程：高级算法、分布式系统、机器学习系统"
+      ]
+    },
+    {
+      "period": "2019.09 — 2023.06",
+      "org": "XX 大学",
+      "role": "工学学士 · 计算机科学与技术",
+      "details": [
+        "GPA：3.8/4.0",
+        "校级优秀毕业生"
+      ]
+    }
+  ],
+  "awards": [
+    {
+      "date": "2025.09",
+      "text": "国家奖学金"
+    },
+    {
+      "date": "2024.11",
+      "text": "XX 学术竞赛 一等奖"
+    },
+    {
+      "date": "2023.06",
+      "text": "校级优秀毕业生"
+    }
+  ]
+}
