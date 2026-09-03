@@ -7,6 +7,9 @@ node_modules/
 # Astro 自动生成的类型
 .astro/
 
+# 崩溃转储
+core.*
+
 # 系统与编辑器
 .DS_Store
 .vscode/
