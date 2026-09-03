@@ -26,7 +26,7 @@ const has = (id: string) => visible.some((s) => s.id === id);
 const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 ---
 
-{/* ---------- 个人简介 + 研究方向 ---------- */}
+{/* ---------- 个人简介 + 研究方向 + 最新动态 ---------- */}
 <Section title={t('section.about')} icon="👤" id="about">
   <div class="bio">
     {profile.bio.map((para) => <p>{para}</p>)}
@@ -44,46 +44,46 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
       </>
     )
   }
+
+  {
+    profile.news.length > 0 && (
+      <>
+        <h3 class="sub-title">{t('section.news')}</h3>
+        <ul class="news-list">
+          {profile.news.map((n) => (
+            <li>
+              <span class="news-list__date">{n.date}</span>
+              <span set:html={n.text} />
+            </li>
+          ))}
+        </ul>
+      </>
+    )
+  }
 </Section>
 
-{/* ---------- 最新动态 ---------- */}
-{
-  has('news') && (
-    <Section title={t('section.news')} icon="📰" id="news">
-      <ul class="news-list">
-        {profile.news.map((n) => (
-          <li>
-            <span class="news-list__date">{n.date}</span>
-            <span set:html={n.text} />
-          </li>
-        ))}
-      </ul>
-    </Section>
-  )
-}
-
-{/* ---------- 论文发表（申博核心） ---------- */}
+{/* ---------- 论文发表 + 科研经历（申博核心） ---------- */}
 {
   has('publications') && (
     <Section title={t('section.publications')} icon="📝" id="publications">
-      <div class="pub-list">
-        {sortedPubs.map((pub) => (
-          <PublicationItem pub={pub} locale={locale} />
-        ))}
-      </div>
-    </Section>
-  )
-}
+      {sortedPubs.length > 0 && (
+        <div class="pub-list">
+          {sortedPubs.map((pub) => (
+            <PublicationItem pub={pub} locale={locale} />
+          ))}
+        </div>
+      )}
 
-{/* ---------- 科研经历（申博） ---------- */}
-{
-  has('research') && (
-    <Section title={t('section.research')} icon="🔬" id="research">
-      <div class="timeline">
-        {profile.research.map((entry) => (
-          <TimelineItem entry={entry} />
-        ))}
-      </div>
+      {profile.research.length > 0 && (
+        <>
+          <h3 class="sub-title">{t('section.research')}</h3>
+          <div class="timeline">
+            {profile.research.map((entry) => (
+              <TimelineItem entry={entry} />
+            ))}
+          </div>
+        </>
+      )}
     </Section>
   )
 }
@@ -101,57 +101,57 @@ const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
   )
 }
 
-{/* ---------- 项目经历（就业核心） ---------- */}
+{/* ---------- 项目经历 + 实习经历（就业核心） ---------- */}
 {
   has('projects') && (
     <Section title={t('section.projects')} icon="🚀" id="projects">
-      <div class="projects">
-        {profile.projects.map((project) => (
-          <ProjectCard project={project} />
-        ))}
-      </div>
+      {profile.projects.length > 0 && (
+        <div class="projects">
+          {profile.projects.map((project) => (
+            <ProjectCard project={project} />
+          ))}
+        </div>
+      )}
+
+      {profile.internships.length > 0 && (
+        <>
+          <h3 class="sub-title">{t('section.internships')}</h3>
+          <div class="timeline">
+            {profile.internships.map((entry) => (
+              <TimelineItem entry={entry} />
+            ))}
+          </div>
+        </>
+      )}
     </Section>
   )
 }
 
-{/* ---------- 实习经历（就业） ---------- */}
-{
-  has('internships') && (
-    <Section title={t('section.internships')} icon="💼" id="internships">
-      <div class="timeline">
-        {profile.internships.map((entry) => (
-          <TimelineItem entry={entry} />
-        ))}
-      </div>
-    </Section>
-  )
-}
-
-{/* ---------- 教育背景 ---------- */}
+{/* ---------- 教育背景 + 荣誉奖项 ---------- */}
 {
   has('education') && (
     <Section title={t('section.education')} icon="🎓" id="education">
-      <div class="timeline">
-        {profile.education.map((entry) => (
-          <TimelineItem entry={entry} />
-        ))}
-      </div>
-    </Section>
-  )
-}
+      {profile.education.length > 0 && (
+        <div class="timeline">
+          {profile.education.map((entry) => (
+            <TimelineItem entry={entry} />
+          ))}
+        </div>
+      )}
 
-{/* ---------- 荣誉奖项 ---------- */}
-{
-  has('awards') && (
-    <Section title={t('section.awards')} icon="🏆" id="awards">
-      <ul class="news-list">
-        {profile.awards.map((a) => (
-          <li>
-            <span class="news-list__date">{a.date}</span>
-            <span>{a.text}</span>
-          </li>
-        ))}
-      </ul>
+      {profile.awards.length > 0 && (
+        <>
+          <h3 class="sub-title">{t('section.awards')}</h3>
+          <ul class="news-list">
+            {profile.awards.map((a) => (
+              <li>
+                <span class="news-list__date">{a.date}</span>
+                <span>{a.text}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </Section>
   )
 }

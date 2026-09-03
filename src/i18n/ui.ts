@@ -20,9 +20,9 @@ const zh = {
   'section.publications': '论文发表',
   'section.research': '科研经历',
   'section.skills': '技术栈',
-  'section.projects': '项目经历',
+  'section.projects': '项目与实习',
   'section.internships': '实习经历',
-  'section.education': '教育背景',
+  'section.education': '教育与荣誉',
   'section.awards': '荣誉奖项',
   'section.contact': '联系方式',
 
@@ -56,9 +56,9 @@ const en: Record<keyof typeof zh, string> = {
   'section.publications': 'Publications',
   'section.research': 'Research Experience',
   'section.skills': 'Skills',
-  'section.projects': 'Projects',
+  'section.projects': 'Projects & Internships',
   'section.internships': 'Internships',
-  'section.education': 'Education',
+  'section.education': 'Education & Honors',
   'section.awards': 'Honors & Awards',
   'section.contact': 'Contact',
 
