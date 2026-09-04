@@ -5,7 +5,10 @@
  * 连这个 chunk 都不会下载。交互与 DOM 逻辑在 index.ts，这里只管「展厅长什么样」。
  *
  * 形制参考金贝尔美术馆（Louis Kahn）：并联的摆线筒拱顶，拱顶中央一条通长的
- * 天光缝，缝下两片曲面铝反光翼。观感上的几条取舍：
+ * 天光缝，缝下两片曲面铝反光翼。除了墙，室内还有几样把「空房间」撑成展厅的
+ * 东西：长墙按展位分间的壁柱、拱门的石门套、起拱线下的檐口、端墙前的长凳，
+ * 地上一条中轴石材带、沿墙一圈深色走边，以及天光落在地上的那道光。
+ * 观感上的几条取舍：
  * - 拱壳与反光翼都是手写 BufferGeometry：ExtrudeGeometry 非索引（扁拱会看出
  *   棱），侧面 UV 按 |Δy|<|Δx| 二选一，在摆线起拱处会断裂。法线自己算，
  *   绕序保证内表面朝下，省一次翻转。
@@ -86,6 +89,23 @@ const WING_T = 0.02;
 const BAR_COUNT = 7;
 /** 反光翼比天光缝低多少、往外出多少 */
 const WING_DROP = 0.32;
+/** 壁柱：长墙上分展位的竖挺；比檐口再出挑一点，免得两者共面打架 */
+const PILASTER_W = 0.18;
+const PILASTER_T = 0.062;
+/** 起拱线下的檐口：出挑的横线 + 上面留一条暗缝 */
+const CORNICE_H = 0.1;
+const CORNICE_T = 0.05;
+/** 拱门门套：门洞两侧的竖挺与顶上的横楣 */
+const PORTAL_W = 0.16;
+const PORTAL_T = 0.035;
+/** 地面：中轴石材带的宽度、沿墙走边的宽度，以及天光落地那道光比缝宽出多少 */
+const RUNNER_W = 1.3;
+const BORDER_W = 0.3;
+const POOL_PAD = 1.9;
+/** 长凳：座面高度、座面厚度、支墩宽度 */
+const BENCH_H = 0.42;
+const BENCH_T = 0.09;
+const BENCH_LEG = 0.1;
 
 interface Disposable {
   dispose(): void;
@@ -164,10 +184,11 @@ function grain(ctx: CanvasRenderingContext2D, w: number, h: number, alpha: numbe
 /**
  * 石灰华：暖米色 + 水平层理 + 竖向分缝（金贝尔的墙是竖板拼的），
  * 再点一些细孔。竖缝按贴图宽度均分，配合 repeat 就是一块块墙板。
+ * base 可以调深浅：地面那条中轴石材带要的是更浅一号的石头。
  */
-function travertineTexture(): THREE.CanvasTexture {
+function travertineTexture(base = '#ded5c6'): THREE.CanvasTexture {
   return paint(512, 512, (ctx, w, h) => {
-    ctx.fillStyle = '#ded5c6';
+    ctx.fillStyle = base;
     ctx.fillRect(0, 0, w, h);
 
     // 水平层理：一道道深浅不一的波浪
@@ -269,6 +290,33 @@ function radialTexture(rgb: string): THREE.CanvasTexture {
     gradient.addColorStop(0.45, `rgba(${rgb},0.42)`);
     gradient.addColorStop(1, `rgba(${rgb},0)`);
     ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  });
+}
+
+/**
+ * 天光落在地上的那道光：横向是一条中间亮两侧淡的带子，纵向两端淡出。
+ * 没开阴影，投影算不出来，这道光是画在地上的 —— 但天光本来就该在地上留一道。
+ */
+function floorPoolTexture(): THREE.CanvasTexture {
+  return paint(64, 64, (ctx, w, h) => {
+    const across = ctx.createLinearGradient(0, 0, w, 0);
+    across.addColorStop(0, 'rgba(255,255,255,0)');
+    across.addColorStop(0.3, 'rgba(255,255,255,0.5)');
+    across.addColorStop(0.5, 'rgba(255,255,255,1)');
+    across.addColorStop(0.7, 'rgba(255,255,255,0.5)');
+    across.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = across;
+    ctx.fillRect(0, 0, w, h);
+
+    // 沿长度两端淡出：destination-in 只留下竖着那段的 alpha
+    const along = ctx.createLinearGradient(0, 0, 0, h);
+    along.addColorStop(0, 'rgba(255,255,255,0)');
+    along.addColorStop(0.14, 'rgba(255,255,255,1)');
+    along.addColorStop(0.86, 'rgba(255,255,255,1)');
+    along.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.fillStyle = along;
     ctx.fillRect(0, 0, w, h);
   });
 }
@@ -502,6 +550,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const spanX = plan.bounds.x2 - plan.bounds.x1;
   const spanZ = plan.bounds.z2 - plan.bounds.z1;
   const diagonal = Math.hypot(spanX, spanZ);
+  // 所有拱同长（plan.ts 保证）：地面那几条带子与天光的长度共用这两个数
+  const vaultLength = plan.vaults[0]?.length ?? 0;
+  const slotLength = Math.max(1, vaultLength - VAULT_METRICS.slotInset * 2);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#cbc7c0');
@@ -527,15 +578,26 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const skyMap = track(skyTexture());
   const glowMap = track(radialTexture('255,255,255'));
   const shadowMap = track(radialTexture('0,0,0'));
+  const poolMap = track(floorPoolTexture());
   const unitPlane = track(new THREE.PlaneGeometry(1, 1));
   const unitBox = track(new THREE.BoxGeometry(1, 1, 1));
+  // 中轴石材带与沿墙走边：所有拱同长，几何做一份就够了
+  const runnerLength = Math.max(1, vaultLength - 1.6);
+  const runnerGeometry = track(new THREE.PlaneGeometry(RUNNER_W, runnerLength));
+  const borderGeometry = track(new THREE.PlaneGeometry(BORDER_W, Math.max(1, vaultLength)));
 
   // ---- 统一材质：石灰华墙 / 白橡木地 / 混凝土拱 / 拉丝铝 ----
   const wallMaterial = track(
     new THREE.MeshStandardMaterial({ map: travertineMap, roughness: 0.78, metalness: 0.02 }),
   );
+  // 抛光到能映出一点天光：展厅的地面不该是哑光的
   const floorMaterial = track(
-    new THREE.MeshStandardMaterial({ map: oakMap, roughness: 0.55, metalness: 0.04 }),
+    new THREE.MeshStandardMaterial({
+      map: oakMap,
+      roughness: 0.42,
+      metalness: 0.06,
+      envMapIntensity: 0.7,
+    }),
   );
   const vaultMaterial = track(
     new THREE.MeshStandardMaterial({
@@ -562,6 +624,39 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   );
   const baseMaterial = track(
     new THREE.MeshStandardMaterial({ color: '#2a2d31', roughness: 0.5, metalness: 0.1 }),
+  );
+  /** 深色石材：地面走边、门槛石 */
+  const stoneMaterial = track(
+    new THREE.MeshStandardMaterial({ color: '#4e4842', roughness: 0.46, metalness: 0.08 }),
+  );
+  /** 门套石：比墙深一号，门洞才看得出是个「门」 */
+  const portalMaterial = track(
+    new THREE.MeshStandardMaterial({ color: '#c0b7a4', roughness: 0.6, metalness: 0.04 }),
+  );
+  // 中轴的浅色石材带：浅一号的石灰华，给地面一个方向
+  const runnerMap = track(travertineTexture('#e7e1d3'));
+  runnerMap.repeat.set(RUNNER_W / 1.8, runnerLength / 1.8);
+  const runnerMaterial = track(
+    new THREE.MeshStandardMaterial({ map: runnerMap, roughness: 0.42, metalness: 0.03 }),
+  );
+  // 长凳：一小块橡木，板缝 11cm 正好是条凳的宽度
+  const benchMap = track(oakMap.clone());
+  benchMap.repeat.set(3, 1);
+  const benchMaterial = track(
+    new THREE.MeshStandardMaterial({ map: benchMap, roughness: 0.5, metalness: 0.04 }),
+  );
+  /** 天光落地那道光：加色混合，压得很淡，只作「天光漏下来」的暗示 */
+  const poolMaterial = track(
+    new THREE.MeshBasicMaterial({
+      map: poolMap,
+      color: '#ffeed3',
+      transparent: true,
+      opacity: 0.2,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+      toneMapped: false,
+    }),
   );
   const frameMaterial = track(
     new THREE.MeshStandardMaterial({ color: '#1f2329', roughness: 0.42, metalness: 0.28 }),
@@ -610,6 +705,26 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     floor.userData.isFloor = true;
     scene.add(floor);
     floors.push(floor);
+
+    // 中轴一条浅色石材带 + 沿墙一圈深色走边：地面就有了方向与边界
+    const midX = (space.rect.x1 + space.rect.x2) / 2;
+    const midZ = (space.rect.z1 + space.rect.z2) / 2;
+    const runner = new THREE.Mesh(runnerGeometry, runnerMaterial);
+    runner.rotation.x = -Math.PI / 2;
+    runner.position.set(midX, 0.008, midZ);
+    scene.add(runner);
+
+    for (const side of [-1, 1] as (-1 | 1)[]) {
+      const border = new THREE.Mesh(borderGeometry, stoneMaterial);
+      border.rotation.x = -Math.PI / 2;
+      // 走边从墙面往房间里铺：墙中心线 PANEL_T 之外才是看得见的地面
+      border.position.set(
+        midX + side * ((space.rect.x2 - space.rect.x1) / 2 - PANEL_T - BORDER_W / 2),
+        0.008,
+        midZ,
+      );
+      scene.add(border);
+    }
   }
 
   // ---- 墙（起拱线以下）----
@@ -678,16 +793,83 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     for (const [a, b] of solid) {
       addTrim(face, a, b, BASEBOARD_H, 0.024, BASEBOARD_H / 2, baseMaterial);
     }
-    // 起拱线：一道 2cm 的暗缝，拱顶看着就「落」在墙上而不是糊在一起
-    addTrim(face, face.a, face.b, 0.02, 0.03, face.height - 0.01, revealMaterial);
+    // 起拱线下的檐口：一道出挑的横线，上面留一条暗缝 —— 拱顶看着是「落」在
+    // 檐口上的，不是糊在墙上的。壁柱比檐口更出挑一点，檐口就绕着壁柱转
+    addTrim(
+      face,
+      face.a,
+      face.b,
+      CORNICE_H,
+      CORNICE_T,
+      face.height - CORNICE_H / 2 - 0.014,
+      wallMaterial,
+    );
+    addTrim(face, face.a, face.b, 0.016, CORNICE_T * 0.6, face.height - 0.008, revealMaterial);
+  }
+
+  // ---- 拱门：一圈石门套（两根竖挺 + 一条横楣）与门槛石 ----
+  for (const door of plan.doors) {
+    for (const normal of [1, -1] as (1 | -1)[]) {
+      const x = door.x + normal * (PANEL_T + PORTAL_T / 2);
+      for (const side of [-1, 1] as (-1 | 1)[]) {
+        const jamb = new THREE.Mesh(unitBox, portalMaterial);
+        jamb.position.set(
+          x,
+          (door.height + PORTAL_W) / 2,
+          door.z + side * (door.width / 2 + PORTAL_W / 2),
+        );
+        jamb.scale.set(PORTAL_T, door.height + PORTAL_W, PORTAL_W);
+        scene.add(jamb);
+        blockers.push(jamb);
+      }
+      const head = new THREE.Mesh(unitBox, portalMaterial);
+      head.position.set(x, door.height + PORTAL_W / 2, door.z);
+      head.scale.set(PORTAL_T, PORTAL_W, door.width + PORTAL_W * 2);
+      scene.add(head);
+      blockers.push(head);
+    }
+
+    // 门槛石：门洞地面上一块深色石材，两个拱顶在这里分界
+    const sill = new THREE.Mesh(unitBox, stoneMaterial);
+    sill.position.set(door.x, 0.012, door.z);
+    sill.scale.set(0.42, 0.024, door.width + PORTAL_W * 2);
+    scene.add(sill);
+  }
+
+  // ---- 壁柱：长墙按展位分间，画挂在开间里 ----
+  for (const pilaster of plan.pilasters) {
+    const mesh = new THREE.Mesh(unitBox, wallMaterial);
+    mesh.position.set(
+      pilaster.x + pilaster.normal * (PANEL_T + PILASTER_T / 2),
+      SPRING_H / 2,
+      pilaster.z,
+    );
+    mesh.scale.set(PILASTER_T, SPRING_H, PILASTER_W);
+    scene.add(mesh);
+    blockers.push(mesh);
+  }
+
+  // ---- 长凳：端墙前一条，坐下来正好回望整条天光缝 ----
+  for (const bench of plan.benches) {
+    const seat = new THREE.Mesh(unitBox, benchMaterial);
+    seat.position.set(bench.x, BENCH_H, bench.z);
+    seat.scale.set(bench.width, BENCH_T, bench.depth);
+    scene.add(seat);
+    blockers.push(seat);
+
+    for (const side of [-1, 1] as (-1 | 1)[]) {
+      const leg = new THREE.Mesh(unitBox, baseMaterial);
+      leg.position.set(bench.x + side * (bench.width / 2 - 0.26), BENCH_H / 2, bench.z);
+      leg.scale.set(BENCH_LEG, BENCH_H, bench.depth * 0.72);
+      scene.add(leg);
+      blockers.push(leg);
+    }
   }
 
   // ---- 拱顶：壳体 + 天光缝 + 反光翼 + 端墙拱形 ----
+  // 所有拱同长（plan.ts 保证），天光缝通长、两端各留一点别顶到端墙
   const profile = vaultProfile(VAULT_METRICS.width);
   const rise = vaultRise(VAULT_METRICS.width);
-  // 所有拱同长（plan.ts 保证），天光缝通长、两端各留一点别顶到端墙
-  const vaultLength = plan.vaults[0]?.length ?? 0;
-  const slotLength = Math.max(1, vaultLength - VAULT_METRICS.slotInset * 2);
 
   for (const vault of plan.vaults) {
     const apexY = SPRING_H + rise;
@@ -703,6 +885,14 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     slot.rotation.x = Math.PI / 2;
     slot.scale.set(VAULT_METRICS.slot, slotLength, 1);
     scene.add(slot);
+
+    // 天光落在地上的那道光。没开阴影，投影算不出来，就把它画在地上 ——
+    // 天光本来也该在地上留一道，这道光是「这房子有天窗」最直接的证据
+    const pool = new THREE.Mesh(unitPlane, poolMaterial);
+    pool.position.set(vault.x, 0.016, 0);
+    pool.rotation.x = -Math.PI / 2;
+    pool.scale.set(VAULT_METRICS.slot + POOL_PAD, slotLength, 1);
+    scene.add(pool);
 
     // 缝下的细格栅：金贝尔天光最标志性的那一片穿孔铝
     for (let i = 0; i < BAR_COUNT; i += 1) {

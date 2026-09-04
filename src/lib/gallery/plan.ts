@@ -7,6 +7,8 @@
  * - 每个拱沿 z 延伸（长度），沿 x 并排（跨度）
  * - 摆线断面：跨度 W 对应矢高 W/π（比半圆扁得多，这是这套比例的关键）
  * - 起拱线以下才是「墙」，挂画只挂两道长墙
+ * - 长墙按画框之间的空当立壁柱，分成一间间展位；端墙前摆一条长凳，
+ *   家具在地面上的占位（obstacles）要从可行走区里挖掉
  *
  * 这一层刻意不 import three —— 纯数字进纯数字出，场景（floor.ts）只负责
  * 把下面的规格摆出来。
@@ -101,6 +103,36 @@ export interface DoorSpec {
   height: number;
 }
 
+/**
+ * 长墙上的壁柱：把一整面墙分成一间间展位，画挂在开间里。
+ * 位置取自相邻两件作品之间的空当（见 layoutFloor），所以画多画少都成立。
+ */
+export interface PilasterSpec {
+  spaceId: string;
+  /** 墙中心线（世界坐标 x） */
+  x: number;
+  z: number;
+  /** 与所在墙的法线同向：+1 朝 +x，-1 朝 -x */
+  normal: 1 | -1;
+}
+
+/** 长凳：端墙前一条，坐下来回望整条拱顶 */
+export interface BenchSpec {
+  spaceId: string;
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+}
+
+/** 家具在地面上的占位（含人身余量），可行走区要绕开它 */
+export interface Obstacle {
+  x1: number;
+  z1: number;
+  x2: number;
+  z2: number;
+}
+
 /** 一件作品在世界坐标里的落点 */
 export interface Placement {
   id: string;
@@ -131,6 +163,12 @@ export interface FloorPlan {
   arches: EndArchSpec[];
   walls: WallFace[];
   doors: DoorSpec[];
+  /** 长墙上分展位的壁柱 */
+  pilasters: PilasterSpec[];
+  /** 端墙前的长凳 */
+  benches: BenchSpec[];
+  /** 家具占位：containsPoint 要把它们挖掉 */
+  obstacles: Obstacle[];
   placements: Placement[];
   /** 整层的包围盒，用来定相机远平面 */
   bounds: Rect;
@@ -167,6 +205,15 @@ const HANG_MARGIN = 0.12;
 /** 有拱门的墙，中间这条带子要空出来 */
 const DOOR_BAND = 0.12;
 const DEFAULT_ASPECT = 3 / 2;
+/** 长凳：尺寸与离端墙的距离 */
+const BENCH_W = 1.8;
+const BENCH_D = 0.44;
+const BENCH_INSET = 0.85;
+/** 家具四周要留的人身余量：贴着长凳站会站进凳子里 */
+const FURNITURE_CLEAR = 0.28;
+/** 壁柱：画框与壁柱之间留的空白，以及空当窄于此就不立柱 */
+const BAY_PAD = 0.22;
+const PILASTER_MIN_GAP = 0.42;
 
 export const VAULT_METRICS = {
   width: VAULT_W,
@@ -268,6 +315,9 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
   const arches: EndArchSpec[] = [];
   const walls: WallFace[] = [];
   const doors: DoorSpec[] = [];
+  const pilasters: PilasterSpec[] = [];
+  const benches: BenchSpec[] = [];
+  const obstacles: Obstacle[] = [];
   const placements: Placement[] = [];
 
   rooms.forEach((room, index) => {
@@ -336,13 +386,22 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
     const counts = use.map(
       (_, wallIndex) => room.items.filter((_, j) => j % use.length === wallIndex).length,
     );
+    const perWall = use.map((wall, wallIndex) => ({
+      wall,
+      slots: hangSlots(counts[wallIndex], wall.hasDoor),
+    }));
+    /** 每面墙上被画框占掉的一段段（按墙中心线的 x 归类） */
+    const bays = new Map<
+      number,
+      { normal: 1 | -1; hasDoor: boolean; spans: { z0: number; z1: number }[] }
+    >();
 
     room.items.forEach((item, j) => {
       const wallIndex = j % use.length;
       const wall = use[wallIndex];
       const withinWall = Math.floor(j / use.length);
       const countOnWall = counts[wallIndex];
-      const slots = hangSlots(countOnWall, wall.hasDoor);
+      const slots = perWall[wallIndex].slots;
       const auto = Math.min(MAX_SIZE, (length * 0.82) / Math.max(countOnWall, 1) - 0.25);
       const size = Math.max(0.6, item.place?.size ?? auto);
 
@@ -355,18 +414,60 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
       const v = item.place?.v ?? (EYE_HEIGHT + size * 0.12) / SPRING_H;
 
       const { fw, fh } = boxOf(size, aspectOf(item));
+      const z = (u - 0.5) * length;
+
+      // 记下画框在墙上占的一段（两侧各加一点留白），壁柱就立在段与段之间
+      const bay = bays.get(target.at) ?? {
+        normal: target.normal,
+        hasDoor: target.hasDoor,
+        spans: [],
+      };
+      bay.spans.push({ z0: z - fw / 2 - BAY_PAD, z1: z + fw / 2 + BAY_PAD });
+      bays.set(target.at, bay);
+
       placements.push({
         id: item.id,
         spaceId: room.id,
         x: target.at + target.normal * ART_INSET,
         y: v * SPRING_H,
-        z: (u - 0.5) * length,
+        z,
         ry: target.normal === 1 ? Math.PI / 2 : -Math.PI / 2,
         fw,
         fh,
         title: item.title ?? '',
         camera: item.camera ?? '',
       });
+    });
+
+    // ---- 壁柱：画框之间的空当立一根，一整面长墙就分成了一间间展位 ----
+    for (const [at, bay] of bays) {
+      const spans = [...bay.spans].sort((a, b) => a.z0 - b.z0);
+      const gaps: { from: number; to: number }[] = [];
+      // 从墙的一头走到另一头，把没被画框占掉的空当收集起来
+      let cursor = -half + 0.15;
+      for (const span of spans) {
+        if (span.z0 > cursor) gaps.push({ from: cursor, to: span.z0 });
+        cursor = Math.max(cursor, span.z1);
+      }
+      if (cursor < half - 0.15) gaps.push({ from: cursor, to: half - 0.15 });
+
+      for (const gap of gaps) {
+        const z = (gap.from + gap.to) / 2;
+        if (gap.to - gap.from < PILASTER_MIN_GAP) continue;
+        // 门洞那一段不立柱：柱子在门口会挡路，也把门套切断
+        if (bay.hasDoor && Math.abs(z) < DOOR_W / 2 + 0.25) continue;
+        pilasters.push({ spaceId: room.id, x: at, z, normal: bay.normal });
+      }
+    }
+
+    // ---- 长凳：端墙前一条，坐下来正好回望整条天光缝 ----
+    const benchZ = half - BENCH_INSET;
+    benches.push({ spaceId: room.id, x: cx, z: benchZ, width: BENCH_W, depth: BENCH_D });
+    obstacles.push({
+      x1: cx - BENCH_W / 2 - FURNITURE_CLEAR,
+      x2: cx + BENCH_W / 2 + FURNITURE_CLEAR,
+      z1: benchZ - BENCH_D / 2 - FURNITURE_CLEAR,
+      z2: benchZ + BENCH_D / 2 + FURNITURE_CLEAR,
     });
   });
 
@@ -377,7 +478,7 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
     z2: Math.max(...spaces.map((space) => space.rect.z2)),
   };
 
-  return { spaces, vaults, arches, walls, doors, placements, bounds };
+  return { spaces, vaults, arches, walls, doors, pilasters, benches, obstacles, placements, bounds };
 }
 
 /** 点落在哪个拱顶里（用原始矩形，墙厚算在里面） */
@@ -389,8 +490,13 @@ export function spaceAt(plan: FloorPlan, x: number, z: number): SpaceSpec | null
   return null;
 }
 
-/** 能不能站在这儿：在拱顶内（离墙 BODY_R），或在拱门里（拱门是两个拱顶的桥） */
+/** 能不能站在这儿：不撞家具、在拱顶内（离墙 BODY_R），或在拱门里（拱门是两个拱顶的桥） */
 export function containsPoint(plan: FloorPlan, x: number, z: number): boolean {
+  for (const obstacle of plan.obstacles) {
+    if (x >= obstacle.x1 && x <= obstacle.x2 && z >= obstacle.z1 && z <= obstacle.z2) {
+      return false;
+    }
+  }
   for (const space of plan.spaces) {
     const { rect } = space;
     if (
