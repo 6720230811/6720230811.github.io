@@ -665,7 +665,7 @@ h4 {
   background: var(--c-accent-soft);
 }
 
-/* ---------- 顶栏时钟：所在地 + 当地时间 ---------- */
+/* ---------- 顶栏时钟：访客城市 + 当地时间 ---------- */
 /* 纯展示，不做 btn-plain 的 hover 放大底色（它不可点） */
 .clock {
   display: inline-flex;
@@ -679,6 +679,11 @@ h4 {
   white-space: nowrap;
 }
 
+/* hidden 属性靠这条才生效：.clock 的 display 会盖掉浏览器默认的 [hidden] */
+.clock[hidden] {
+  display: none;
+}
+
 .clock svg {
   flex: none;
   width: 0.9rem;
@@ -686,7 +691,7 @@ h4 {
   color: var(--c-text-faint);
 }
 
-/* 所在地可能很长（如「中国 · 北京」），超宽就截断，不把工具区挤爆 */
+/* 城市名可能很长，超宽就截断，不把工具区挤爆 */
 .clock__city {
   max-width: 9rem;
   overflow: hidden;

@@ -1,61 +1,91 @@
 ---
 /**
- * 时间与位置组件：所在地 + 该地实时时间（顶栏右侧常驻）
+ * 时间与位置组件：访客城市 + 访客本地时间（顶栏右侧常驻）
  *
- * 站点是静态的，构建时算出的时间只能当占位，页面加载后由脚本接管、每秒刷新。
+ * 位置来自 IP 定位（浏览器向第三方接口发一次请求），成功前组件隐藏；
+ * 接口不可达、超额或访客用了代理时宁可一直隐藏，也不展示错误的城市。
+ * 注意：这会把访客 IP 暴露给所配置的接口服务商。
  */
-import type { Profile } from '../data/profile';
 import { useTranslations, type Locale } from '../i18n/ui';
 import Icon from './Icon.astro';
 
 interface Props {
-  profile: Profile;
   locale: Locale;
 }
 
-const { profile, locale } = Astro.props;
+const { locale } = Astro.props;
 const t = useTranslations(locale);
-
-// hourCycle 而不是 hour12：后者的 h24 在午夜会输出「24:00」
-const options: Intl.DateTimeFormatOptions = {
-  timeZone: profile.timezone,
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23',
-};
-const initial = new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-GB', options).format(
-  new Date()
-);
 ---
 
-<div class="clock" data-tz={profile.timezone} data-lang={locale} title={t('clock.label')}>
+{/* hidden 由脚本在定位成功后移除；CSS 里另有 .clock[hidden] 兜底 */}
+<div class="clock" data-lang={locale} title={t('clock.label')} hidden>
   <Icon name="location" />
-  <span class="clock__city">{profile.location}</span>
-  <time class="clock__time">{initial}</time>
+  <span class="clock__city"></span>
+  <time class="clock__time"></time>
 </div>
 
 <script>
+  /**
+   * 免费定位接口（都支持 https、无需 key），前一个拿不到就换下一个。
+   * 两者字段不同：ipwho.is 的时区在 timezone.id，ipapi.co 直接在 timezone。
+   */
+  const ENDPOINTS = ['https://ipwho.is/', 'https://ipapi.co/json/'];
+
+  interface Place {
+    city: string;
+    timeZone: string;
+  }
+
+  async function locate(): Promise<Place | null> {
+    for (const url of ENDPOINTS) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const data = (await res.json()) as {
+          city?: string;
+          country?: string;
+          timezone?: string | { id?: string };
+        };
+        const timeZone = typeof data.timezone === 'string' ? data.timezone : data.timezone?.id;
+        const city = data.city || data.country;
+        if (city && timeZone) return { city, timeZone };
+      } catch {
+        // 网络不可达 / 返回非 JSON：换下一家
+      }
+    }
+    return null;
+  }
+
   const clock = document.querySelector<HTMLElement>('.clock');
   if (clock) {
+    const cityEl = clock.querySelector('.clock__city');
     const timeEl = clock.querySelector('time');
-    const fmt = new Intl.DateTimeFormat(clock.dataset.lang === 'en' ? 'en-GB' : 'zh-CN', {
-      timeZone: clock.dataset.tz,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    });
 
-    const tick = () => {
-      const now = new Date();
-      if (timeEl) {
-        timeEl.textContent = fmt.format(now);
-        timeEl.dateTime = now.toISOString();
-      }
-    };
+    const place = await locate();
 
-    tick();
-    window.setInterval(tick, 1000);
+    if (place) {
+      if (cityEl) cityEl.textContent = place.city;
+
+      // hourCycle 而不是 hour12：后者的 h24 在午夜会输出「24:00」
+      const fmt = new Intl.DateTimeFormat(clock.dataset.lang === 'en' ? 'en-GB' : 'zh-CN', {
+        timeZone: place.timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+      });
+
+      const tick = () => {
+        const now = new Date();
+        if (timeEl) {
+          timeEl.textContent = fmt.format(now);
+          timeEl.dateTime = now.toISOString();
+        }
+      };
+
+      tick();
+      clock.hidden = false;
+      window.setInterval(tick, 1000);
+    }
   }
 </script>

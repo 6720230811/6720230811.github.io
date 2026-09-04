@@ -5,7 +5,6 @@
   "affiliationLink": "https://example.edu.cn",
   "lab": "XX Lab",
   "location": "Beijing · China",
-  "timezone": "Asia/Shanghai",
   "email": "your.email@example.com",
   "bio": [
     "I am a Master's student in Computer Science at XX University, advised by Prof. XX. My research focuses on efficient machine learning and large language model inference optimization.",

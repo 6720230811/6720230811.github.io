@@ -10,8 +10,8 @@ const zh = {
   'sidebar.cv': '下载简历',
   'sidebar.contact': '联系方式',
 
-  // 时间与位置组件（顶栏时钟）
-  'clock.label': '我的所在地当地时间',
+  // 时间与位置组件（顶栏时钟：按访客 IP 定位）
+  'clock.label': '你所在的城市与当地时间',
 
   // 导航栏（跨页面链接）
   'nav.aria': '主导航',
@@ -95,8 +95,8 @@ const en: Record<keyof typeof zh, string> = {
   'sidebar.cv': 'Download CV',
   'sidebar.contact': 'Contact',
 
-  // 时间与位置组件（顶栏时钟）
-  'clock.label': 'Local time at my location',
+  // 时间与位置组件（顶栏时钟：按访客 IP 定位）
+  'clock.label': 'Your city and local time',
 
   // 导航栏（跨页面链接）
   'nav.aria': 'Main navigation',
