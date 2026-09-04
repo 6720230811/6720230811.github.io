@@ -5,8 +5,11 @@ import TokenBar from '../components/admin/TokenBar.astro';
 import PostEditor from '../components/admin/PostEditor.astro';
 import ProfileEditor from '../components/admin/ProfileEditor.astro';
 import FriendsEditor from '../components/admin/FriendsEditor.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
+import Icon from '../components/Icon.astro';
 
 // 后台不进导航、不进站点地图，也不要被 pagefind 索引
+const base = import.meta.env.BASE_URL;
 ---
 
 <!doctype html>
@@ -34,8 +37,21 @@ import FriendsEditor from '../components/admin/FriendsEditor.astro';
 
   <body>
     <header class="admin-top">
-      <h1>后台</h1>
-      <code class="admin-top__path">/{'admin'}</code>
+      <div class="admin-top__card">
+        <div class="admin-top__brand">
+          <span class="admin-top__dot" aria-hidden="true"></span>
+          <h1>后台</h1>
+          <code class="admin-top__path">/{'admin'}</code>
+        </div>
+
+        <div class="admin-top__tools">
+          <a class="admin-top__link" href={base}>
+            <Icon name="external" />
+            <span>查看站点</span>
+          </a>
+          <ThemeToggle locale="zh" />
+        </div>
+      </div>
     </header>
 
     <div class="admin-wrap">

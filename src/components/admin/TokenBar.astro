@@ -13,20 +13,23 @@ const { owner = repo.owner, name = repo.repo, branch = repo.branch } = Astro.pro
 
 <section class="panel token-bar">
   <div class="token-bar__main">
-    <label class="field">
-      <span class="field__label">
+    <div class="field">
+      <label class="field__label" for="token-input">
         GitHub Token
         <span class="field__hint">fine-grained PAT，只给这一个仓库的 Contents 读写权限</span>
-      </span>
-      <input
-        id="token-input"
-        class="input"
-        type="password"
-        placeholder="github_pat_…"
-        autocomplete="off"
-        spellcheck="false"
-      />
-    </label>
+      </label>
+      <div class="token-bar__input">
+        <input
+          id="token-input"
+          class="input"
+          type="password"
+          placeholder="github_pat_…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="token-toggle" class="token-bar__eye" type="button" aria-pressed="false">显示</button>
+      </div>
+    </div>
 
     <div class="token-bar__actions">
       <button id="token-save" class="btn btn--primary" type="button">保存 Token</button>
@@ -50,3 +53,17 @@ const { owner = repo.owner, name = repo.repo, branch = repo.branch } = Astro.pro
     <p class="help__warn">不要在公共电脑上使用：拿到这个 token 的人就能改这个仓库。</p>
   </details>
 </section>
+
+<script>
+  // 输入的是 token，默认遮住；需要核对时切成明文
+  const tokenInput = document.querySelector<HTMLInputElement>('#token-input');
+  const tokenToggle = document.getElementById('token-toggle');
+
+  tokenToggle?.addEventListener('click', () => {
+    if (!tokenInput) return;
+    const show = tokenInput.type === 'password';
+    tokenInput.type = show ? 'text' : 'password';
+    tokenToggle.textContent = show ? '隐藏' : '显示';
+    tokenToggle.setAttribute('aria-pressed', String(show));
+  });
+</script>
