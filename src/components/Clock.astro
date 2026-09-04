@@ -3,8 +3,9 @@
  * 时间与位置组件：访客城市 + 访客本地时间（顶栏右侧常驻）
  *
  * 位置来自 IP 定位（浏览器向第三方接口发一次请求），成功前组件隐藏；
- * 接口不可达、超额或访客用了代理时宁可一直隐藏，也不展示错误的城市。
- * 注意：这会把访客 IP 暴露给所配置的接口服务商。
+ * 接口不可达、超额、或 VPN/代理的 IP 查不到城市时，退化为访客系统时区的时间
+ * （Intl 自带，不联网），只是没有城市名。
+ * 注意：定位会把访客 IP 暴露给所配置的接口服务商。
  */
 import { useTranslations, type Locale } from '../i18n/ui';
 import Icon from './Icon.astro';
@@ -17,8 +18,14 @@ const { locale } = Astro.props;
 const t = useTranslations(locale);
 ---
 
-{/* hidden 由脚本在定位成功后移除；CSS 里另有 .clock[hidden] 兜底 */}
-<div class="clock" data-lang={locale} title={t('clock.label')} hidden>
+{/* hidden 由脚本在拿到时区后移除；CSS 里另有 .clock[hidden] 兜底 */}
+<div
+  class="clock"
+  data-lang={locale}
+  data-label-fallback={t('clock.labelLocal')}
+  title={t('clock.label')}
+  hidden
+>
   <Icon name="location" />
   <span class="clock__city"></span>
   <time class="clock__time"></time>
@@ -58,34 +65,41 @@ const t = useTranslations(locale);
 
   const clock = document.querySelector<HTMLElement>('.clock');
   if (clock) {
-    const cityEl = clock.querySelector('.clock__city');
+    const cityEl = clock.querySelector<HTMLElement>('.clock__city');
     const timeEl = clock.querySelector('time');
 
     const place = await locate();
 
     if (place) {
       if (cityEl) cityEl.textContent = place.city;
-
-      // hourCycle 而不是 hour12：后者的 h24 在午夜会输出「24:00」
-      const fmt = new Intl.DateTimeFormat(clock.dataset.lang === 'en' ? 'en-GB' : 'zh-CN', {
-        timeZone: place.timeZone,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hourCycle: 'h23',
-      });
-
-      const tick = () => {
-        const now = new Date();
-        if (timeEl) {
-          timeEl.textContent = fmt.format(now);
-          timeEl.dateTime = now.toISOString();
-        }
-      };
-
-      tick();
-      clock.hidden = false;
-      window.setInterval(tick, 1000);
+    } else {
+      // 没有城市就只留时间：城市那一段和定位图标都收掉，标题也换成不含城市的那一句
+      if (cityEl) cityEl.hidden = true;
+      const icon = clock.querySelector('svg');
+      if (icon) icon.style.display = 'none';
+      clock.title = clock.dataset.labelFallback ?? clock.title;
     }
+
+    // hourCycle 而不是 hour12：后者的 h24 在午夜会输出「24:00」
+    const fmt = new Intl.DateTimeFormat(clock.dataset.lang === 'en' ? 'en-GB' : 'zh-CN', {
+      // 定位不到（接口挂了、VPN 出口查不出城市）就用浏览器自己的时区，照样给时间
+      timeZone: place?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+
+    const tick = () => {
+      const now = new Date();
+      if (timeEl) {
+        timeEl.textContent = fmt.format(now);
+        timeEl.dateTime = now.toISOString();
+      }
+    };
+
+    tick();
+    clock.hidden = false;
+    window.setInterval(tick, 1000);
   }
 </script>

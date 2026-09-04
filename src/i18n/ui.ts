@@ -12,6 +12,7 @@ const zh = {
 
   // 时间与位置组件（顶栏时钟：按访客 IP 定位）
   'clock.label': '你所在的城市与当地时间',
+  'clock.labelLocal': '你的当地时间',
 
   // 导航栏（跨页面链接）
   'nav.aria': '主导航',
@@ -97,6 +98,7 @@ const en: Record<keyof typeof zh, string> = {
 
   // 时间与位置组件（顶栏时钟：按访客 IP 定位）
   'clock.label': 'Your city and local time',
+  'clock.labelLocal': 'Your local time',
 
   // 导航栏（跨页面链接）
   'nav.aria': 'Main navigation',
