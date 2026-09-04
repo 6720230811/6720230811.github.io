@@ -75,7 +75,7 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
     {/* 背景效果层：装饰性画布，靠 z-index 与 DOM 顺序压在所有内容之下 */}
     <Backdrop />
 
-    <Navbar profile={profile} locale={locale} />
+    <Navbar locale={locale} />
 
     {/* 装饰性横幅，下方 .page 会盖住它的底部 --banner-overlap */}
     <div class="hero" aria-hidden="true" style={`--banner-img: url('${base}banner.jpg')`}></div>

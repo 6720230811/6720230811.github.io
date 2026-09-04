@@ -270,7 +270,6 @@ h4 {
 
 /* btn-plain + scale-animation（Fuwari 顶栏里所有可点元素共用的观感）：
    自身无底色，hover 时 ::before 从 85% 放大到 100% 铺出底色，按下时整块缩小 */
-.navbar__brand,
 .navbar__link,
 .navbar__menu,
 .navbar__search,
@@ -289,7 +288,6 @@ h4 {
   transition: color 0.15s ease, transform 0.15s ease;
 }
 
-.navbar__brand::before,
 .navbar__link::before,
 .navbar__menu::before,
 .navbar__search::before,
@@ -305,7 +303,6 @@ h4 {
   transition: transform 0.15s ease-out, background-color 0.15s ease-out;
 }
 
-.navbar__brand:hover::before,
 .navbar__link:hover::before,
 .navbar__menu:hover::before,
 .navbar__search:hover::before,
@@ -315,7 +312,6 @@ h4 {
   background: var(--c-bg-soft);
 }
 
-.navbar__brand:hover,
 .navbar__link:hover,
 .navbar__menu:hover,
 .navbar__search:hover,
@@ -325,23 +321,6 @@ h4 {
   text-decoration: none;
 }
 
-/* h-[3.25rem] px-5：品牌比链接更高一档，图标 1.75rem */
-.navbar__brand {
-  flex: none;
-  height: 3.25rem;
-  padding: 0 1.25rem;
-  font-size: 1rem;
-  color: var(--c-accent);
-}
-
-.navbar__brand svg {
-  width: 1.75rem;
-  height: 1.75rem;
-  margin-right: 0.5rem;
-  margin-bottom: 0.25rem; /* Fuwari 的 mb-1，把图标抬到与文字视觉齐平 */
-}
-
-.navbar__brand:active,
 .navbar__link:active {
   transform: scale(0.95);
 }
@@ -721,8 +700,9 @@ h4 {
 }
 
 /* ---------- 顶栏时钟：访客城市 + 当地时间 ---------- */
-/* 纯展示，不做 btn-plain 的 hover 放大底色（它不可点） */
+/* 占顶栏左侧（原来是品牌位）。纯展示，不做 btn-plain 的 hover 放大底色 */
 .clock {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -746,7 +726,7 @@ h4 {
   color: var(--c-text-faint);
 }
 
-/* 城市名可能很长，超宽就截断，不把工具区挤爆 */
+/* 城市名可能很长，超宽就截断，不把导航链接挤没了 */
 .clock__city {
   max-width: 9rem;
   overflow: hidden;
@@ -765,8 +745,8 @@ h4 {
   }
 }
 
-@media (max-width: 520px) {
-  /* 再窄下去工具区放不下了（搜索 / 主题 / 语言 / 菜单） */
+@media (max-width: 400px) {
+  /* 极窄屏（<400px）左侧也放不下了 */
   .clock {
     display: none;
   }
@@ -1688,11 +1668,6 @@ h4 {
 
   .layout {
     grid-template-columns: 1fr;
-  }
-
-  /* 品牌在窄屏只留图标，把横向空间让给工具按钮 */
-  .navbar__brand span {
-    display: none;
   }
 
   .sidebar {

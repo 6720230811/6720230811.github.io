@@ -1,5 +1,4 @@
 ---
-import type { Profile } from '../data/profile';
 import { navItems } from '../data/nav';
 import { useTranslations, type Locale } from '../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
@@ -10,11 +9,10 @@ import Search from './Search.astro';
 import ThemeToggle from './ThemeToggle.astro';
 
 interface Props {
-  profile: Profile;
   locale: Locale;
 }
 
-const { profile, locale } = Astro.props;
+const { locale } = Astro.props;
 const t = useTranslations(locale);
 
 // 导航项链接：getRelativeLocaleUrl 会补上语言前缀（/en/…）与 base 前缀
@@ -35,10 +33,8 @@ const isCurrent = (path: string) => current === path;
 
 <header class="navbar">
   <div class="navbar__card">
-    <a class="navbar__brand" href={getRelativeLocaleUrl(locale, '')}>
-      <Icon name="home" />
-      <span>{profile.name}</span>
-    </a>
+    {/* 左侧：时间与位置组件（原品牌位） */}
+    <Clock locale={locale} />
 
     <nav class="navbar__nav" aria-label={t('nav.aria')}>
       {
@@ -55,7 +51,6 @@ const isCurrent = (path: string) => current === path;
     </nav>
 
     <div class="navbar__tools">
-      <Clock locale={locale} />
       <Search locale={locale} />
       <ThemeToggle locale={locale} />
       <LangSwitcher />
