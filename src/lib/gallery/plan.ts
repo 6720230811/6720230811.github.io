@@ -1,12 +1,15 @@
 /**
- * 展厅平面图：把同一策展视图下的若干房间沿一条走廊串起来，算出墙、门洞、
- * 挂画的世界坐标，以及哪儿能走、怎么从一间房走到另一间房。
+ * 展厅平面：若干并联的筒拱顶展厅（barrel vault），摆线（cycloid）断面，
+ * 拱顶中央一条通长的天光缝。相邻拱顶共享一道墙、开拱门连通。
  *
- * 这一层刻意不 import three —— 纯数字进纯数字出，场景（floor.ts）只负责把它
- * 摆出来。坐标约定：
- * - 走廊沿 x 轴横贯，中心线 z = 0（z ∈ [-1.2, 1.2]）
- * - 房间分列走廊南北：北侧房间在 z 更小的一侧（背墙朝 -z），南侧反之
- * - 每间房只有背墙与左右墙挂画，朝走廊那面墙开门洞
+ * 形制参考金贝尔美术馆（Louis Kahn, 1972）：扁而长的拱、顶部一线天光、
+ * 光沿弧面洒下来。坐标约定：
+ * - 每个拱沿 z 延伸（长度），沿 x 并排（跨度）
+ * - 摆线断面：跨度 W 对应矢高 W/π（比半圆扁得多，这是这套比例的关键）
+ * - 起拱线以下才是「墙」，挂画只挂两道长墙
+ *
+ * 这一层刻意不 import three —— 纯数字进纯数字出，场景（floor.ts）只负责
+ * 把下面的规格摆出来。
  */
 
 export type WallKey = 'n' | 'e' | 's' | 'w';
@@ -32,116 +35,181 @@ export interface PlanRoomInput {
   id: string;
   label: string;
   items: readonly PlanItem[];
-  colors: { wall: string; floor: string; light: string };
 }
 
-/** 一件作品在世界坐标里的落点 */
-export interface Placement {
-  id: string;
-  /** 所属空间（走廊不挂画，所以一定是某个房间 id） */
-  spaceId: string;
+/** 拱断面上的一个采样点：x 以拱中心为 0，y 从起拱线往上算 */
+export interface ProfilePoint {
   x: number;
   y: number;
+}
+
+/** 一个筒拱顶 */
+export interface VaultSpec {
+  spaceId: string;
+  /** 拱的中心 x */
+  x: number;
+  /** 跨度（米） */
+  width: number;
+  /** 长度（米），沿 z */
+  length: number;
+}
+
+/** 拱顶两端的封口：起拱线以上的拱形墙面 */
+export interface EndArchSpec {
+  spaceId: string;
+  /** 端墙所在的 z */
   z: number;
-  /** 绕 y 轴的朝向：画心法线指向房间内侧 */
-  ry: number;
-  /** 画心尺寸（米），画框在 floor.ts 里按卡纸宽度往外扩 */
-  fw: number;
-  fh: number;
+  /** 朝内：+1 表示朝 +z，-1 表示朝 -z */
+  normal: 1 | -1;
+  x: number;
+  width: number;
 }
 
 /**
- * 一片墙。墙是「两片背靠背」拼出来的：一片属于一个空间，各自用自己的配色与
- * 层高（走廊比房间矮），所以门洞两侧的墙可以长得不一样。
+ * 一片墙。墙是「两片背靠背」拼出来的：一片属于一个拱顶，用各自的层高与
+ * 材质，所以共享墙两侧可以长得不一样。
  */
 export interface WallFace {
-  /** 'x'：墙沿 x 延伸、法线沿 z；'z'：墙沿 z 延伸、法线沿 x */
+  /** 'z'：墙沿 z 延伸（长墙），法线沿 x；'x'：墙沿 x 延伸（端墙），法线沿 z */
   axis: 'x' | 'z';
   /** 沿墙方向的起止（世界坐标） */
   a: number;
   b: number;
   /** 墙中心线的另一个坐标 */
   at: number;
-  /** 法线方向：+1 / -1（axis 'x' 时指 ±z，'z' 时指 ±x），也是这一面朝向的方向 */
+  /** 法线方向：+1 / -1，也是这一面朝向的方向 */
   normal: 1 | -1;
-  /** 这一面属于哪个空间，决定配色 */
   spaceId: string;
   height: number;
-  /** 门洞：沿墙方向的中心与宽度。带门洞的墙在 floor.ts 里拆成左/右/门楣三段 */
+  /** 拱门：沿墙方向的中心与尺寸，floor.ts 会把它拆成左右两段加门楣 */
   door?: { center: number; width: number; height: number };
+}
+
+/** 拱门：连通两个拱顶，也是可行走区的桥 */
+export interface DoorSpec {
+  id: string;
+  /** 门两侧的空间 */
+  a: string;
+  b: string;
+  /** 门洞中心（世界坐标；门开在长墙上，所以宽度沿 z） */
+  x: number;
+  z: number;
+  width: number;
+  height: number;
+}
+
+/** 一件作品在世界坐标里的落点 */
+export interface Placement {
+  id: string;
+  spaceId: string;
+  x: number;
+  y: number;
+  z: number;
+  /** 绕 y 轴的朝向：画心法线指向展厅内侧 */
+  ry: number;
+  fw: number;
+  fh: number;
 }
 
 export interface SpaceSpec {
   id: string;
-  kind: 'room' | 'corridor';
   label: string;
   rect: Rect;
-  height: number;
-  colors: { wall: string; floor: string; light: string };
   spawn: { x: number; z: number; yaw: number };
-}
-
-/** 门洞：可行走区的桥，也是跨房间寻路的必经点 */
-export interface DoorSpec {
-  spaceId: string;
-  /** 门洞中心（世界坐标） */
-  x: number;
-  z: number;
 }
 
 export interface FloorPlan {
   spaces: SpaceSpec[];
+  vaults: VaultSpec[];
+  /** 每个拱顶两端的拱形封口 */
+  arches: EndArchSpec[];
   walls: WallFace[];
   doors: DoorSpec[];
   placements: Placement[];
-  /** 整层的包围盒，用来定相机远平面与雾的距离 */
+  /** 整层的包围盒，用来定相机远平面 */
   bounds: Rect;
 }
 
-/** 层高。画廊式的空高，画挂太高要仰头看，太低会被人挡住 */
-export const ROOM_HEIGHT = 3.2;
-/** 走廊压低一档：穿过矮门洞进到高展厅，空间有节奏 */
-export const CORRIDOR_HEIGHT = 2.6;
+/** 起拱线高度：墙到此为止，再往上是拱 */
+export const SPRING_H = 3.2;
 /** 眼睛高度：相机初始高度，也是自动挂画时画框中心想去的高度附近 */
 export const EYE_HEIGHT = 1.6;
 
-/** 走廊的 id（也是判断「现在在走廊」的依据） */
-export const CORRIDOR_ID = 'corridor';
-
-const CORRIDOR_HALF = 1.2;
-const DOOR_W = 1.8;
-const DOOR_H = 2.35;
-/** 走廊两端超出房间的长度 */
-const END_PAD = 0.9;
-/** 同侧相邻房间之间的结构缝 */
-const SIDE_GAP = 1.0;
+/** 单个拱的跨度（金贝尔是 20 英尺，约 6 米出头） */
+const VAULT_W = 6.4;
+/** 拱的最短长度；每两件作品再加一截，免得展厅空得发慌 */
+const MIN_LEN = 9;
+const LEN_PER_PAIR = 3.2;
+/** 拱门尺寸：比住宅门高，配 3.2m 的墙 */
+const DOOR_W = 1.9;
+const DOOR_H = 2.6;
+/** 天光缝与反光翼（floor.ts 用同一组数字，改这里就够了） */
+const SLOT_W = 0.7;
+const WING_W = 0.9;
+/** 天光缝两端各留这么长，别顶到端墙 */
+const SLOT_INSET = 0.6;
 /** 人身半径：离墙这么近就走不过去了 */
 const BODY_R = 0.35;
-/** 门洞可行走区沿进深的外扩，要跨过墙厚，否则过门瞬间「哪都不在」 */
+/** 拱门可行走区沿进深的外扩，要跨过墙厚，否则过门瞬间「哪都不在」 */
 const DOOR_DEPTH = 0.85;
-/** 画心离墙中心线的距离：半墙厚(0.07) 之外再留 6cm，画框看着才像挂在墙上 */
+/** 画心离墙中心线的距离：半墙厚(0.07) 之外再留 6cm */
 const ART_INSET = 0.13;
-
-const MIN_SIDE = 5.5;
+/** 单件作品的最大长边 */
 const MAX_SIZE = 1.5;
-const WALL_PADDING = 0.82;
+/** 挂画区在墙长上留的边距（0.12 起，0.88 止） */
+const HANG_MARGIN = 0.12;
+/** 有拱门的墙，中间这条带子要空出来 */
+const DOOR_BAND = 0.12;
 const DEFAULT_ASPECT = 3 / 2;
 
-/** 走廊配色（属于设计而非内容，所以写在这里，不进 gallery.json） */
-const CORRIDOR_COLORS = { wall: '#24272c', floor: '#191c20', light: '#ffe4bd' };
+export const VAULT_METRICS = {
+  width: VAULT_W,
+  slot: SLOT_W,
+  wing: WING_W,
+  slotInset: SLOT_INSET,
+} as const;
 
-interface RoomBox {
-  input: PlanRoomInput;
-  /** 北侧（z 更小）还是南侧 */
-  north: boolean;
-  rect: Rect;
-  /** 背墙的 z（北侧房间是 rect.z1，南侧是 rect.z2） */
-  backZ: number;
-  /** 门洞中心的 x */
-  doorX: number;
-  /** 房间边长 */
-  side: number;
-  hang: { perWall: number; walls: number };
+/**
+ * 摆线（cycloid）拱的断面采样点，从一端起拱点到另一端。
+ *
+ * 按**弧长**等距重采样：摆线在 θ=0 处是尖点，均匀采 θ 会把顶点全挤在
+ * 尖点附近，弧面就一段段折线了。floor.ts 拿它建拱壳与端墙拱形，
+ * 无头测试也拿它算几何断言 —— 单一真源。
+ */
+export function vaultProfile(width: number, samples = 64): ProfilePoint[] {
+  const r = width / (2 * Math.PI);
+  // 先密采一遍算弧长
+  const dense = 512;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const arc: number[] = [0];
+  for (let i = 0; i <= dense; i += 1) {
+    const t = (i / dense) * Math.PI * 2;
+    // θ=π 落在拱顶（x=0, y=2r），θ=0 / 2π 落在两侧起拱点
+    xs.push(r * (t - Math.sin(t)) - Math.PI * r);
+    ys.push(r * (1 - Math.cos(t)));
+    if (i > 0) arc.push(arc[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]));
+  }
+  const total = arc[dense];
+
+  const points: ProfilePoint[] = [];
+  let cursor = 1;
+  for (let k = 0; k <= samples; k += 1) {
+    const target = (k / samples) * total;
+    while (cursor < dense && arc[cursor] < target) cursor += 1;
+    const span = arc[cursor] - arc[cursor - 1];
+    const f = span > 0 ? (target - arc[cursor - 1]) / span : 0;
+    points.push({
+      x: xs[cursor - 1] + (xs[cursor] - xs[cursor - 1]) * f,
+      y: ys[cursor - 1] + (ys[cursor] - ys[cursor - 1]) * f,
+    });
+  }
+  return points;
+}
+
+/** 摆线拱的矢高：跨度 / π（比半圆扁得多） */
+export function vaultRise(width: number): number {
+  return width / Math.PI;
 }
 
 function aspectOf(item: PlanItem): number {
@@ -152,277 +220,159 @@ function boxOf(size: number, aspect: number): { fw: number; fh: number } {
   return aspect >= 1 ? { fw: size, fh: size / aspect } : { fw: size * aspect, fh: size };
 }
 
-/** 单间房用几面墙、每面几幅 */
-function hangPlan(count: number): { perWall: number; walls: number } {
-  // 只有背墙与左右墙能挂画，朝走廊那面开了门洞
-  const walls = Math.min(3, Math.max(1, Math.ceil(count / 3)));
-  return { perWall: Math.ceil(count / walls), walls };
-}
-
-/** 房间沿走廊排布：两侧各自居中对齐，同侧多间时按（最长边 + 缝）排开 */
-function placeRooms(rooms: readonly PlanRoomInput[]): RoomBox[] {
-  const boxes: RoomBox[] = rooms.map((input, index) => {
-    const hang = hangPlan(input.items.length);
-    const side = Math.max(MIN_SIDE, hang.perWall * 2);
-    return {
-      input,
-      // 偶数号挂北侧，奇数号挂南侧：两间房时门洞正对，走廊最短
-      north: index % 2 === 0,
-      rect: { x1: 0, z1: 0, x2: 0, z2: 0 },
-      backZ: 0,
-      doorX: 0,
-      side,
-      hang,
-    };
-  });
-
-  const widest = Math.max(...boxes.map((box) => box.side));
-  const step = widest + SIDE_GAP;
-
-  for (const north of [true, false]) {
-    const group = boxes.filter((box) => box.north === north);
-    group.forEach((box, k) => {
-      const centerX = (k - (group.length - 1) / 2) * step;
-      box.rect = north
-        ? {
-            x1: centerX - box.side / 2,
-            z1: -CORRIDOR_HALF - box.side,
-            x2: centerX + box.side / 2,
-            z2: -CORRIDOR_HALF,
-          }
-        : {
-            x1: centerX - box.side / 2,
-            z1: CORRIDOR_HALF,
-            x2: centerX + box.side / 2,
-            z2: CORRIDOR_HALF + box.side,
-          };
-      box.backZ = north ? box.rect.z1 : box.rect.z2;
-      box.doorX = centerX;
-    });
+/**
+ * 一面墙上的挂画位置（沿墙 0~1）。
+ * 有拱门的墙要避开中间那条带子，所以分两段排。
+ */
+function hangSlots(count: number, hasDoor: boolean): number[] {
+  const slots: number[] = [];
+  if (!hasDoor) {
+    const span = 1 - HANG_MARGIN * 2;
+    for (let i = 0; i < count; i += 1) slots.push(HANG_MARGIN + ((i + 0.5) / count) * span);
+    return slots;
   }
-
-  return boxes;
-}
-
-/** 一条线段减去若干区间后剩下的部分（在走廊长墙上给房间的门墙让位） */
-function subtract(span: [number, number], holes: [number, number][]): [number, number][] {
-  let pieces: [number, number][] = [span];
-  for (const hole of holes) {
-    const next: [number, number][] = [];
-    for (const [a, b] of pieces) {
-      if (hole[1] <= a || hole[0] >= b) {
-        next.push([a, b]);
-        continue;
-      }
-      if (hole[0] > a) next.push([a, hole[0]]);
-      if (hole[1] < b) next.push([hole[1], b]);
-    }
-    pieces = next;
+  // 门洞两侧各占一段：[margin, 0.5-band] 与 [0.5+band, 1-margin]
+  const left = Math.ceil(count / 2);
+  const right = count - left;
+  for (let i = 0; i < left; i += 1) {
+    const span = 0.5 - DOOR_BAND - HANG_MARGIN;
+    slots.push(HANG_MARGIN + ((i + 0.5) / left) * span);
   }
-  return pieces.filter(([a, b]) => b - a > 0.02);
-}
-
-function hangPosition(
-  box: RoomBox,
-  wall: 'back' | 'left' | 'right',
-  u: number,
-  v: number,
-): { x: number; y: number; z: number; ry: number } {
-  const { rect, north } = box;
-  const { side } = box;
-
-  if (wall === 'back') {
-    // 背墙：沿 x 铺开，法线朝房间内（北侧房间朝 +z）
-    return {
-      x: rect.x1 + u * (rect.x2 - rect.x1),
-      y: v * ROOM_HEIGHT,
-      z: box.backZ + (north ? ART_INSET : -ART_INSET),
-      ry: north ? 0 : Math.PI,
-    };
+  for (let i = 0; i < right; i += 1) {
+    const span = 0.5 - DOOR_BAND - HANG_MARGIN;
+    slots.push(0.5 + DOOR_BAND + ((i + 0.5) / right) * span);
   }
-
-  // 侧墙：u=0 在门洞那头，u=1 在背墙那头
-  return {
-    x: wall === 'left' ? rect.x1 + ART_INSET : rect.x2 - ART_INSET,
-    y: v * ROOM_HEIGHT,
-    z: north ? -CORRIDOR_HALF - u * side : CORRIDOR_HALF + u * side,
-    ry: wall === 'left' ? Math.PI / 2 : -Math.PI / 2,
-  };
+  return slots;
 }
 
-/** 生成整层平面图 */
-export function layoutFloor(rooms: readonly PlanRoomInput[], corridorLabel: string): FloorPlan {
-  const boxes = placeRooms(rooms);
-  const x1 = Math.min(...boxes.map((box) => box.rect.x1));
-  const x2 = Math.max(...boxes.map((box) => box.rect.x2));
+/** 生成整层平面：并联的筒拱顶展厅 */
+export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
+  const count = rooms.length;
+  // 所有拱取统一长度：端墙要齐，外轮廓才成形
+  const length = Math.max(
+    MIN_LEN,
+    ...rooms.map((room) => Math.ceil(room.items.length / 2) * LEN_PER_PAIR),
+  );
+  const half = length / 2;
+  const totalWidth = count * VAULT_W;
+  const leftEdge = -totalWidth / 2;
 
-  const corridor: SpaceSpec = {
-    id: CORRIDOR_ID,
-    kind: 'corridor',
-    label: corridorLabel,
-    rect: {
-      x1: x1 - END_PAD,
-      z1: -CORRIDOR_HALF,
-      x2: x2 + END_PAD,
-      z2: CORRIDOR_HALF,
-    },
-    height: CORRIDOR_HEIGHT,
-    colors: CORRIDOR_COLORS,
-    spawn: { x: (x1 + x2) / 2, z: 0, yaw: Math.PI / 2 },
-  };
-
-  const spaces: SpaceSpec[] = [corridor];
+  const spaces: SpaceSpec[] = [];
+  const vaults: VaultSpec[] = [];
+  const arches: EndArchSpec[] = [];
   const walls: WallFace[] = [];
   const doors: DoorSpec[] = [];
   const placements: Placement[] = [];
 
-  for (const box of boxes) {
-    const { rect, north, input } = box;
-    const { side } = box;
-    const doorZ = north ? -CORRIDOR_HALF : CORRIDOR_HALF;
+  rooms.forEach((room, index) => {
+    const cx = leftEdge + (index + 0.5) * VAULT_W;
+    const x1 = cx - VAULT_W / 2;
+    const x2 = cx + VAULT_W / 2;
 
     spaces.push({
-      id: input.id,
-      kind: 'room',
-      label: input.label,
-      rect,
-      height: ROOM_HEIGHT,
-      colors: input.colors,
-      spawn: {
-        x: box.doorX,
-        // 站在门里一点，正对背墙
-        z: north ? doorZ - 1.1 : doorZ + 1.1,
-        yaw: north ? 0 : Math.PI,
-      },
+      id: room.id,
+      label: room.label,
+      rect: { x1, z1: -half, x2, z2: half },
+      // 站在拱的一头，朝另一头看：一眼望穿整条天光缝
+      spawn: { x: cx, z: -half + 2, yaw: Math.PI },
     });
-    doors.push({ spaceId: input.id, x: box.doorX, z: doorZ });
+    vaults.push({ spaceId: room.id, x: cx, width: VAULT_W, length });
 
-    // 背墙：单面，朝房间内
-    walls.push({
-      axis: 'x',
-      a: rect.x1,
-      b: rect.x2,
-      at: box.backZ,
-      normal: north ? 1 : -1,
-      spaceId: input.id,
-      height: ROOM_HEIGHT,
-    });
+    // 两端的封口：实体端墙（起拱线以下）+ 拱形（起拱线以上）
+    for (const [z, normal] of [
+      [-half, 1],
+      [half, -1],
+    ] as [number, 1 | -1][]) {
+      walls.push({ axis: 'x', a: x1, b: x2, at: z, normal, spaceId: room.id, height: SPRING_H });
+      arches.push({ spaceId: room.id, z, normal, x: cx, width: VAULT_W });
+    }
 
-    // 左右侧墙：单面，朝房间内
-    walls.push({
-      axis: 'z',
-      a: rect.z1,
-      b: rect.z2,
-      at: rect.x1,
-      normal: 1,
-      spaceId: input.id,
-      height: ROOM_HEIGHT,
-    });
-    walls.push({
-      axis: 'z',
-      a: rect.z1,
-      b: rect.z2,
-      at: rect.x2,
-      normal: -1,
-      spaceId: input.id,
-      height: ROOM_HEIGHT,
-    });
+    // ---- 两道长墙 ----
+    // 左墙（x1）朝 +x，右墙（x2）朝 -x；与邻拱共享的墙上要开拱门
+    const longWalls: { at: number; normal: 1 | -1; hasDoor: boolean }[] = [
+      { at: x1, normal: 1, hasDoor: index > 0 },
+      { at: x2, normal: -1, hasDoor: index < count - 1 },
+    ];
 
-    // 门墙：两片背靠背，开同样的门洞
-    const door = { center: box.doorX, width: DOOR_W, height: DOOR_H };
-    walls.push({
-      axis: 'x',
-      a: rect.x1,
-      b: rect.x2,
-      at: doorZ,
-      normal: north ? -1 : 1, // 房间在门墙的 -z（北侧）/ +z（南侧）
-      spaceId: input.id,
-      height: ROOM_HEIGHT,
-      door,
-    });
-    walls.push({
-      axis: 'x',
-      a: rect.x1,
-      b: rect.x2,
-      at: doorZ,
-      normal: north ? 1 : -1,
-      spaceId: CORRIDOR_ID,
-      height: CORRIDOR_HEIGHT,
-      door,
-    });
-
-    // ---- 挂画 ----
-    const { perWall, walls: wallCount } = box.hang;
-    const wallOrder: ('back' | 'left' | 'right')[] = ['back', 'left', 'right'];
-    input.items.forEach((item, index) => {
-      const wallIndex = Math.min(Math.floor(index / perWall), wallCount - 1);
-      const slot = index % perWall;
-      const countOnWall = Math.min(perWall, input.items.length - wallIndex * perWall);
-      const auto = Math.min(MAX_SIZE, (side * WALL_PADDING) / countOnWall - 0.25);
-      const size = Math.max(0.6, item.place?.size ?? auto);
-
-      // 手指定的墙：'n' 背墙、'w' 左墙、'e' 右墙；'s' 是门墙，挂不了，退回背墙
-      const placed = item.place?.wall;
-      const wall =
-        placed === 'e' ? 'right' : placed === 'w' ? 'left' : wallOrder[wallIndex] ?? 'back';
-      const u = item.place?.u ?? (slot + 0.5) / countOnWall;
-      const v = item.place?.v ?? (EYE_HEIGHT + size * 0.12) / ROOM_HEIGHT;
-
-      const { x, y, z, ry } = hangPosition(box, wall, u, v);
-      const { fw, fh } = boxOf(size, aspectOf(item));
-      placements.push({ id: item.id, spaceId: input.id, x, y, z, ry, fw, fh });
-    });
-  }
-
-  // 走廊长墙：整条减去各房间占据的区间，剩下的才是实心墙（单面朝走廊内）
-  for (const north of [true, false]) {
-    const holes = boxes
-      .filter((box) => box.north === north)
-      .map((box): [number, number] => [box.rect.x1, box.rect.x2]);
-    for (const [a, b] of subtract([corridor.rect.x1, corridor.rect.x2], holes)) {
+    for (const wall of longWalls) {
+      const door = wall.hasDoor
+        ? { center: 0, width: DOOR_W, height: DOOR_H }
+        : undefined;
       walls.push({
-        axis: 'x',
-        a,
-        b,
-        at: north ? -CORRIDOR_HALF : CORRIDOR_HALF,
-        normal: north ? 1 : -1,
-        spaceId: CORRIDOR_ID,
-        height: CORRIDOR_HEIGHT,
+        axis: 'z',
+        a: -half,
+        b: half,
+        at: wall.at,
+        normal: wall.normal,
+        spaceId: room.id,
+        height: SPRING_H,
+        ...(door ? { door } : {}),
       });
     }
-  }
 
-  // 走廊两端的墙
-  walls.push({
-    axis: 'z',
-    a: -CORRIDOR_HALF,
-    b: CORRIDOR_HALF,
-    at: corridor.rect.x1,
-    normal: 1,
-    spaceId: CORRIDOR_ID,
-    height: CORRIDOR_HEIGHT,
-  });
-  walls.push({
-    axis: 'z',
-    a: -CORRIDOR_HALF,
-    b: CORRIDOR_HALF,
-    at: corridor.rect.x2,
-    normal: -1,
-    spaceId: CORRIDOR_ID,
-    height: CORRIDOR_HEIGHT,
+    // 相邻两拱之间的那道墙只有一个门洞，登记一次即可
+    if (index < count - 1) {
+      doors.push({
+        id: `${room.id}--${rooms[index + 1].id}`,
+        a: room.id,
+        b: rooms[index + 1].id,
+        x: x2,
+        z: 0,
+        width: DOOR_W,
+        height: DOOR_H,
+      });
+    }
+
+    // ---- 挂画 ----
+    // 有拱门的墙尽量不挂画：拱门在墙正中，画挂那儿会被门切断
+    const free = longWalls.filter((wall) => !wall.hasDoor);
+    const use = free.length > 0 ? free : longWalls;
+    const counts = use.map(
+      (_, wallIndex) => room.items.filter((_, j) => j % use.length === wallIndex).length,
+    );
+
+    room.items.forEach((item, j) => {
+      const wallIndex = j % use.length;
+      const wall = use[wallIndex];
+      const withinWall = Math.floor(j / use.length);
+      const countOnWall = counts[wallIndex];
+      const slots = hangSlots(countOnWall, wall.hasDoor);
+      const auto = Math.min(MAX_SIZE, (length * 0.82) / Math.max(countOnWall, 1) - 0.25);
+      const size = Math.max(0.6, item.place?.size ?? auto);
+
+      // 手指定的墙：'w' 左墙、'e' 右墙；'n'/'s' 现在是端墙（不挂画），退回长墙
+      const placed = item.place?.wall;
+      const byHand =
+        placed === 'w' ? longWalls[0] : placed === 'e' ? longWalls[1] : undefined;
+      const target = byHand ?? wall;
+      const u = item.place?.u ?? slots[withinWall] ?? 0.5;
+      const v = item.place?.v ?? (EYE_HEIGHT + size * 0.12) / SPRING_H;
+
+      const { fw, fh } = boxOf(size, aspectOf(item));
+      placements.push({
+        id: item.id,
+        spaceId: room.id,
+        x: target.at + target.normal * ART_INSET,
+        y: v * SPRING_H,
+        z: (u - 0.5) * length,
+        ry: target.normal === 1 ? Math.PI / 2 : -Math.PI / 2,
+        fw,
+        fh,
+      });
+    });
   });
 
   const bounds: Rect = {
-    x1: Math.min(corridor.rect.x1, x1),
-    z1: Math.min(...boxes.map((box) => box.rect.z1), corridor.rect.z1),
-    x2: Math.max(corridor.rect.x2, x2),
-    z2: Math.max(...boxes.map((box) => box.rect.z2), corridor.rect.z2),
+    x1: Math.min(...spaces.map((space) => space.rect.x1)),
+    z1: Math.min(...spaces.map((space) => space.rect.z1)),
+    x2: Math.max(...spaces.map((space) => space.rect.x2)),
+    z2: Math.max(...spaces.map((space) => space.rect.z2)),
   };
 
-  return { spaces, walls, doors, placements, bounds };
+  return { spaces, vaults, arches, walls, doors, placements, bounds };
 }
 
-/** 点落在哪个空间里（用原始矩形，墙厚算在里面） */
+/** 点落在哪个拱顶里（用原始矩形，墙厚算在里面） */
 export function spaceAt(plan: FloorPlan, x: number, z: number): SpaceSpec | null {
   for (const space of plan.spaces) {
     const { rect } = space;
@@ -431,7 +381,7 @@ export function spaceAt(plan: FloorPlan, x: number, z: number): SpaceSpec | null
   return null;
 }
 
-/** 能不能站在这儿：在空间内（离墙 BODY_R），或在门洞里（门洞是两块空间的桥） */
+/** 能不能站在这儿：在拱顶内（离墙 BODY_R），或在拱门里（拱门是两个拱顶的桥） */
 export function containsPoint(plan: FloorPlan, x: number, z: number): boolean {
   for (const space of plan.spaces) {
     const { rect } = space;
@@ -445,7 +395,7 @@ export function containsPoint(plan: FloorPlan, x: number, z: number): boolean {
     }
   }
   for (const door of plan.doors) {
-    if (Math.abs(x - door.x) <= DOOR_W / 2 && Math.abs(z - door.z) <= DOOR_DEPTH) return true;
+    if (Math.abs(z - door.z) <= door.width / 2 && Math.abs(x - door.x) <= DOOR_DEPTH) return true;
   }
   return false;
 }
@@ -456,41 +406,47 @@ export interface Waypoint {
 }
 
 /**
- * 从 from 走到 to 的途经点。同在一间房/走廊就直走（矩形是凸的，直线一定通）；
- * 跨空间一律绕走廊中心线，不上 A*。
+ * 从 from 走到 to 的途经点。同一个拱顶里直走（矩形是凸的）；跨拱顶就在
+ * 「拱门连接成的图」上做一次 BFS —— 从第一个拱到第三个拱得穿过中间那个。
  */
 export function routeTo(plan: FloorPlan, from: Waypoint, to: Waypoint): Waypoint[] {
   const a = spaceAt(plan, from.x, from.z);
   const b = spaceAt(plan, to.x, to.z);
   if (!a || !b || a.id === b.id) return [to];
 
-  const path: Waypoint[] = [];
-  // 两间房的门洞正对时，「上走廊」和「下走廊」可能是同一个点，去掉重复
-  const push = (point: Waypoint): void => {
-    const last = path[path.length - 1];
-    if (!last || Math.hypot(last.x - point.x, last.z - point.z) > 0.01) path.push(point);
-  };
-  const doorOf = (id: string): DoorSpec | undefined =>
-    plan.doors.find((door) => door.spaceId === id);
+  const cameFrom = new Map<string, { space: string; door: DoorSpec }>();
+  const seen = new Set<string>([a.id]);
+  const queue: string[] = [a.id];
 
-  // 出：先走到自己这间房的门洞，再上走廊中心线
-  const da = doorOf(a.id);
-  if (da) {
-    push({ x: da.x, z: da.z });
-    push({ x: da.x, z: 0 });
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (current === b.id) break;
+    for (const door of plan.doors) {
+      const next = door.a === current ? door.b : door.b === current ? door.a : null;
+      if (!next || seen.has(next)) continue;
+      seen.add(next);
+      cameFrom.set(next, { space: current, door });
+      queue.push(next);
+    }
   }
-  // 进：沿走廊中心线走到对方门洞的 x，再穿门进屋
-  const db = doorOf(b.id);
-  if (db) {
-    push({ x: db.x, z: 0 });
-    push({ x: db.x, z: db.z });
-  }
-  push(to);
+  if (!seen.has(b.id)) return [to];
 
+  // 回溯出沿途要穿过的门
+  const route: DoorSpec[] = [];
+  let cursor = b.id;
+  while (cursor !== a.id) {
+    const step = cameFrom.get(cursor);
+    if (!step) break;
+    route.unshift(step.door);
+    cursor = step.space;
+  }
+
+  const path: Waypoint[] = route.map((door) => ({ x: door.x, z: door.z }));
+  path.push(to);
   return path;
 }
 
-/** 出生点：指定房间门内的视角；找不到就退回走廊中心 */
+/** 出生点：指定拱顶那头的视角；找不到就用第一个拱 */
 export function spawnOf(plan: FloorPlan, spaceId: string): { x: number; z: number; yaw: number } {
   const space = plan.spaces.find((item) => item.id === spaceId);
   return space?.spawn ?? plan.spaces[0].spawn;

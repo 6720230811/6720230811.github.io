@@ -2,10 +2,10 @@ import galleryJson from './gallery.json';
 import { GallerySchema } from './gallery.schema';
 // 报错的格式化复用 profile.schema 里那一份：两处各写一遍迟早会漂移
 import { formatIssues } from './profile.schema';
-import type { Gallery, GalleryItem, GalleryMood, LocaleText } from './gallery.schema';
+import type { Gallery, GalleryItem, LocaleText } from './gallery.schema';
 import type { Locale } from '../i18n/ui';
 
-export type { Gallery, GalleryItem, GalleryMood, LocaleText };
+export type { Gallery, GalleryItem, LocaleText };
 
 /**
  * 画廊数据：内容在 `src/data/gallery.json`，后台 /admin 也是读写这个文件。
@@ -44,24 +44,6 @@ function groupKey(item: GalleryItem, view: GalleryView): string {
 export function roomLabel(room: GalleryRoom, locale: Locale): string {
   if (room.view === 'year') return room.key;
   return gallery.labels.theme[room.key]?.[locale] ?? room.key;
-}
-
-/**
- * 缺省氛围：按 key 哈希出一个色相，这样新增分组不用先去写 moods 也能看。
- * 想要确定的观感就在 JSON 的 moods 里显式配 `theme:xxx` / `year:xxxx`。
- */
-function fallbackMood(key: string): GalleryMood {
-  let h = 0;
-  for (let i = 0; i < key.length; i += 1) h = (h * 31 + key.charCodeAt(i)) % 360;
-  return {
-    wall: `hsl(${h} 10% 82%)`,
-    floor: `hsl(${h} 10% 68%)`,
-    light: `hsl(${(h + 200) % 360} 55% 88%)`,
-  };
-}
-
-export function roomMood(room: GalleryRoom): GalleryMood {
-  return gallery.moods[`${room.view}:${room.key}`] ?? fallbackMood(room.key);
 }
 
 /**

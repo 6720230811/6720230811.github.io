@@ -105,30 +105,6 @@
       "tags": ["海", "长曝光"]
     }
   ],
-  "moods": {
-    "theme:city": {
-      "wall": "#2b2f36",
-      "floor": "#1c1f24",
-      "light": "#ffd9a8",
-      "intro": { "zh": "城市的房间，天黑之后", "en": "The city room, after dark" }
-    },
-    "theme:sea": {
-      "wall": "#e6e9ec",
-      "floor": "#cfd6d9",
-      "light": "#cfe6ff",
-      "intro": { "zh": "海边的房间，有雾的早晨", "en": "The sea room, a misty morning" }
-    },
-    "year:2024": {
-      "wall": "#3a3230",
-      "floor": "#241f1e",
-      "light": "#ffc9a0"
-    },
-    "year:2025": {
-      "wall": "#e8e4dc",
-      "floor": "#c9c4bb",
-      "light": "#fff3e0"
-    }
-  },
   "labels": {
     "theme": {
       "city": { "zh": "城市", "en": "City" },

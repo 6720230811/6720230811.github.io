@@ -1,5 +1,5 @@
 ---
-import { mediaUrl, type GalleryItem, type GalleryMood } from '../../data/gallery';
+import { mediaUrl, type GalleryItem } from '../../data/gallery';
 import { useTranslations, type Locale } from '../../i18n/ui';
 
 /** 一间展室：id + 名字 + 配色 + 它自己的那批展品 */
@@ -7,7 +7,6 @@ export interface FloorRoom {
   id: string;
   label: string;
   intro: string;
-  mood: GalleryMood;
   items: readonly GalleryItem[];
 }
 
@@ -16,12 +15,10 @@ interface Props {
   rooms: readonly FloorRoom[];
   /** 从哪间房出生（就是当前这个页面的房间） */
   startRoomId: string;
-  /** 走廊尽头那块名牌的文案（按主题布展 / 按时间布展） */
-  corridorLabel: string;
   locale: Locale;
 }
 
-const { rooms, startRoomId, corridorLabel, locale } = Astro.props;
+const { rooms, startRoomId, locale } = Astro.props;
 const t = useTranslations(locale);
 
 /**
@@ -32,9 +29,6 @@ const payload = rooms.map((room) => ({
   id: room.id,
   label: room.label,
   intro: room.intro,
-  wall: room.mood.wall,
-  floor: room.mood.floor,
-  light: room.mood.light,
   items: room.items.map((item) => ({
     id: item.id,
     type: item.type,
@@ -58,11 +52,9 @@ const payload = rooms.map((room) => ({
   class="gal"
   id="gal"
   data-start-room={startRoomId}
-  data-corridor={corridorLabel}
   data-rooms={JSON.stringify(payload)}
   data-label-loading={t('gallery.loading')}
   data-label-camera={t('gallery.meta.camera')}
-  data-label-corridor={t('gallery.corridor')}
 >
   <canvas class="gal__canvas" id="gal-canvas" tabindex="0" aria-label={t('gallery.title')}></canvas>
 

@@ -6,7 +6,7 @@ import GalleryGrid from '../../../components/gallery/GalleryGrid.astro';
 import GalleryLightbox from '../../../components/gallery/GalleryLightbox.astro';
 import '../../../styles/gallery.css';
 import { profile } from '../../../data/profile';
-import { roomById, roomLabel, roomMood, rooms } from '../../../data/gallery';
+import { roomById, roomLabel, rooms } from '../../../data/gallery';
 import { toLocale, useTranslations } from '../../../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
@@ -27,7 +27,6 @@ const p = profile[locale];
 const found = roomById(room.view, room.id);
 if (!found) return Astro.redirect(getRelativeLocaleUrl(locale, 'gallery'));
 
-const mood = roomMood(found);
 const label = roomLabel(found, locale);
 
 // 房间之间已经打通：这一页装的是同一策展视图下的整层展厅，只是从当前这间出生
@@ -35,12 +34,11 @@ const siblings = rooms(found.view);
 const floorRooms = siblings.map((item) => ({
   id: item.id,
   label: roomLabel(item, locale),
-  intro: roomMood(item).intro?.[locale] ?? `${item.items.length} ${t('gallery.itemCount')}`,
-  mood: roomMood(item),
+  intro: `${item.items.length} ${t('gallery.itemCount')}`,
   items: item.items,
 }));
 const total = siblings.reduce((sum, item) => sum + item.items.length, 0);
-const intro = mood.intro?.[locale] ?? `${siblings.length} ${t('gallery.roomCount')} · ${total} ${t('gallery.itemCount')}`;
+const intro = `${siblings.length} ${t('gallery.roomCount')} · ${total} ${t('gallery.itemCount')}`;
 
 const backUrl =
   found.view === 'year'
@@ -77,12 +75,7 @@ const backUrl =
 
       <p class="gal-fallback" id="gal-fallback" hidden>{t('gallery.fallback.notice')}</p>
 
-      <GalleryFloor
-        rooms={floorRooms}
-        startRoomId={found.id}
-        corridorLabel={t(`gallery.view.${found.view}`)}
-        locale={locale}
-      />
+      <GalleryFloor rooms={floorRooms} startRoomId={found.id} locale={locale} />
       <GalleryGrid groups={floorRooms} locale={locale} />
       <GalleryLightbox locale={locale} />
     </div>

@@ -40,9 +40,6 @@ interface PayloadRoom {
   id: string;
   label: string;
   intro: string;
-  wall: string;
-  floor: string;
-  light: string;
   items: PayloadItem[];
 }
 
@@ -110,7 +107,6 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const mode3d = document.getElementById('gal-mode-3d');
   const modeGrid = document.getElementById('gal-mode-grid');
   const cameraLabel = root.dataset.labelCamera ?? '';
-  const corridorLabel = root.dataset.labelCorridor ?? '';
   const hereLabel = where?.dataset.here ?? '';
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -234,18 +230,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
 
     const plan = layoutFloor(
       rooms.map(
-        (room): PlanRoomInput => ({
-          id: room.id,
-          label: room.label,
-          items: room.items,
-          colors: {
-            wall: resolveColor(room.wall, '#2b2f36'),
-            floor: resolveColor(room.floor, '#1c1f24'),
-            light: resolveColor(room.light, '#ffd9a8'),
-          },
-        }),
+        (room): PlanRoomInput => ({ id: room.id, label: room.label, items: room.items }),
       ),
-      root.dataset.corridor ?? corridorLabel,
     );
 
     let floor: FloorHandle;
@@ -261,7 +247,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     const keys = new Set<string>();
     let yaw = home.yaw;
     let pitch = 0;
-    /** 途经点队列：点地面/画作时由 routeTo 算出，可能要绕走廊 */
+    /** 途经点队列：点地面/画作时由 routeTo 算出，跨展厅会经过中间的拱门 */
     let path: Waypoint[] = [];
     let pendingFocus: string | null = null;
     let hereId = '';
@@ -374,7 +360,6 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       if (!space) return;
 
       if (where) where.textContent = `${hereLabel}：${space.label}`;
-      if (space.kind !== 'room') return;
 
       // URL 只换最后一段，?item= 之类的查询串原样留着
       const url = new URL(window.location.href);
@@ -480,8 +465,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       path = [];
       pendingFocus = null;
       const space = spaceAt(plan, pos.x, pos.z);
-      // 在走廊里就回出发的那间房，不然「回正」完还站在走廊中间
-      const back = spawnOf(plan, space?.kind === 'room' ? space.id : startRoomId);
+      const back = spawnOf(plan, space?.id ?? startRoomId);
       pos.x = back.x;
       pos.z = back.z;
       yaw = back.yaw;
@@ -608,22 +592,6 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       floor.dispose();
     }
   }
-}
-
-/**
- * 读房间配色。
- * 变量可能是 hsl() 之类 three 不一定认的写法，先让浏览器解析成 rgb()。
- */
-function resolveColor(input: string, fallback: string): string {
-  const value = input.trim();
-  if (!value) return fallback;
-  const probe = document.createElement('span');
-  probe.style.display = 'none';
-  probe.style.color = value;
-  document.body.appendChild(probe);
-  const computed = getComputedStyle(probe).color;
-  probe.remove();
-  return computed || fallback;
 }
 
 /** 退回网格：data-mode 回到 grid 并说明原因；展厅整体藏掉，切换按钮也收了 */

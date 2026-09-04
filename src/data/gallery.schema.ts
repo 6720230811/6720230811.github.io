@@ -64,22 +64,12 @@ export const GalleryItemSchema = z.object({
     .optional(),
 });
 
-/** 房间氛围：墙色 / 地板色 / 灯光色 / 导语 */
-export const GalleryMoodSchema = z.object({
-  wall: z.string(),
-  floor: z.string(),
-  light: z.string(),
-  intro: LocaleTextSchema.optional(),
-});
-
 export const GallerySchema = z
   .object({
     version: z.literal(1),
     /** 素材前缀：'' 表示用仓库里的 public/gallery/；换 CDN 时填 CDN 地址即可 */
     base: z.string().default(''),
     items: z.array(GalleryItemSchema),
-    /** 键是 'theme:city' 或 'year:2024'，缺省的氛围会按 key 推一个色相 */
-    moods: z.record(z.string(), GalleryMoodSchema).default({}),
     labels: z
       .object({
         theme: z.record(z.string(), LocaleTextSchema).default({}),
@@ -92,6 +82,5 @@ export const GallerySchema = z
   });
 
 export type GalleryItem = z.infer<typeof GalleryItemSchema>;
-export type GalleryMood = z.infer<typeof GalleryMoodSchema>;
 export type Gallery = z.infer<typeof GallerySchema>;
 export type LocaleText = z.infer<typeof LocaleTextSchema>;

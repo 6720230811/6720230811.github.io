@@ -4,23 +4,27 @@
  * 只在 mountGallery 确认设备能跑 WebGL 之后才被动态 import —— 不支持的设备
  * 连这个 chunk 都不会下载。交互与 DOM 逻辑在 index.ts，这里只管「展厅长什么样」。
  *
- * 观感上的几条取舍：
- * - 建筑面（墙/地/顶/踢脚/画框）用 Standard 材质吃光，画心用 Basic 材质且关掉
- *   色调映射 —— 展品的亮度不该被房间灯光吃掉，这样画永远是展厅里最亮的。
- * - 墙面/地面用画布现画一张程序化纹理（细颗粒 + 大块晕染），大片纯色在
- *   透视里会发平，有了纹理才有材质感。
- * - 洗墙光、灯罩是纯贴图/自发光，不额外点灯：灯越多 shader 越贵，而这些
- *   效果本来就是「看起来亮」，不需要真的参与光照计算。
- * - 墙是「两片背靠背」拼的（每片属于一个空间），所以门洞两侧可以是两种颜色
- *   两种层高：走廊压低到 2.6m，穿过矮门洞进到 3.2m 的高展厅，空间才有节奏。
+ * 形制参考金贝尔美术馆（Louis Kahn）：并联的摆线筒拱顶，拱顶中央一条通长的
+ * 天光缝，缝下两片曲面铝反光翼。观感上的几条取舍：
+ * - 拱壳与反光翼都是手写 BufferGeometry：ExtrudeGeometry 非索引（扁拱会看出
+ *   棱），侧面 UV 按 |Δy|<|Δx| 二选一，在摆线起拱处会断裂。法线自己算，
+ *   绕序保证内表面朝下，省一次翻转。
+ * - 拱顶的明暗是**画**出来的（渐变同时当 map 与 emissiveMap），不靠模拟：
+ *   在缝下挂点光源会让拱顶过曝、墙上出现一串光斑，而且没开阴影时光会越过
+ *   墙顶漏进隔壁拱顶。
+ * - 天光用 RectAreaLight（线光源的正确软衰减）+ PMREM 环境贴图；没有 envMap
+ *   时 metalness 0.8 的铝翼会近似全黑。
+ * - 墙是「两片背靠背」拼的（每片属于一个拱顶），共享墙开拱门后两侧各自留面。
  */
 import * as THREE from 'three';
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import {
-  CORRIDOR_HEIGHT,
-  CORRIDOR_ID,
-  ROOM_HEIGHT,
+  SPRING_H,
+  VAULT_METRICS,
+  vaultProfile,
+  vaultRise,
   type FloorPlan,
-  type SpaceSpec,
+  type ProfilePoint,
   type WallFace,
 } from './plan';
 
@@ -65,13 +69,16 @@ const WASH_PAD = 0.66;
 /** 画框在墙上的投影比画框大出多少 */
 const SHADOW_PAD = 0.34;
 /** 踢脚线高度 */
-const BASEBOARD_H = 0.1;
-/** 墙顶的檐口（灯槽的实体部分） */
-const CORNICE_H = 0.055;
+const BASEBOARD_H = 0.08;
 /** 一片墙的厚度（两片背靠背拼成一整堵墙） */
 const PANEL_T = 0.07;
-/** 门洞宽度，与 plan.ts 的 DOOR_W 一致（门高由 plan 直接给到墙的 door 上） */
-const DOOR_W = 1.8;
+/** 拱壳与反光翼的厚度 */
+const SHELL_T = 0.12;
+const WING_T = 0.02;
+/** 天光缝下那道细格栅的条数与粗细 */
+const BAR_COUNT = 7;
+/** 反光翼比天光缝低多少、往外出多少 */
+const WING_DROP = 0.32;
 
 interface Disposable {
   dispose(): void;
@@ -148,37 +155,102 @@ function grain(ctx: CanvasRenderingContext2D, w: number, h: number, alpha: numbe
 }
 
 /**
- * 墙面细节贴图。以白为底（只带明暗细节），真正的颜色由材质的 color 决定 ——
- * 否则贴图颜色会和材质颜色相乘，墙/地会暗掉一截。
+ * 石灰华：暖米色 + 水平层理 + 竖向分缝（金贝尔的墙是竖板拼的），
+ * 再点一些细孔。竖缝按贴图宽度均分，配合 repeat 就是一块块墙板。
  */
-function wallTexture(): THREE.CanvasTexture {
-  return paint(128, 256, (ctx, w, h) => {
-    const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, '#ffffff');
-    gradient.addColorStop(1, '#e4e4e4');
-    ctx.fillStyle = gradient;
+function travertineTexture(): THREE.CanvasTexture {
+  return paint(512, 512, (ctx, w, h) => {
+    ctx.fillStyle = '#ded5c6';
     ctx.fillRect(0, 0, w, h);
-    grain(ctx, w, h, 0.03);
+
+    // 水平层理：一道道深浅不一的波浪
+    for (let i = 0; i < 26; i += 1) {
+      const y = Math.random() * h;
+      ctx.strokeStyle = `rgba(${Math.random() > 0.5 ? '255,252,244' : '188,176,156'},0.16)`;
+      ctx.lineWidth = 2 + Math.random() * 7;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      for (let x = 0; x <= w; x += 32) {
+        ctx.lineTo(x, y + Math.sin((x / w) * Math.PI * 2 + i) * 5);
+      }
+      ctx.stroke();
+    }
+
+    // 细孔
+    for (let i = 0; i < 900; i += 1) {
+      ctx.fillStyle = `rgba(150,138,118,${0.05 + Math.random() * 0.12})`;
+      ctx.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 1);
+    }
+
+    // 竖向分缝：两块板之间的一道暗缝
+    for (const x of [w * 0.25, w * 0.5, w * 0.75]) {
+      ctx.fillStyle = 'rgba(120,110,94,0.22)';
+      ctx.fillRect(x - 1, 0, 2, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(x + 1, 0, 1, h);
+    }
   });
 }
 
-/** 地面：抛光水磨石——大块的深浅晕染 + 细骨料颗粒 */
-function floorTexture(): THREE.CanvasTexture {
-  return paint(256, 256, (ctx, w, h) => {
-    ctx.fillStyle = '#f2f2f2';
+/** 白橡木地面：板缝沿长轴走，带一点木纹 */
+function oakTexture(): THREE.CanvasTexture {
+  return paint(512, 512, (ctx, w, h) => {
+    ctx.fillStyle = '#d8c6a8';
     ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 22; i += 1) {
-      const x = Math.random() * w;
+    // 木纹：细长的深浅丝
+    for (let i = 0; i < 260; i += 1) {
       const y = Math.random() * h;
-      const r = 18 + Math.random() * 54;
-      const blob = ctx.createRadialGradient(x, y, 0, x, y, r);
-      const tint = Math.random() > 0.5 ? '255,255,255' : '0,0,0';
-      blob.addColorStop(0, `rgba(${tint},0.07)`);
-      blob.addColorStop(1, `rgba(${tint},0)`);
-      ctx.fillStyle = blob;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.strokeStyle = `rgba(${Math.random() > 0.5 ? '255,246,228' : '166,142,110'},0.14)`;
+      ctx.lineWidth = 1 + Math.random() * 2;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y + (Math.random() - 0.5) * 8);
+      ctx.stroke();
     }
-    grain(ctx, w, h, 0.05);
+    // 板缝：每 1/4 一道
+    for (let i = 0; i < 4; i += 1) {
+      const y = (i / 4) * h;
+      ctx.fillStyle = 'rgba(120,98,70,0.28)';
+      ctx.fillRect(0, y, w, 2);
+    }
+  });
+}
+
+/** 混凝土拱顶：很淡的颗粒，明暗交给 emissiveMap 的渐变 */
+function concreteTexture(): THREE.CanvasTexture {
+  return paint(256, 256, (ctx, w, h) => {
+    ctx.fillStyle = '#e6e4de';
+    ctx.fillRect(0, 0, w, h);
+    grain(ctx, w, h, 0.055);
+  });
+}
+
+/**
+ * 拱顶的明暗：从起拱点（暗）到拱顶（亮）再回到另一侧，横向一条对称渐变。
+ * u 沿拱断面（0 与 1 是两侧起拱点，0.5 是拱顶），v 沿长度 —— 明暗是画出来的。
+ */
+function vaultLightTexture(): THREE.CanvasTexture {
+  return paint(256, 8, (ctx, w, h) => {
+    const gradient = ctx.createLinearGradient(0, 0, w, 0);
+    gradient.addColorStop(0, '#8e9298');
+    gradient.addColorStop(0.28, '#c8ccd1');
+    gradient.addColorStop(0.5, '#ffffff');
+    gradient.addColorStop(0.72, '#c8ccd1');
+    gradient.addColorStop(1, '#8e9298');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  });
+}
+
+/** 天光缝：中间白、两侧偏冷，像被拱顶切了一条的天空 */
+function skyTexture(): THREE.CanvasTexture {
+  return paint(64, 8, (ctx, w, h) => {
+    const gradient = ctx.createLinearGradient(0, 0, w, 0);
+    gradient.addColorStop(0, '#cfe0f2');
+    gradient.addColorStop(0.5, '#ffffff');
+    gradient.addColorStop(1, '#cfe0f2');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
   });
 }
 
@@ -194,20 +266,22 @@ function radialTexture(rgb: string): THREE.CanvasTexture {
   });
 }
 
-/** 灯槽往下洒在墙上的光：顶边最亮，往下淡出 */
-function coveTexture(): THREE.CanvasTexture {
-  return paint(8, 128, (ctx, w, h) => {
+/** 环境贴图用的 equirect：上半天光、下半地面反弹，只为给金属与石材一点反射 */
+function environmentTexture(): THREE.CanvasTexture {
+  const texture = paint(64, 32, (ctx, w, h) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, 'rgba(255,255,255,0.95)');
-    gradient.addColorStop(0.3, 'rgba(255,255,255,0.34)');
-    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    gradient.addColorStop(0, '#e8f1fb');
+    gradient.addColorStop(0.5, '#dcd8d0');
+    gradient.addColorStop(1, '#a9a093');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, w, h);
   });
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  return texture;
 }
 
 /**
- * 门旁的房间名牌 / 走廊尽头的策展名牌。
+ * 门洞上方（端墙上）的房间名牌 / 端墙上的展厅名。
  * 文字直接画进贴图：3D 里放文字网格要么糊要么贵，一块小牌子最省事。
  */
 function labelTexture(text: string): THREE.CanvasTexture {
@@ -232,63 +306,123 @@ function labelTexture(text: string): THREE.CanvasTexture {
   });
 }
 
-/** 一件作品的全部零件；换图时按真实比例一起缩放 */
-interface FrameParts {
-  frame: THREE.Mesh;
-  mat: THREE.Mesh;
-  picture: THREE.Mesh;
-  wash: THREE.Mesh;
-  shadow: THREE.Mesh;
-  label: THREE.Mesh;
+/** 断面上一点的外法线：切线逆时针转 90°（摆线在起拱点是竖直的，正好朝外） */
+function outwardNormal(points: ProfilePoint[], index: number): { x: number; y: number } {
+  const prev = points[Math.max(index - 1, 0)];
+  const next = points[Math.min(index + 1, points.length - 1)];
+  const dx = next.x - prev.x;
+  const dy = next.y - prev.y;
+  const length = Math.hypot(dx, dy) || 1;
+  return { x: -dy / length, y: dx / length };
 }
 
-/** 一个空间（房间或走廊）自己的一套材质 */
-interface SpaceMats {
-  wall: THREE.MeshStandardMaterial;
-  trim: THREE.MeshStandardMaterial;
-  cornice: THREE.MeshStandardMaterial;
-  ceiling: THREE.MeshStandardMaterial;
-  floor: THREE.MeshStandardMaterial;
-  /** 檐口灯槽洒在墙上的光 */
-  cove: THREE.MeshBasicMaterial;
-  /** 画背后的洗墙光 */
-  wash: THREE.MeshBasicMaterial;
-  /** 灯罩亮盘、走廊灯带这类自发光面 */
-  glow: THREE.MeshBasicMaterial;
-  light: THREE.Color;
+/**
+ * 把一条断面沿 z 挤成一层薄壳（拱壳、反光翼都用它）。
+ *
+ * 内表面法线朝 -n（朝室内/朝下），外表面朝 +n；UV 的 u 按断面弧长归一
+ * （0 与 1 是两端，0.5 附近是拱顶，正好对上明暗渐变），v 沿长度归一。
+ * 这个函数不碰 DOM，可以在 node 里直接构造做几何断言。
+ */
+export function buildShell(profile: ProfilePoint[], length: number, thickness: number): THREE.BufferGeometry {
+  const count = profile.length;
+  const half = length / 2;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  // 累计弧长，u 按弧长归一（顶点密度已经是弧长等距的，这里只是归一）
+  const arc: number[] = [0];
+  for (let i = 1; i < count; i += 1) {
+    arc.push(arc[i - 1] + Math.hypot(profile[i].x - profile[i - 1].x, profile[i].y - profile[i - 1].y));
+  }
+  const total = arc[count - 1] || 1;
+
+  const push = (x: number, y: number, z: number, nx: number, ny: number, u: number, v: number): number => {
+    positions.push(x, y, z);
+    // 断面在 xy 平面、挤出沿 z，所以断面的法线 (nx, ny) 就是世界法线的前两维
+    normals.push(nx, ny, 0);
+    uvs.push(u, v);
+    return positions.length / 3 - 1;
+  };
+
+  for (let i = 0; i < count; i += 1) {
+    const point = profile[i];
+    const normal = outwardNormal(profile, i);
+    const u = arc[i] / total;
+    const outer = { x: point.x + normal.x * thickness, y: point.y + normal.y * thickness };
+
+    // 每个断面点在 z 的两端各生成一对（内 / 外）顶点
+    const back = -half;
+    const front = half;
+    const innerBack = push(point.x, point.y, back, -normal.x, -normal.y, u, 0);
+    const innerFront = push(point.x, point.y, front, -normal.x, -normal.y, u, 1);
+    const outerBack = push(outer.x, outer.y, back, normal.x, normal.y, u, 0);
+    const outerFront = push(outer.x, outer.y, front, normal.x, normal.y, u, 1);
+
+    if (i > 0) {
+      const step = 4;
+      const prevInnerBack = innerBack - step;
+      const prevInnerFront = innerFront - step;
+      const prevOuterBack = outerBack - step;
+      const prevOuterFront = outerFront - step;
+      // 内表面：绕序保证法线朝室内（拱顶处是朝下）
+      indices.push(prevInnerBack, innerBack, innerFront);
+      indices.push(prevInnerBack, innerFront, prevInnerFront);
+      // 外表面：朝室外
+      indices.push(prevOuterBack, outerFront, outerBack);
+      indices.push(prevOuterBack, prevOuterFront, outerFront);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeBoundingBox();
+  return geometry;
 }
 
-/** 一片墙的朝向转成绕 y 的旋转：画框/光晕的正面默认朝 +z */
-function facingRotation(axis: WallFace['axis'], normal: 1 | -1): number {
-  if (axis === 'x') return normal === 1 ? 0 : Math.PI;
-  return normal === 1 ? Math.PI / 2 : -Math.PI / 2;
+/**
+ * 拱顶两端的封口：起拱线以上的拱形墙面。
+ * 用外扩后的断面（盖住拱壳的厚度），免得端墙与壳体之间露出一条缝。
+ */
+export function buildEndArch(profile: ProfilePoint[], thickness: number): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  const first = profile[0];
+  const outerFirst = (() => {
+    const normal = outwardNormal(profile, 0);
+    return { x: first.x + normal.x * thickness, y: first.y + normal.y * thickness };
+  })();
+  shape.moveTo(outerFirst.x, outerFirst.y);
+  profile.forEach((point, index) => {
+    const normal = outwardNormal(profile, index);
+    shape.lineTo(point.x + normal.x * thickness, point.y + normal.y * thickness);
+  });
+  shape.lineTo(-outerFirst.x, outerFirst.y);
+  shape.closePath();
+  return new THREE.ShapeGeometry(shape);
 }
 
 export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  // 电影感的色调映射：灯泡与洗墙光不再直接烧成一片死白
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1;
 
   const spanX = plan.bounds.x2 - plan.bounds.x1;
   const spanZ = plan.bounds.z2 - plan.bounds.z1;
   const diagonal = Math.hypot(spanX, spanZ);
 
-  // 背景用走廊的墙色再暗一档：万一哪里漏出去，看着也像阴影
-  const corridorColors =
-    plan.spaces.find((space) => space.id === CORRIDOR_ID)?.colors ??
-    plan.spaces[0].colors;
-  const background = new THREE.Color(corridorColors.wall).multiplyScalar(0.8);
   const scene = new THREE.Scene();
-  scene.background = background;
-  // 一点雾：远处稍微退后，展厅显得更深
-  scene.fog = new THREE.Fog(background, diagonal * 0.4, diagonal * 1.4);
+  scene.background = new THREE.Color('#cbc7c0');
+  // 室内是封闭的，也用不着雾把远处糊掉
 
-  const camera = new THREE.PerspectiveCamera(58, 1, 0.05, diagonal * 2 + 6);
+  // 筒拱里广角会把弧面拉变形，也会让边上的画透视失真
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, diagonal * 2 + 6);
 
-  // 所有要回收的东西统一登记，dispose 时一次性走完
   const disposables: Disposable[] = [];
   const track = <T extends Disposable>(item: T): T => {
     disposables.push(item);
@@ -296,15 +430,52 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   };
 
   // ---- 全展厅共用的一份贴图与单位几何 ----
-  const wallDetail = track(wallTexture());
-  wallDetail.repeat.set(3, 1.3);
-  const floorDetail = track(floorTexture());
-  const coveMap = track(coveTexture());
+  const travertineMap = track(travertineTexture());
+  travertineMap.repeat.set(3, 1.2);
+  const oakMap = track(oakTexture());
+  oakMap.repeat.set(2, 3);
+  const concreteMap = track(concreteTexture());
+  concreteMap.repeat.set(7, 9);
+  const vaultLightMap = track(vaultLightTexture());
+  const skyMap = track(skyTexture());
   const glowMap = track(radialTexture('255,255,255'));
   const shadowMap = track(radialTexture('0,0,0'));
   const unitPlane = track(new THREE.PlaneGeometry(1, 1));
   const unitBox = track(new THREE.BoxGeometry(1, 1, 1));
 
+  // ---- 统一材质：石灰华墙 / 白橡木地 / 混凝土拱 / 拉丝铝 ----
+  const wallMaterial = track(
+    new THREE.MeshStandardMaterial({ map: travertineMap, roughness: 0.78, metalness: 0.02 }),
+  );
+  const floorMaterial = track(
+    new THREE.MeshStandardMaterial({ map: oakMap, roughness: 0.55, metalness: 0.04 }),
+  );
+  const vaultMaterial = track(
+    new THREE.MeshStandardMaterial({
+      map: concreteMap,
+      // 明暗画在 emissiveMap 里：拱脚暗、拱顶亮，比用灯照更可控
+      emissive: 0xffffff,
+      emissiveMap: vaultLightMap,
+      emissiveIntensity: 0.3,
+      roughness: 0.95,
+      metalness: 0,
+    }),
+  );
+  const aluminiumMaterial = track(
+    new THREE.MeshStandardMaterial({ color: '#d3d8dc', roughness: 0.34, metalness: 0.82 }),
+  );
+  const barMaterial = track(
+    new THREE.MeshStandardMaterial({ color: '#6f747a', roughness: 0.42, metalness: 0.6 }),
+  );
+  const skyMaterial = track(
+    new THREE.MeshBasicMaterial({ map: skyMap, toneMapped: false, fog: false }),
+  );
+  const revealMaterial = track(
+    new THREE.MeshStandardMaterial({ color: '#8d8578', roughness: 0.7 }),
+  );
+  const baseMaterial = track(
+    new THREE.MeshStandardMaterial({ color: '#2a2d31', roughness: 0.5, metalness: 0.1 }),
+  );
   const frameMaterial = track(
     new THREE.MeshStandardMaterial({ color: '#1f2329', roughness: 0.42, metalness: 0.28 }),
   );
@@ -312,12 +483,23 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const labelMaterial = track(
     new THREE.MeshStandardMaterial({ color: '#e6e2d9', roughness: 0.7 }),
   );
-  // 画框在墙上的投影：全展厅一个色（就是一片暗），不用按空间分
+  const washMaterial = track(
+    new THREE.MeshBasicMaterial({
+      map: glowMap,
+      color: '#fff6e8',
+      transparent: true,
+      opacity: 0.26,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+      toneMapped: false,
+    }),
+  );
   const shadowMaterial = track(
     new THREE.MeshBasicMaterial({
       map: shadowMap,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.28,
       depthWrite: false,
       fog: false,
       toneMapped: false,
@@ -331,100 +513,29 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const pictures = new Map<string, THREE.Mesh>();
   const parts = new Map<string, FrameParts>();
 
-  /** 每个空间一套材质：墙/地/顶/踢脚/檐口各有自己的颜色 */
-  function materialsFor(space: SpaceSpec): SpaceMats {
-    const wall = new THREE.Color(space.colors.wall);
-    const floor = new THREE.Color(space.colors.floor);
-    const light = new THREE.Color(space.colors.light);
-    return {
-      wall: track(
-        new THREE.MeshStandardMaterial({ color: wall, map: wallDetail, roughness: 0.92 }),
-      ),
-      trim: track(
-        new THREE.MeshStandardMaterial({
-          color: floor.clone().multiplyScalar(0.42),
-          roughness: 0.5,
-          metalness: 0.1,
-        }),
-      ),
-      cornice: track(
-        new THREE.MeshStandardMaterial({ color: wall.clone().multiplyScalar(0.9), roughness: 0.8 }),
-      ),
-      ceiling: track(
-        new THREE.MeshStandardMaterial({ color: wall.clone().multiplyScalar(1.12), roughness: 0.95 }),
-      ),
-      floor: track(new THREE.MeshStandardMaterial({ color: floor, roughness: 0.55, metalness: 0.06 })),
-      cove: track(
-        new THREE.MeshBasicMaterial({
-          map: coveMap,
-          color: light,
-          transparent: true,
-          opacity: 0.5,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          fog: false,
-          toneMapped: false,
-        }),
-      ),
-      // 画背后的洗墙光跟着这间房的灯光色走：暖光房和冷光房看得出差别
-      wash: track(
-        new THREE.MeshBasicMaterial({
-          map: glowMap,
-          color: light,
-          transparent: true,
-          opacity: 0.34,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          fog: false,
-          toneMapped: false,
-        }),
-      ),
-      glow: track(new THREE.MeshBasicMaterial({ color: light, fog: false, toneMapped: false })),
-      light,
-    };
-  }
-
-  const spaceMats = new Map<string, SpaceMats>();
-  for (const space of plan.spaces) spaceMats.set(space.id, materialsFor(space));
-
-  // ---- 地面与天花板 ----
+  // ---- 地面 ----
   for (const space of plan.spaces) {
-    const mats = spaceMats.get(space.id) as SpaceMats;
     const width = space.rect.x2 - space.rect.x1;
     const depth = space.rect.z2 - space.rect.z1;
-    const cx = (space.rect.x1 + space.rect.x2) / 2;
-    const cz = (space.rect.z1 + space.rect.z2) / 2;
-
-    // 地面贴图按空间大小重复，免得小房间和大房间的骨料差一截
-    const floorMap = track(floorDetail.clone());
-    floorMap.repeat.set(width / 2, depth / 2);
-    floorMap.needsUpdate = true;
-    mats.floor.map = floorMap;
-
-    const floor = new THREE.Mesh(track(new THREE.PlaneGeometry(width, depth)), mats.floor);
+    const floor = new THREE.Mesh(
+      track(new THREE.PlaneGeometry(width, depth)),
+      floorMaterial,
+    );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(cx, 0, cz);
+    floor.position.set((space.rect.x1 + space.rect.x2) / 2, 0, (space.rect.z1 + space.rect.z2) / 2);
     floor.userData.isFloor = true;
     scene.add(floor);
     floors.push(floor);
-
-    const ceiling = new THREE.Mesh(
-      track(new THREE.PlaneGeometry(width, depth)),
-      mats.ceiling,
-    );
-    ceiling.rotation.x = Math.PI / 2;
-    ceiling.position.set(cx, space.height, cz);
-    scene.add(ceiling);
   }
 
-  // ---- 墙 ----
+  // ---- 墙（起拱线以下）----
   /** 在墙上贴一块板（墙面 / 门楣）：沿墙方向 [a,b]，竖直方向 [y0,y1] */
-  function addPanel(face: WallFace, a: number, b: number, y0: number, y1: number): THREE.Mesh {
+  function addPanel(face: WallFace, a: number, b: number, y0: number, y1: number): void {
     const length = b - a;
     const height = y1 - y0;
     const along = (a + b) / 2;
     const offset = PANEL_T / 2;
-    const mesh = new THREE.Mesh(unitBox, matsOf(face.spaceId).wall);
+    const mesh = new THREE.Mesh(unitBox, wallMaterial);
     if (face.axis === 'x') {
       mesh.position.set(along, (y0 + y1) / 2, face.at + face.normal * offset);
       mesh.scale.set(length, height, PANEL_T);
@@ -435,10 +546,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     mesh.userData.isWall = true;
     scene.add(mesh);
     blockers.push(mesh);
-    return mesh;
   }
 
-  /** 踢脚线 / 檐口：贴着墙面的一条细板 */
+  /** 贴着墙面的一条细板：踢脚线、起拱线那道凹槽 */
   function addTrim(
     face: WallFace,
     a: number,
@@ -461,29 +571,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     scene.add(mesh);
   }
 
-  /** 檐口下洒在墙上的一片光 */
-  function addCove(face: WallFace, a: number, b: number): void {
-    const mats = matsOf(face.spaceId);
-    const mesh = new THREE.Mesh(unitPlane, mats.cove);
-    const along = (a + b) / 2;
-    if (face.axis === 'x') {
-      mesh.position.set(along, face.height - CORNICE_H - 0.36, face.at + face.normal * (PANEL_T + 0.02));
-    } else {
-      mesh.position.set(face.at + face.normal * (PANEL_T + 0.02), face.height - CORNICE_H - 0.36, along);
-    }
-    mesh.rotation.y = facingRotation(face.axis, face.normal);
-    mesh.scale.set(b - a, 0.72, 1);
-    scene.add(mesh);
-  }
-
-  /** 一片墙 / 一间房自己的那套材质 */
-  function matsOf(spaceId: string): SpaceMats {
-    return spaceMats.get(spaceId) ?? (spaceMats.values().next().value as SpaceMats);
-  }
-
   for (const face of plan.walls) {
-    const mats = matsOf(face.spaceId);
-    // 门洞把墙切成左右两段，门楣单独补一块
     const spans: [number, number][] = face.door
       ? [
           [face.a, face.door.center - face.door.width / 2],
@@ -502,154 +590,129 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
         face.height,
       );
     }
-    // 踢脚线遇到门洞就断开（门口没有踢脚线）
+    // 踢脚线遇到拱门就断开
     for (const [a, b] of solid) {
-      addTrim(face, a, b, BASEBOARD_H, 0.028, BASEBOARD_H / 2, mats.trim);
+      addTrim(face, a, b, BASEBOARD_H, 0.024, BASEBOARD_H / 2, baseMaterial);
     }
-    addTrim(face, face.a, face.b, CORNICE_H, 0.05, face.height - CORNICE_H / 2, mats.cornice);
-    // 洗墙光同理：门洞上方是空的，别糊一片光在门口
-    for (const [a, b] of solid) addCove(face, a, b);
+    // 起拱线：一道 2cm 的暗缝，拱顶看着就「落」在墙上而不是糊在一起
+    addTrim(face, face.a, face.b, 0.02, 0.03, face.height - 0.01, revealMaterial);
   }
 
-  // ---- 门旁的房间名牌 ----
-  for (const door of plan.doors) {
-    const space = plan.spaces.find((item) => item.id === door.spaceId);
-    if (!space) continue;
-    // 门开在房间的哪一侧走廊墙：z 为负是北侧房间，牌子朝 +z
-    const normal: 1 | -1 = door.z < 0 ? 1 : -1;
+  // ---- 拱顶：壳体 + 天光缝 + 反光翼 + 端墙拱形 ----
+  const profile = vaultProfile(VAULT_METRICS.width);
+  const rise = vaultRise(VAULT_METRICS.width);
+  // 所有拱同长（plan.ts 保证），天光缝通长、两端各留一点别顶到端墙
+  const vaultLength = plan.vaults[0]?.length ?? 0;
+  const slotLength = Math.max(1, vaultLength - VAULT_METRICS.slotInset * 2);
+
+  for (const vault of plan.vaults) {
+    const apexY = SPRING_H + rise;
+
+    const shell = new THREE.Mesh(buildShell(profile, vault.length, SHELL_T), vaultMaterial);
+    shell.position.set(vault.x, SPRING_H, 0);
+    scene.add(shell);
+    track(shell.geometry);
+
+    // 天光缝：贴在拱顶下沿的一条亮面（不用在壳上开洞，看不出区别）
+    const slot = new THREE.Mesh(unitPlane, skyMaterial);
+    slot.position.set(vault.x, apexY - 0.06, 0);
+    slot.rotation.x = Math.PI / 2;
+    slot.scale.set(VAULT_METRICS.slot, slotLength, 1);
+    scene.add(slot);
+
+    // 缝下的细格栅：金贝尔天光最标志性的那一片穿孔铝
+    for (let i = 0; i < BAR_COUNT; i += 1) {
+      const z = -slotLength / 2 + ((i + 0.5) / BAR_COUNT) * slotLength;
+      const bar = new THREE.Mesh(unitBox, barMaterial);
+      bar.position.set(vault.x, apexY - 0.12, z);
+      bar.scale.set(VAULT_METRICS.slot + 0.08, 0.022, 0.024);
+      scene.add(bar);
+    }
+
+    // 反光翼：从缝的两侧向外、向下弯出去的浅弧
+    for (const side of [-1, 1] as (-1 | 1)[]) {
+      const wing = buildShell(wingProfile(side), slotLength, WING_T);
+      const mesh = new THREE.Mesh(wing, aluminiumMaterial);
+      mesh.position.set(vault.x, SPRING_H, 0);
+      scene.add(mesh);
+      track(wing);
+    }
+  }
+
+  /** 一侧反光翼的断面：从天光缝边上向外向下弯出去 */
+  function wingProfile(side: -1 | 1): ProfilePoint[] {
+    const points: ProfilePoint[] = [];
+    const steps = 12;
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      points.push({
+        x: side * (VAULT_METRICS.slot / 2 + VAULT_METRICS.wing * t),
+        // 起拱线往上算：贴着拱顶走，再慢慢离开
+        y: rise - 0.1 - WING_DROP * t * t,
+      });
+    }
+    return points;
+  }
+
+  // 端墙的拱形封口
+  const archGeometry = track(buildEndArch(profile, SHELL_T));
+  for (const arch of plan.arches) {
+    const mesh = new THREE.Mesh(archGeometry, wallMaterial);
+    mesh.position.set(arch.x, SPRING_H, arch.z);
+    // ShapeGeometry 建在 xy 平面、朝 +z；normal 为 -1 时转过去朝 -z
+    mesh.rotation.y = arch.normal === 1 ? 0 : Math.PI;
+    if (arch.normal === 1) mesh.position.z += 0.02;
+    else mesh.position.z -= 0.02;
+    mesh.userData.isWall = true;
+    scene.add(mesh);
+    blockers.push(mesh);
+
+    // 端墙内侧挂展厅名：走进拱顶时抬眼就能看到这是哪间
     const plaque = new THREE.Mesh(
       unitPlane,
       track(
         new THREE.MeshBasicMaterial({
-          map: track(labelTexture(space.label)),
+          map: track(labelTexture(spaceLabel(arch.spaceId))),
           color: '#d8d8d8',
           fog: false,
           toneMapped: false,
         }),
       ),
     );
-    plaque.position.set(
-      door.x + DOOR_W / 2 + 0.34,
-      1.55,
-      door.z + normal * (PANEL_T + 0.02),
-    );
-    plaque.rotation.y = normal === 1 ? 0 : Math.PI;
-    plaque.scale.set(0.56, 0.14, 1);
+    plaque.position.set(arch.x, SPRING_H - 0.75, arch.z + arch.normal * 0.06);
+    plaque.rotation.y = arch.normal === 1 ? 0 : Math.PI;
+    plaque.scale.set(1.5, 0.375, 1);
     scene.add(plaque);
   }
 
-  // ---- 走廊：灯带 + 尽头的策展名牌 ----
-  const corridor = plan.spaces.find((space) => space.id === CORRIDOR_ID);
-  if (corridor) {
-    const mats = matsOf(CORRIDOR_ID);
-    const length = corridor.rect.x2 - corridor.rect.x1;
-    const cx = (corridor.rect.x1 + corridor.rect.x2) / 2;
-
-    // 顶上两条灯带（自发光，不点灯）
-    for (const z of [-0.55, 0.55]) {
-      const strip = new THREE.Mesh(unitPlane, mats.glow);
-      strip.position.set(cx, CORRIDOR_HEIGHT - 0.015, z);
-      strip.rotation.x = Math.PI / 2;
-      strip.scale.set(length - 0.6, 0.1, 1);
-      scene.add(strip);
-    }
-
-    // 灯带本身只照亮自己，补两盏小灯让走廊两头也不至于太暗
-    for (const dx of [-length * 0.26, length * 0.26]) {
-      const lamp = new THREE.PointLight(new THREE.Color(corridor.colors.light), 11, 0, 1.7);
-      lamp.position.set(cx + dx, CORRIDOR_HEIGHT - 0.25, 0);
-      scene.add(lamp);
-    }
-
-    // 走廊尽头写策展名
-    for (const [x, ry] of [
-      [corridor.rect.x1 + PANEL_T + 0.02, Math.PI / 2],
-      [corridor.rect.x2 - PANEL_T - 0.02, -Math.PI / 2],
-    ] as [number, number][]) {
-      const plaque = new THREE.Mesh(
-        unitPlane,
-        track(
-          new THREE.MeshBasicMaterial({
-            map: track(labelTexture(corridor.label)),
-            color: '#d8d8d8',
-            fog: false,
-            toneMapped: false,
-          }),
-        ),
-      );
-      plaque.position.set(x, 1.7, 0);
-      plaque.rotation.y = ry;
-      plaque.scale.set(1.1, 0.275, 1);
-      scene.add(plaque);
-    }
+  function spaceLabel(spaceId: string): string {
+    return plan.spaces.find((space) => space.id === spaceId)?.label ?? '';
   }
 
-  // ---- 灯光 ----
-  scene.add(new THREE.AmbientLight(0xffffff, 1.05));
-  const ground = new THREE.Color(corridor?.colors.floor ?? '#1a1d21');
-  scene.add(new THREE.HemisphereLight(new THREE.Color(corridorColors.light).getHex(), ground.getHex(), 0.65));
+  // ---- 灯光：日光的三层（环境 + 面光 + 环境反射）----
+  RectAreaLightUniformsLib.init();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+  scene.add(new THREE.HemisphereLight('#dbe8f5', '#e0cdb0', 0.6));
 
-  const shadeMaterial = track(
-    new THREE.MeshStandardMaterial({
-      color: '#2b2e34',
-      roughness: 0.38,
-      metalness: 0.35,
-      side: THREE.DoubleSide,
-    }),
-  );
-  const rodMaterial = track(
-    new THREE.MeshStandardMaterial({ color: '#3a3e45', roughness: 0.35, metalness: 0.6 }),
-  );
-  const rodGeometry = track(new THREE.CylinderGeometry(0.008, 0.008, 1, 6));
-  const shadeGeometry = track(new THREE.CylinderGeometry(0.13, 0.16, 0.18, 24, 1, true));
-  const discGeometry = track(new THREE.CircleGeometry(1, 24));
-  const ringGeometry = track(new THREE.TorusGeometry(0.52, 0.017, 8, 56));
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const equirect = environmentTexture();
+  const environment = pmrem.fromEquirectangular(equirect).texture;
+  scene.environment = environment;
+  scene.environmentIntensity = 1;
+  pmrem.dispose();
+  equirect.dispose();
+  disposables.push(environment);
 
-  // 每间房两盏吊灯 + 正中一圈发光吊环
-  for (const space of plan.spaces) {
-    if (space.kind !== 'room') continue;
-    const mats = matsOf(space.id);
-    const cx = (space.rect.x1 + space.rect.x2) / 2;
-    const cz = (space.rect.z1 + space.rect.z2) / 2;
-    const side = Math.min(space.rect.x2 - space.rect.x1, space.rect.z2 - space.rect.z1);
-    const lampY = ROOM_HEIGHT - 0.5;
-
-    for (const dz of [-side * 0.22, side * 0.22]) {
-      const rod = new THREE.Mesh(rodGeometry, rodMaterial);
-      rod.position.set(cx, (ROOM_HEIGHT + lampY) / 2, cz + dz);
-      rod.scale.y = ROOM_HEIGHT - lampY;
-      scene.add(rod);
-
-      const shade = new THREE.Mesh(shadeGeometry, shadeMaterial);
-      shade.position.set(cx, lampY, cz + dz);
-      scene.add(shade);
-
-      // 灯罩口那片亮：不用点光源也知道灯是开着的
-      const disc = new THREE.Mesh(discGeometry, mats.glow);
-      disc.position.set(cx, lampY - 0.088, cz + dz);
-      disc.rotation.x = Math.PI / 2;
-      disc.scale.setScalar(0.154);
-      scene.add(disc);
-
-      const lamp = new THREE.PointLight(mats.light, 18, 0, 1.6);
-      lamp.position.set(cx, lampY - 0.1, cz + dz);
-      scene.add(lamp);
-    }
-
-    const ring = new THREE.Mesh(ringGeometry, mats.glow);
-    ring.position.set(cx, ROOM_HEIGHT - 0.78, cz);
-    ring.rotation.x = Math.PI / 2;
-    scene.add(ring);
-    for (const [rx, rz] of [
-      [0, 0.52],
-      [0.45, -0.26],
-      [-0.45, -0.26],
-    ]) {
-      const wire = new THREE.Mesh(rodGeometry, rodMaterial);
-      wire.position.set(cx + rx, ROOM_HEIGHT - 0.39, cz + rz);
-      wire.scale.y = 0.78;
-      scene.add(wire);
-    }
+  // 每拱一盏面光，尺寸就是天光缝：线状光源的软衰减才是对的
+  for (const vault of plan.vaults) {
+    const light = new THREE.RectAreaLight('#fff8ec', 10, VAULT_METRICS.slot, slotLength);
+    // 压到反光翼下沿：面光只朝一面发光，挂在缝上就照不到翼的底面了。
+    // 拱顶那一圈的亮度由 emissiveMap 的渐变负责，这里只管把光送到墙和地面上
+    light.position.set(vault.x, SPRING_H + rise - 0.45, 0);
+    // 朝正下方时 lookAt 是退化情形（视线与 up 平行），直接转：+π/2 让出光面朝下，
+    // 7.8m 那条边正好落在 z 轴上
+    light.rotation.set(Math.PI / 2, 0, 0);
+    scene.add(light);
   }
 
   // ---- 画 ----
@@ -662,7 +725,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const outer = { w: art.w + MAT_WIDTH * 2, h: art.h + MAT_WIDTH * 2 };
 
     // 洗墙光：画框背后的墙上晕开一片，画就像被单独打了光
-    const wash = new THREE.Mesh(unitPlane, matsOf(placement.spaceId).wash);
+    const wash = new THREE.Mesh(unitPlane, washMaterial);
     wash.position.z = -0.035;
     group.add(wash);
 
@@ -689,8 +752,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     picture.position.z = FRAME_DEPTH / 2 + 0.003;
     group.add(picture);
 
-    // 墙上的作品标签：朝房间中心那侧挂，免得探出墙角。z 收到贴近墙的位置，
-    // 不然标签会浮在半空
+    // 墙上的作品标签
     const label = new THREE.Mesh(unitBox, labelMaterial);
     label.scale.set(0.14, 0.09, 0.008);
     label.position.z = -0.05;
@@ -809,6 +871,16 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       renderer.dispose();
     },
   };
+}
+
+/** 一件作品的全部零件；换图时按真实比例一起缩放 */
+interface FrameParts {
+  frame: THREE.Mesh;
+  mat: THREE.Mesh;
+  picture: THREE.Mesh;
+  wash: THREE.Mesh;
+  shadow: THREE.Mesh;
+  label: THREE.Mesh;
 }
 
 /** 按比例求画心尺寸：长边保持不变，短边跟着比例缩 */
