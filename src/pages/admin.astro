@@ -58,12 +58,21 @@ const base = import.meta.env.BASE_URL;
       <TokenBar />
 
       <p id="status" class="status" role="status" hidden></p>
-      <p id="draft-notice" class="status status--info" hidden></p>
+      <p id="draft-notice" class="status status--info admin-notice" hidden></p>
 
       <nav class="tabs" aria-label="后台分区">
-        <button class="tab" type="button" data-tab="post" aria-current="page">文章</button>
-        <button class="tab" type="button" data-tab="profile">个人信息</button>
-        <button class="tab" type="button" data-tab="friends">友链</button>
+        <button class="tab" type="button" data-tab="post" aria-current="page">
+          <Icon name="doc" />
+          文章
+        </button>
+        <button class="tab" type="button" data-tab="profile">
+          <Icon name="user" />
+          个人信息
+        </button>
+        <button class="tab" type="button" data-tab="friends">
+          <Icon name="link" />
+          友链
+        </button>
       </nav>
 
       <div class="tab-panel" data-panel="post"><PostEditor /></div>

@@ -11,6 +11,8 @@
 
 body {
   color: var(--c-text);
+  /* 后台是长时间看的工作界面，字号比前台大一档 */
+  font-size: 16px;
   /* 两层很淡的渐变当背景，background-attachment: fixed 让它跟着视口不动。
      用 background 而不是伪元素：body 自己有背景色，负层会被它盖住 */
   background-color: var(--c-page);
@@ -27,7 +29,7 @@ body {
 }
 
 /* ============================================================
-   顶栏：与前台 .navbar__card 同款（页面上角方、下角圆的卡片）
+   顶栏：与前台 .navbar__card 同款（上角方、下角圆的卡片）
    ============================================================ */
 .admin-top {
   position: sticky;
@@ -41,7 +43,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  height: 4rem;
+  height: 4.25rem;
   max-width: 72rem;
   margin: 0 auto;
   padding: 0 1rem;
@@ -55,51 +57,54 @@ body {
 .admin-top__brand {
   display: flex;
   align-items: baseline;
-  gap: 0.55rem;
+  gap: 0.6rem;
   min-width: 0;
 }
 
 .admin-top__dot {
   align-self: center;
-  width: 0.45rem;
-  height: 0.45rem;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 999px;
   background: var(--c-accent);
 }
 
 .admin-top h1 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
 }
 
 .admin-top__path {
-  font-size: 0.75rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: var(--c-bg-soft);
+  font-size: 0.78rem;
   color: var(--c-text-faint);
 }
 
 .admin-top__tools {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.4rem;
 }
 
 /* 与顶栏其它按钮同规格的「文字 + 图标」链接 */
 .admin-top__link {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  height: 2.5rem;
-  padding: 0 0.7rem;
+  gap: 0.4rem;
+  height: 2.6rem;
+  padding: 0 0.8rem;
   border-radius: 0.5rem;
-  font-size: 0.84rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--c-text-muted);
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .admin-top__link svg {
-  width: 0.95rem;
-  height: 0.95rem;
+  width: 1rem;
+  height: 1rem;
 }
 
 .admin-top__link:hover {
@@ -111,34 +116,42 @@ body {
 .admin-wrap {
   max-width: 72rem;
   margin: 0 auto;
-  padding: 1.25rem 1.25rem 4rem;
+  padding: 1.5rem 1.25rem 5rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 /* ---------- 分区切换：胶囊式 segmented control ---------- */
 .tabs {
   align-self: flex-start;
   display: flex;
-  gap: 0.25rem;
-  padding: 0.25rem;
+  gap: 0.35rem;
+  padding: 0.35rem;
   background: var(--c-bg-soft);
   border: 1px solid var(--c-border-soft);
   border-radius: 999px;
 }
 
 .tab {
-  padding: 0.34rem 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 1.1rem;
   border: none;
   border-radius: 999px;
   background: none;
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--c-text-muted);
   cursor: pointer;
   transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tab svg {
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .tab:hover {
@@ -148,12 +161,12 @@ body {
 .tab[aria-current='page'] {
   color: var(--c-accent);
   background: var(--c-card);
-  box-shadow: 0 1px 2px var(--c-shadow-sm);
+  box-shadow: 0 1px 3px var(--c-shadow-sm);
 }
 
 /* ---------- 面板 ---------- */
 .panel {
-  padding: 1.25rem 1.4rem 1.5rem;
+  padding: 1.5rem 1.75rem 1.75rem;
   background: var(--c-card);
   border: 1px solid var(--c-border-soft);
   border-radius: var(--radius-lg);
@@ -162,30 +175,41 @@ body {
   backdrop-filter: blur(8px);
 }
 
+/* 头部吸顶：面板很长（个人信息有几十个字段）时，操作按钮始终够得着。
+   负外边距让分隔线通到卡片边缘；圆角要自己补，因为卡片不能 overflow: hidden——
+   那会让 .panel 变成滚动容器，sticky 就失效了 */
 .panel__head {
+  position: sticky;
+  top: 4.5rem; /* 顶栏高度 4.25rem + 一点间隙 */
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: 1rem;
+  margin: -1.5rem -1.75rem 1.5rem;
+  padding: 1.15rem 1.75rem 0.9rem;
+  background: var(--c-card);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--c-border-soft);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 /* 与前台板块标题同款：左侧一根主色小竖条 */
 .panel__head h2 {
   position: relative;
-  margin: 0 0 0 0.85rem;
-  font-size: 1.05rem;
+  margin: 0 0 0 0.95rem;
+  font-size: 1.15rem;
 }
 
 .panel__head h2::before {
   content: '';
   position: absolute;
-  left: -0.85rem;
-  top: 0.42em;
-  width: 0.25rem;
-  height: 1rem;
-  border-radius: 0.125rem;
+  left: -0.95rem;
+  top: 0.4em;
+  width: 0.28rem;
+  height: 1.1rem;
+  border-radius: 0.14rem;
   background: var(--c-accent);
 }
 
@@ -193,7 +217,19 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
+}
+
+/* 后台的按钮比前台大一点：padding 与字号都上调 */
+.admin-wrap .btn {
+  padding: 0.62rem 1.1rem;
+  font-size: 0.92rem;
+  border-radius: var(--radius);
+}
+
+.admin-wrap .btn svg {
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .panel__tools .btn:active,
@@ -201,25 +237,34 @@ body {
   transform: scale(0.97);
 }
 
+/* 提示语做成一块浅底说明条，比一行小灰字好读 */
 .panel__hint {
-  margin: 0 0 1.1rem;
-  font-size: 0.82rem;
-  color: var(--c-text-faint);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0 0 1.4rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-sm);
+  background: var(--c-bg-soft);
+  font-size: 0.86rem;
+  color: var(--c-text-muted);
+  line-height: 1.7;
 }
 
 .panel__hint code,
 .token-bar__meta code {
-  padding: 0.05rem 0.35rem;
+  padding: 0.08rem 0.4rem;
   border-radius: 4px;
-  background: var(--c-bg-soft);
-  font-size: 0.78rem;
+  background: var(--c-card);
+  font-size: 0.8rem;
 }
 
 .panel__sub {
-  margin: 1.5rem 0 0.75rem;
-  padding-bottom: 0.4rem;
+  margin: 1.9rem 0 1rem;
+  padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--c-border-soft);
-  font-size: 0.8rem;
+  font-size: 0.84rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -234,7 +279,7 @@ body {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.4rem;
   min-width: 0;
 }
 
@@ -243,55 +288,59 @@ body {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.5rem;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   font-weight: 600;
 }
 
 /* 字段名用小胶囊标出来，跟后面的说明一眼分开 */
 .field__label code {
-  padding: 0.05rem 0.4rem;
+  padding: 0.08rem 0.45rem;
   border-radius: 4px;
   background: var(--c-bg-soft);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--c-accent);
 }
 
 .field__hint {
   font-weight: 400;
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   color: var(--c-text-faint);
 }
 
 .field__error {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #d92d20;
 }
 
 .field--check {
   flex-direction: row;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.82rem;
+  gap: 0.5rem;
+  font-size: 0.88rem;
 }
 
 .field--check input[type='checkbox'] {
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.15rem;
+  height: 1.15rem;
   accent-color: var(--c-accent);
   cursor: pointer;
 }
 
 .input {
   width: 100%;
-  padding: 0.45rem 0.65rem;
+  padding: 0.55rem 0.75rem;
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
   background: var(--c-page);
   color: var(--c-text);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input::placeholder {
+  color: var(--c-text-faint);
 }
 
 .input:hover {
@@ -312,46 +361,55 @@ body {
 
 .input--sm {
   width: auto;
-  padding: 0.32rem 0.5rem;
-  font-size: 0.84rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.88rem;
 }
 
-/* 下拉框：去掉系统外观，换成统一的细箭头 */
+/* 下拉框：去掉系统外观，换成统一的细箭头；并给定最小宽度，
+   免得选项还没载入时缩成一小条 */
 select.input {
   appearance: none;
-  padding-right: 1.9rem;
+  padding-right: 2rem;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23656d76' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 0.55rem center;
-  background-size: 0.85rem;
+  background-position: right 0.6rem center;
+  background-size: 0.9rem;
   cursor: pointer;
+}
+
+select.input--sm {
+  min-width: 7.5rem;
+}
+
+#post-file {
+  min-width: 14rem;
 }
 
 .input--code {
   font-family: var(--font-mono);
-  font-size: 0.82rem;
-  line-height: 1.65;
+  font-size: 0.86rem;
+  line-height: 1.7;
   tab-size: 2;
   resize: vertical;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 0.85rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem 1.25rem;
 }
 
 .json-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 0.85rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1rem 1.25rem;
 }
 
 .inline {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.82rem;
+  gap: 0.45rem;
+  font-size: 0.86rem;
   color: var(--c-text-muted);
 }
 
@@ -359,42 +417,55 @@ select.input {
 .editor {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-top: 1.1rem;
+  gap: 1.25rem;
+  margin-top: 1.4rem;
 }
 
-/* 两栏各自做成卡片里的子面板，像编辑器的两扇窗 */
+/* 两栏各自做成卡片里的子面板：顶部一条标题栏，下面是内容 */
 .editor__pane {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
   min-width: 0;
-  padding: 0.6rem;
   border: 1px solid var(--c-border-soft);
   border-radius: var(--radius);
   background: var(--c-bg-soft);
+  overflow: hidden;
 }
 
 .editor__label {
-  padding-left: 0.15rem;
-  font-size: 0.74rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--c-border-soft);
+  background: var(--c-card);
+  font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--c-text-faint);
 }
 
+/* 内容区贴着窗格边，所以去掉自己的边框与圆角；
+   focus 环改用 inset，否则会被窗格的 overflow: hidden 裁掉 */
+.editor__area,
+.editor__preview {
+  border: none;
+  border-radius: 0;
+}
+
 .editor__area {
-  min-height: 24rem;
+  min-height: 26rem;
   background: var(--c-page);
+}
+
+.editor__area:focus {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 .editor__preview {
   flex: 1;
   width: 100%;
-  min-height: 24rem;
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-sm);
+  min-height: 26rem;
   background: var(--c-bg-soft);
 }
 
@@ -404,29 +475,45 @@ select.input {
   }
 }
 
-/* ---------- 状态条 ---------- */
-/* 左侧一条颜色竖条区分 ok / error / info / busy；不改 display，
-   否则 hidden 属性会被覆盖（main.ts 靠 hidden 控制显隐） */
+/* ---------- 状态提示 ---------- */
+/* 浮在右下角，不占文档流；左侧一条颜色竖条区分 ok / error / info / busy。
+   不改 display，否则 main.ts 用来控制显隐的 hidden 属性会被覆盖 */
 .status {
-  position: relative;
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 40;
+  max-width: min(28rem, calc(100vw - 2.5rem));
   margin: 0;
-  padding: 0.6rem 0.9rem 0.6rem 1.1rem;
+  padding: 0.8rem 1.1rem 0.8rem 1.35rem;
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
-  background: var(--c-card);
-  font-size: 0.86rem;
-  animation: admin-rise 0.18s ease-out;
+  background: var(--c-float-panel);
+  box-shadow: 0 12px 32px -10px var(--c-shadow-md);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  animation: admin-toast-in 0.2s ease-out;
 }
 
 .status::before {
   content: '';
   position: absolute;
-  left: 0.45rem;
-  top: 0.6rem;
-  bottom: 0.6rem;
-  width: 0.2rem;
+  left: 0.6rem;
+  top: 0.7rem;
+  bottom: 0.7rem;
+  width: 0.22rem;
   border-radius: 999px;
   background: var(--c-text-faint);
+}
+
+/* 草稿提示是常驻信息，留在文档流里，不做浮层 */
+.admin-notice {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  max-width: none;
+  box-shadow: none;
+  animation: none;
 }
 
 .status--ok {
@@ -460,10 +547,10 @@ select.input {
   animation: admin-pulse 1s ease-in-out infinite;
 }
 
-@keyframes admin-rise {
+@keyframes admin-toast-in {
   from {
     opacity: 0;
-    transform: translateY(-2px);
+    transform: translateY(0.5rem);
   }
   to {
     opacity: 1;
@@ -496,27 +583,28 @@ select.input {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .token-bar__main .field {
-  flex: 1 1 18rem;
+  flex: 1 1 20rem;
 }
 
 .token-bar__input {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  align-items: stretch;
+  gap: 0.5rem;
 }
 
 .token-bar__eye {
   flex: none;
-  padding: 0.45rem 0.6rem;
+  padding: 0 0.8rem;
   border: 1px solid var(--c-border);
   border-radius: var(--radius);
   background: var(--c-bg-soft);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
+  font-weight: 600;
   color: var(--c-text-muted);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
@@ -529,23 +617,24 @@ select.input {
 
 .token-bar__actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .token-bar__meta {
-  margin: 0.7rem 0 0;
-  font-size: 0.78rem;
+  margin: 0.9rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.7;
   color: var(--c-text-faint);
 }
 
 /* ---------- 帮助 ---------- */
 .help {
-  margin-top: 1rem;
-  padding: 0.6rem 0.85rem;
+  margin-top: 1.25rem;
+  padding: 0.7rem 1rem;
   border: 1px dashed var(--c-border);
   border-radius: var(--radius);
   background: var(--c-bg-soft);
-  font-size: 0.82rem;
+  font-size: 0.86rem;
   color: var(--c-text-muted);
 }
 
@@ -556,16 +645,16 @@ select.input {
 }
 
 .help ol {
-  margin: 0.6rem 0 0;
-  padding-left: 1.3rem;
+  margin: 0.7rem 0 0;
+  padding-left: 1.4rem;
 }
 
 .help li {
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.35rem;
 }
 
 .help__warn {
-  margin: 0.6rem 0 0;
+  margin: 0.7rem 0 0;
   color: #d92d20;
 }
 
@@ -575,10 +664,27 @@ select.input {
     height: auto;
     flex-wrap: wrap;
     justify-content: center;
-    padding: 0.6rem 1rem;
+    padding: 0.7rem 1rem;
   }
 
   .admin-top__link span {
     display: none;
+  }
+
+  .panel {
+    padding: 1.25rem 1.1rem 1.4rem;
+  }
+
+  /* 吸顶头部的负边距要跟着内边距一起收 */
+  .panel__head {
+    margin: -1.25rem -1.1rem 1.25rem;
+    padding: 1rem 1.1rem 0.8rem;
+  }
+
+  .status {
+    right: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    max-width: none;
   }
 }

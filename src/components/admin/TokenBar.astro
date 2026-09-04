@@ -1,4 +1,5 @@
 ---
+import Icon from '../Icon.astro';
 import { repo } from '../../data/admin';
 
 interface Props {
@@ -32,7 +33,10 @@ const { owner = repo.owner, name = repo.repo, branch = repo.branch } = Astro.pro
     </div>
 
     <div class="token-bar__actions">
-      <button id="token-save" class="btn btn--primary" type="button">保存 Token</button>
+      <button id="token-save" class="btn btn--primary" type="button">
+        <Icon name="save" />
+        保存 Token
+      </button>
       <button id="token-clear" class="btn" type="button">清除</button>
     </div>
   </div>

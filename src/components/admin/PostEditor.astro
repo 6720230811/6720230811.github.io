@@ -1,4 +1,6 @@
 ---
+import Icon from '../Icon.astro';
+
 interface Props {
   id?: string;
 }
@@ -18,8 +20,14 @@ const { id = 'post-preview' } = Astro.props;
         </select>
       </label>
       <select id="post-file" class="input input--sm"></select>
-      <button id="post-reload" class="btn" type="button">重新载入</button>
-      <button id="post-save" class="btn btn--primary" type="button">发布</button>
+      <button id="post-reload" class="btn" type="button">
+        <Icon name="refresh" />
+        重新载入
+      </button>
+      <button id="post-save" class="btn btn--primary" type="button">
+        <Icon name="save" />
+        发布
+      </button>
     </div>
   </div>
 
