@@ -100,6 +100,8 @@ export const ProfileSchema = z.object({
   /** 实验室 / 课题组，可选 */
   lab: z.string().optional(),
   location: z.string(),
+  /** 所在地的 IANA 时区，如 'Asia/Shanghai'；顶栏时钟按它换算当地时间 */
+  timezone: z.string(),
   email: z.string(),
   /** 个人简介，每个元素一个段落 */
   bio: z.array(z.string()),

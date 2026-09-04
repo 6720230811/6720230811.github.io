@@ -374,6 +374,7 @@ function fillProfile(profile: Profile): void {
   set('p-affiliationLink', profile.affiliationLink ?? '');
   set('p-lab', profile.lab ?? '');
   set('p-location', profile.location);
+  set('p-timezone', profile.timezone);
   set('p-email', profile.email);
   set('p-citationSummary', profile.citationSummary ?? '');
   set('p-cvFile', profile.cvFile);
@@ -400,6 +401,7 @@ function collectProfile(): unknown {
     title: value('p-title'),
     affiliation: value('p-affiliation'),
     location: value('p-location'),
+    timezone: value('p-timezone'),
     email: value('p-email'),
     cvFile: value('p-cvFile'),
     bio: lines($<HTMLTextAreaElement>('p-bio').value),
@@ -423,7 +425,7 @@ function collectProfile(): unknown {
   // 字段顺序要跟 schema 一致，所以最后再按 schema 的顺序重建（见 stableProfileJson）
   const ordered: Record<string, unknown> = {};
   const order = [
-    'name', 'title', 'affiliation', 'affiliationLink', 'lab', 'location', 'email',
+    'name', 'title', 'affiliation', 'affiliationLink', 'lab', 'location', 'timezone', 'email',
     'bio', 'interests', 'links', 'citationSummary', 'cvFile', ...ARRAY_KEYS,
   ];
   for (const key of ARRAY_KEYS) profile[key] = readJson(key);

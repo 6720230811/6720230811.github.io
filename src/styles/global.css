@@ -665,6 +665,53 @@ h4 {
   background: var(--c-accent-soft);
 }
 
+/* ---------- 顶栏时钟：所在地 + 当地时间 ---------- */
+/* 纯展示，不做 btn-plain 的 hover 放大底色（它不可点） */
+.clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 2.75rem;
+  padding: 0 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+
+.clock svg {
+  flex: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--c-text-faint);
+}
+
+/* 所在地可能很长（如「中国 · 北京」），超宽就截断，不把工具区挤爆 */
+.clock__city {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 秒数在跳，等宽数字才不会让整条宽度抖动 */
+.clock__time {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1024px) {
+  /* 中等宽度先让位给导航链接，只留时间 */
+  .clock__city {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  /* 再窄下去工具区放不下了（搜索 / 主题 / 语言 / 菜单） */
+  .clock {
+    display: none;
+  }
+}
+
 /* ---------- 主内容 ---------- */
 .main {
   min-width: 0;
@@ -1647,6 +1694,7 @@ h4 {
   .toc,
   .footer,
   .lang-switch,
+  .clock,
   .theme-toggle {
     display: none;
   }

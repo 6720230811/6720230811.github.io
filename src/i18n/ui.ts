@@ -10,6 +10,9 @@ const zh = {
   'sidebar.cv': '下载简历',
   'sidebar.contact': '联系方式',
 
+  // 时间与位置组件（顶栏时钟）
+  'clock.label': '我的所在地当地时间',
+
   // 导航栏（跨页面链接）
   'nav.aria': '主导航',
   'nav.menu': '打开导航菜单',
@@ -91,6 +94,9 @@ const en: Record<keyof typeof zh, string> = {
   'sidebar.status': 'Open to PhD & SWE Opportunities',
   'sidebar.cv': 'Download CV',
   'sidebar.contact': 'Contact',
+
+  // 时间与位置组件（顶栏时钟）
+  'clock.label': 'Local time at my location',
 
   // 导航栏（跨页面链接）
   'nav.aria': 'Main navigation',

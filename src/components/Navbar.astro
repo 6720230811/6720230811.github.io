@@ -4,6 +4,7 @@ import { navItems } from '../data/nav';
 import { useTranslations, type Locale } from '../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import Icon from './Icon.astro';
+import Clock from './Clock.astro';
 import LangSwitcher from './LangSwitcher.astro';
 import Search from './Search.astro';
 import ThemeToggle from './ThemeToggle.astro';
@@ -54,6 +55,7 @@ const isCurrent = (path: string) => current === path;
     </nav>
 
     <div class="navbar__tools">
+      <Clock profile={profile} locale={locale} />
       <Search locale={locale} />
       <ThemeToggle locale={locale} />
       <LangSwitcher />
