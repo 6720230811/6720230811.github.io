@@ -250,6 +250,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     /** 途经点队列：点地面/画作时由 routeTo 算出，跨展厅会经过中间的拱门 */
     let path: Waypoint[] = [];
     let pendingFocus: string | null = null;
+    /** 走到画前之后该转到的角度（yaw）；跟着 pendingFocus 一起排队 */
+    let pendingYaw: number | null = null;
     let hereId = '';
     let dirty = true;
     let lastTime = 0;
@@ -296,6 +298,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       if (forward || strafe) {
         path = [];
         pendingFocus = null;
+        pendingYaw = null;
         stuck = 0;
         // 前后沿视线方向，左右沿它的垂直方向；斜着走不该更快
         const dx = -Math.sin(yaw) * forward + Math.cos(yaw) * strafe;
@@ -323,11 +326,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
           pos.z = target.z;
         }
         path.shift();
-        if (path.length === 0 && pendingFocus) {
-          const id = pendingFocus;
-          pendingFocus = null;
-          openFocus(id);
-        }
+        if (path.length === 0) arrive();
         return true;
       }
 
@@ -339,11 +338,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
         if (stuck > 6) {
           path = [];
           stuck = 0;
-          if (pendingFocus) {
-            const id = pendingFocus;
-            pendingFocus = null;
-            openFocus(id);
-          }
+          arrive();
         }
         return false;
       }
@@ -401,11 +396,30 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       travelled = 0;
       lastX = event.clientX;
       lastY = event.clientY;
+      // 一按下就开始转视角，先收掉悬停高亮
+      setHovered('');
       canvas.setPointerCapture(event.pointerId);
     });
 
+    // ---- 悬停：只在真鼠标上做，触屏没有「悬停」这回事 ----
+    let hovered = '';
+
+    function setHovered(id: string): void {
+      if (id === hovered) return;
+      hovered = id;
+      floor.setHover(id || null);
+      canvas.style.cursor = id ? 'pointer' : '';
+      requestRender();
+    }
+
     canvas.addEventListener('pointermove', (event) => {
-      if (!dragging) return;
+      if (!dragging) {
+        if (event.pointerType === 'mouse') {
+          const hit = floor.pick(event.clientX, event.clientY);
+          setHovered(hit?.kind === 'art' ? hit.id : '');
+        }
+        return;
+      }
       const dx = event.clientX - lastX;
       const dy = event.clientY - lastY;
       lastX = event.clientX;
@@ -434,25 +448,46 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       walkTo(hit.id);
     });
 
+    canvas.addEventListener('pointerleave', () => setHovered(''));
+
     canvas.addEventListener('pointercancel', () => {
       dragging = false;
     });
 
-    /** 点画作：先走到画前面（可能要穿过走廊去另一间房），到了再开大图 */
+    /** 走到位了：先正对作品再开大图，关掉之后人还站在画前看着它 */
+    function arrive(): void {
+      if (!pendingFocus) return;
+      const id = pendingFocus;
+      pendingFocus = null;
+      if (pendingYaw !== null) {
+        yaw = pendingYaw;
+        pendingYaw = null;
+        pitch = 0;
+      }
+      openFocus(id);
+    }
+
+    /** 点画作：先走到画前面（可能要穿过拱门去另一间房），到了再开大图 */
     function walkTo(id: string): void {
       const view = floor.viewpoint(id);
-      const spot = view ? { x: view.x, z: view.z } : null;
-      if (!spot || reduceMotion || Math.hypot(spot.x - pos.x, spot.z - pos.z) < 1.2) {
-        if (spot) {
-          pos.x = spot.x;
-          pos.z = spot.z;
-          updateLocation();
-        }
+      if (!view) {
+        openFocus(id);
+        return;
+      }
+      const near = Math.hypot(view.x - pos.x, view.z - pos.z) < 1.2;
+      if (reduceMotion || near) {
+        // 站定并转身：只是「走过去」而不转头，等于背对着画
+        pos.x = view.x;
+        pos.z = view.z;
+        yaw = view.yaw;
+        pitch = 0;
+        updateLocation();
         openFocus(id);
         return;
       }
       pendingFocus = id;
-      path = routeTo(plan, pos, spot);
+      pendingYaw = view.yaw;
+      path = routeTo(plan, pos, { x: view.x, z: view.z });
       requestRender();
     }
 
@@ -464,6 +499,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       keys.clear();
       path = [];
       pendingFocus = null;
+      pendingYaw = null;
       const space = spaceAt(plan, pos.x, pos.z);
       const back = spawnOf(plan, space?.id ?? startRoomId);
       pos.x = back.x;
@@ -500,6 +536,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       event.preventDefault();
       path = [];
       pendingFocus = null;
+      pendingYaw = null;
     });
 
     document.addEventListener('keyup', (event) => keys.delete(event.code));

@@ -29,6 +29,9 @@ export interface PlanItem {
   w: number | null;
   h: number | null;
   place: { wall: WallKey; u: number; v: number; size?: number } | null;
+  /** 展签用：标题与相机型号，缺了就留空板 */
+  title?: string;
+  camera?: string;
 }
 
 export interface PlanRoomInput {
@@ -109,6 +112,9 @@ export interface Placement {
   ry: number;
   fw: number;
   fh: number;
+  /** 展签文字 */
+  title: string;
+  camera: string;
 }
 
 export interface SpaceSpec {
@@ -358,6 +364,8 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
         ry: target.normal === 1 ? Math.PI / 2 : -Math.PI / 2,
         fw,
         fh,
+        title: item.title ?? '',
+        camera: item.camera ?? '',
       });
     });
   });

@@ -52,8 +52,13 @@ export interface FloorHandle {
   setPicture(id: string, texture: THREE.Texture, aspect: number | null): void;
   /** 屏幕坐标拾取；打在墙上或没打中返回 null */
   pick(clientX: number, clientY: number): PickResult | null;
-  /** 站到某件作品正前方 1.5m 的位置（世界坐标 x/z），由调用方夹回可行走区 */
-  viewpoint(id: string): { x: number; z: number } | null;
+  /**
+   * 站到某件作品正前方 1.5m 的位置（世界坐标 x/z），由调用方夹回可行走区。
+   * yaw 是站在那儿正对画心该有的视线角（相机绕 y 轴转，0 面朝 -z）。
+   */
+  viewpoint(id: string): { x: number; z: number; yaw: number } | null;
+  /** 悬停高亮：传 id 点亮那件作品的画框，传 null 全部熄灭 */
+  setHover(id: string | null): void;
   setSize(width: number, height: number): void;
   render(): void;
   dispose(): void;
@@ -70,6 +75,8 @@ const WASH_PAD = 0.66;
 const SHADOW_PAD = 0.34;
 /** 踢脚线高度 */
 const BASEBOARD_H = 0.08;
+/** 展签宽度（高是一半）：要走近了能读清，比真实展签大一圈 */
+const LABEL_W = 0.24;
 /** 一片墙的厚度（两片背靠背拼成一整堵墙） */
 const PANEL_T = 0.07;
 /** 拱壳与反光翼的厚度 */
@@ -306,6 +313,86 @@ function labelTexture(text: string): THREE.CanvasTexture {
   });
 }
 
+/**
+ * 墙上的作品展签：标题 + 一行小字的器材，左对齐、标题下压一道细线。
+ * 跟房间名牌分两张画：名牌要边框、要居中，展签是展签的样子。
+ */
+function wallLabelTexture(title: string, meta: string): THREE.CanvasTexture {
+  return paint(512, 256, (ctx, w, h) => {
+    ctx.fillStyle = '#efece4';
+    ctx.fillRect(0, 0, w, h);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+
+    // 标题：两行放不下就缩字号（短标题走一遍就过）
+    let size = 46;
+    let lines = wrap(ctx, title, `600 ${size}px`, w - 72);
+    while (lines.length > 2 && size > 28) {
+      size -= 6;
+      lines = wrap(ctx, title, `600 ${size}px`, w - 72);
+    }
+    ctx.font = `600 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+
+    let y = 92;
+    ctx.fillStyle = '#23262b';
+    for (const line of lines.slice(0, 3)) {
+      ctx.fillText(line, 36, y);
+      y += size * 1.18;
+    }
+
+    // 标题与器材之间那道细线
+    const rule = Math.min(y + 14, h - 62);
+    ctx.fillStyle = 'rgba(35,38,43,0.28)';
+    ctx.fillRect(36, rule, w - 72, 2);
+
+    if (meta) {
+      ctx.font = '400 30px system-ui, -apple-system, "Segoe UI", sans-serif';
+      ctx.fillStyle = 'rgba(35,38,43,0.66)';
+      ctx.fillText(ellipsize(ctx, meta, w - 72), 36, rule + 40);
+    }
+  });
+}
+
+/** 一个汉字 / 一串西文单词 / 一段空白：中文按字断行，西文不从单词中间断开 */
+const CJK_WORD = /[\u4e00-\u9fff\u3000-\u303f]|[^\s\u4e00-\u9fff\u3000-\u303f]+|\s+/g;
+
+/**
+ * 按给定字体把一段文字折成若干行。
+ * 中文逐字可断，西文按空格断：切分时不按码点走，按「一个汉字 / 一串西文
+ * 单词」取词，英文标题就不会从单词中间断开。
+ */
+function wrap(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  font: string,
+  maxWidth: number,
+): string[] {
+  ctx.font = font;
+  const lines: string[] = [];
+  let line = '';
+
+  // 汉字单独成词，连续的西文/数字算一个词，空格自成一个词（行首不留空格）
+  const tokens = text.match(CJK_WORD) ?? [];
+  for (const word of tokens) {
+    if (/^\s+$/.test(word) && !line) continue;
+    if (ctx.measureText(line + word).width > maxWidth && line) {
+      lines.push(line.trimEnd());
+      line = /^\s+$/.test(word) ? '' : word;
+    } else {
+      line += word;
+    }
+  }
+  if (line.trim()) lines.push(line.trimEnd());
+  return lines;
+}
+
+function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let out = text;
+  while (out.length > 1 && ctx.measureText(`${out}…`).width > maxWidth) out = out.slice(0, -1);
+  return `${out}…`;
+}
+
 /** 断面上一点的外法线：切线逆时针转 90°（摆线在起拱点是竖直的，正好朝外） */
 function outwardNormal(points: ProfilePoint[], index: number): { x: number; y: number } {
   const prev = points[Math.max(index - 1, 0)];
@@ -480,9 +567,6 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     new THREE.MeshStandardMaterial({ color: '#1f2329', roughness: 0.42, metalness: 0.28 }),
   );
   const matMaterial = track(new THREE.MeshStandardMaterial({ color: '#efece4', roughness: 0.9 }));
-  const labelMaterial = track(
-    new THREE.MeshStandardMaterial({ color: '#e6e2d9', roughness: 0.7 }),
-  );
   const washMaterial = track(
     new THREE.MeshBasicMaterial({
       map: glowMap,
@@ -734,8 +818,10 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     shadow.position.set(0.035, -0.045, -0.045);
     group.add(shadow);
 
-    // 画框：卡纸四周再压一圈木条
-    const frame = new THREE.Mesh(unitBox, frameMaterial);
+    // 画框：卡纸四周再压一圈木条。材质是逐件 clone 的 —— 悬停要点亮
+    // 单独一件，shared material 会让整层展厅一起亮
+    const frameMaterialForArt = track(frameMaterial.clone());
+    const frame = new THREE.Mesh(unitBox, frameMaterialForArt);
     frame.userData.id = placement.id;
     group.add(frame);
 
@@ -752,13 +838,23 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     picture.position.z = FRAME_DEPTH / 2 + 0.003;
     group.add(picture);
 
-    // 墙上的作品标签
-    const label = new THREE.Mesh(unitBox, labelMaterial);
-    label.scale.set(0.14, 0.09, 0.008);
-    label.position.z = -0.05;
+    // 墙上的作品标签：标题 + 器材，字画进贴图
+    const labelMap = track(wallLabelTexture(placement.title, placement.camera));
+    const labelMaterialForArt = track(
+      new THREE.MeshStandardMaterial({ map: labelMap, roughness: 0.85 }),
+    );
+    const label = new THREE.Mesh(unitBox, labelMaterialForArt);
     group.add(label);
 
-    const entry: FrameParts = { frame, mat, picture, wash, shadow, label };
+    const entry: FrameParts = {
+      frame,
+      frameMaterial: frameMaterialForArt,
+      mat,
+      picture,
+      wash,
+      shadow,
+      label,
+    };
     applySize(entry, art.w, art.h, outer.w, outer.h);
 
     pictures.set(placement.id, picture);
@@ -787,9 +883,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     entry.frame.scale.set(outerW, outerH, FRAME_DEPTH);
     entry.wash.scale.set(outerW + WASH_PAD, outerH + WASH_PAD * 0.8, 1);
     entry.shadow.scale.set(outerW + SHADOW_PAD, outerH + SHADOW_PAD, 1);
-    // 标签贴着画框右下角，与画框底边齐平
-    entry.label.position.x = outerW / 2 + 0.13;
-    entry.label.position.y = -outerH / 2 + 0.07;
+    // 标签贴着画框右下角外侧，底边与画框底边齐平。比例跟着贴图走（2:1）
+    entry.label.scale.set(LABEL_W, LABEL_W / 2, 0.008);
+    entry.label.position.set(outerW / 2 + LABEL_W / 2 + 0.06, -outerH / 2 + 0.08, -0.05);
   }
 
   /** 长边不变，只按真实比例重排宽高：卡纸、画框、洗墙光都跟着画心走 */
@@ -845,10 +941,21 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       frame.getWorldQuaternion(quaternion);
       const normal = scratch.set(0, 0, 1).applyQuaternion(quaternion);
       frame.getWorldPosition(worldPosition);
+      // 站定后要正对画心：相机朝 -z 看是 yaw=0，即 forward = (-sin yaw, -cos yaw)，
+      // 令它等于「从站位指回画心」的 -normal，解出 yaw = atan2(n.x, n.z)
       return {
         x: worldPosition.x + normal.x * 1.5,
         z: worldPosition.z + normal.z * 1.5,
+        yaw: Math.atan2(normal.x, normal.z),
       };
+    },
+
+    setHover(id) {
+      for (const [key, entry] of parts) {
+        const on = key === id;
+        // 一点暖光从画框里透出来：比描边含蓄，也不改几何
+        entry.frameMaterial.emissive.setHex(on ? 0x3a2f1c : 0x000000);
+      }
     },
 
     setSize(width, height) {
@@ -876,6 +983,8 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 /** 一件作品的全部零件；换图时按真实比例一起缩放 */
 interface FrameParts {
   frame: THREE.Mesh;
+  /** 逐件 clone 出来的画框材质，悬停时单独点亮 */
+  frameMaterial: THREE.MeshStandardMaterial;
   mat: THREE.Mesh;
   picture: THREE.Mesh;
   wash: THREE.Mesh;
