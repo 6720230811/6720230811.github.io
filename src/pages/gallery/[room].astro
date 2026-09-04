@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Section from '../../components/Section.astro';
-import GalleryRoom from '../../components/gallery/GalleryRoom.astro';
+import GalleryFloor from '../../components/gallery/GalleryFloor.astro';
 import GalleryGrid from '../../components/gallery/GalleryGrid.astro';
 import GalleryLightbox from '../../components/gallery/GalleryLightbox.astro';
 import '../../styles/gallery.css';
@@ -30,7 +30,22 @@ if (!found) return Astro.redirect(getRelativeLocaleUrl(locale, 'gallery'));
 
 const mood = roomMood(found);
 const label = roomLabel(found, locale);
-const intro = mood.intro?.[locale] ?? `${found.items.length} ${t('gallery.itemCount')}`;
+
+/**
+ * 房间之间已经打通：这一页装的是同一策展视图下的整层展厅，只是从当前这间
+ * 出生。所以要把同一视图的所有房间（含各自的配色与简介）一起交给脚本，
+ * 网格也按房间分段列全。
+ */
+const siblings = rooms(found.view);
+const floorRooms = siblings.map((item) => ({
+  id: item.id,
+  label: roomLabel(item, locale),
+  intro: roomMood(item).intro?.[locale] ?? `${item.items.length} ${t('gallery.itemCount')}`,
+  mood: roomMood(item),
+  items: item.items,
+}));
+const total = siblings.reduce((sum, item) => sum + item.items.length, 0);
+const intro = mood.intro?.[locale] ?? `${siblings.length} ${t('gallery.roomCount')} · ${total} ${t('gallery.itemCount')}`;
 
 // 回到同一策展的房间索引：按时间布展的房间回 /gallery/year/
 const backUrl =
@@ -45,13 +60,13 @@ const backUrl =
   title={`${label} · ${t('gallery.title')}`}
   description={intro}
 >
-  <Section title={label} icon="🖼">
+  <Section title={label} titleId="gal-room-title" icon="🖼">
     {/* data-mode 由脚本切换：默认 grid（也是无 JS / 无 WebGL 的形态），能用 3D 才切到 3d */}
     <div class="gal-page" id="gal-page" data-mode="grid">
       <div class="gal-head">
         <div class="gal-head__title">
           <span class="gal-head__view">{t(`gallery.view.${found.view}`)}</span>
-          <p class="gal-head__intro">{intro}</p>
+          <p class="gal-head__intro" id="gal-room-intro">{intro}</p>
         </div>
 
         <div class="gal-head__tools">
@@ -70,8 +85,13 @@ const backUrl =
 
       <p class="gal-fallback" id="gal-fallback" hidden>{t('gallery.fallback.notice')}</p>
 
-      <GalleryRoom items={found.items} mood={mood} locale={locale} roomId={found.id} />
-      <GalleryGrid items={found.items} locale={locale} />
+      <GalleryFloor
+        rooms={floorRooms}
+        startRoomId={found.id}
+        corridorLabel={t(`gallery.view.${found.view}`)}
+        locale={locale}
+      />
+      <GalleryGrid groups={floorRooms} locale={locale} />
       <GalleryLightbox locale={locale} />
     </div>
   </Section>

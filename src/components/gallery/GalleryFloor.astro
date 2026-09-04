@@ -2,46 +2,67 @@
 import { mediaUrl, type GalleryItem, type GalleryMood } from '../../data/gallery';
 import { useTranslations, type Locale } from '../../i18n/ui';
 
-interface Props {
-  items: readonly GalleryItem[];
+/** 一间展室：id + 名字 + 配色 + 它自己的那批展品 */
+export interface FloorRoom {
+  id: string;
+  label: string;
+  intro: string;
   mood: GalleryMood;
-  locale: Locale;
-  roomId: string;
+  items: readonly GalleryItem[];
 }
 
-const { items, mood, locale, roomId } = Astro.props;
+interface Props {
+  /** 同一策展视图下的所有房间，会被摆进同一个连通的展厅 */
+  rooms: readonly FloorRoom[];
+  /** 从哪间房出生（就是当前这个页面的房间） */
+  startRoomId: string;
+  /** 走廊尽头那块名牌的文案（按主题布展 / 按时间布展） */
+  corridorLabel: string;
+  locale: Locale;
+}
+
+const { rooms, startRoomId, corridorLabel, locale } = Astro.props;
 const t = useTranslations(locale);
 
 /**
  * 只把渲染需要的最小字段交给脚本，不整份 schema 塞进 HTML。
  * （尺寸未知的先给 null，纹理载入后按真实宽高校正画框比例）
  */
-const payload = items.map((item) => ({
-  id: item.id,
-  type: item.type,
-  src: mediaUrl(item.src),
-  thumb: mediaUrl(item.thumb),
-  w: item.w ?? null,
-  h: item.h ?? null,
-  title: item.title[locale],
-  desc: item.desc?.[locale] ?? '',
-  camera: item.camera ?? '',
-  place: item.place ?? null,
+const payload = rooms.map((room) => ({
+  id: room.id,
+  label: room.label,
+  intro: room.intro,
+  wall: room.mood.wall,
+  floor: room.mood.floor,
+  light: room.mood.light,
+  items: room.items.map((item) => ({
+    id: item.id,
+    type: item.type,
+    src: mediaUrl(item.src),
+    thumb: mediaUrl(item.thumb),
+    w: item.w ?? null,
+    h: item.h ?? null,
+    title: item.title[locale],
+    desc: item.desc?.[locale] ?? '',
+    camera: item.camera ?? '',
+    place: item.place ?? null,
+  })),
 }));
 ---
 
 {/*
-  3D 房间的宿主。默认隐藏（.gal-page[data-mode='grid'] 里 display:none），
+  3D 展厅的宿主。默认隐藏（.gal-page[data-mode='grid'] 里 display:none），
   脚本确认能用 WebGL 之后才把容器切到 data-mode='3d' 并挂载画布。
 */}
 <div
   class="gal"
   id="gal"
-  data-room={roomId}
-  data-items={JSON.stringify(payload)}
+  data-start-room={startRoomId}
+  data-corridor={corridorLabel}
+  data-rooms={JSON.stringify(payload)}
   data-label-loading={t('gallery.loading')}
   data-label-camera={t('gallery.meta.camera')}
-  style={`--gal-wall:${mood.wall};--gal-floor:${mood.floor};--gal-light:${mood.light}`}
+  data-label-corridor={t('gallery.corridor')}
 >
   <canvas class="gal__canvas" id="gal-canvas" tabindex="0" aria-label={t('gallery.title')}></canvas>
 
@@ -49,6 +70,7 @@ const payload = items.map((item) => ({
 
   <div class="gal__hud">
     <div class="gal__hint">
+      <span class="gal__where" id="gal-where" data-here={t('gallery.here')}></span>
       <span
         id="gal-hint"
         data-desktop={`${t('gallery.hint.look')} · ${t('gallery.hint.move')}`}

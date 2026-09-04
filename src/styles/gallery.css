@@ -180,7 +180,18 @@ button.gal-view[aria-pressed='true'] {
 .gal__hint {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: 0.35rem 0.9rem;
+}
+
+/* 当前所在房间：整个展厅是连通的，得随时知道自己在哪一间 */
+.gal__where {
+  font-weight: 700;
+  color: #fff;
+}
+
+.gal__where:empty {
+  display: none;
 }
 
 .gal__actions {
@@ -275,6 +286,17 @@ button.gal-view[aria-pressed='true'] {
 }
 
 /* ---------- 网格（降级视图 / 无 JS 路径） ---------- */
+/* 3D 里房间是打通的，网格就按房间分段列，翻到哪段就是哪间 */
+.gal-group + .gal-group {
+  margin-top: 1.4rem;
+}
+
+.gal-group__name {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
 .gal-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));

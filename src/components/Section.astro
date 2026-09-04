@@ -2,17 +2,19 @@
 interface Props {
   id?: string;
   title: string;
+  /** 标题文字的 id：脚本要改标题时用（画廊换房间时会跟着换） */
+  titleId?: string;
   /** 可选的 emoji / 图标字符，如 '📝' */
   icon?: string;
 }
 
-const { id, title, icon } = Astro.props;
+const { id, title, titleId, icon } = Astro.props;
 ---
 
 <section class="section" id={id}>
   <h2 class="section__title">
     {icon && <span class="icon">{icon}</span>}
-    <span>{title}</span>
+    <span id={titleId}>{title}</span>
   </h2>
   <slot />
 </section>

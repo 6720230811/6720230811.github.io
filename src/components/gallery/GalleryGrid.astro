@@ -2,43 +2,58 @@
 import { mediaUrl, type GalleryItem } from '../../data/gallery';
 import type { Locale } from '../../i18n/ui';
 
-interface Props {
+interface Group {
+  id: string;
+  label: string;
   items: readonly GalleryItem[];
+}
+
+interface Props {
+  /** 按房间分组的展品：3D 展厅是连通的，网格就把每间房各列一段 */
+  groups: readonly Group[];
   locale: Locale;
 }
 
-const { items, locale } = Astro.props;
+const { groups, locale } = Astro.props;
 ---
 
 {/*
   所有展品的网格：始终由服务端渲染，它就是降级视图（无 WebGL / 弱设备 /
-  prefers-reduced-motion），也是禁用 JS 时唯一能看到的东西——所以每件都是
-  一个真实的 button，脚本只负责把它们接到灯箱上。
+  无 JS），也是禁用 JS 时唯一能看到的东西——所以每件都是一个真实的 button，
+  脚本只负责把它们接到灯箱上。
+
+  整层是一整个连通展厅，所以这里按房间分段列：3D 里走两步进另一间房，
+  网格里往下翻一段就是那一间。
 */}
-<ul class="gal-grid">
-  {
-    items.map((item) => (
-      <li>
-        <button
-          class="gal-tile"
-          type="button"
-          data-id={item.id}
-          data-src={mediaUrl(item.src)}
-          data-title={item.title[locale]}
-          data-desc={item.desc?.[locale] ?? ''}
-          data-camera={item.camera ?? ''}
-          aria-label={item.title[locale]}
-        >
-          <img
-            src={mediaUrl(item.thumb)}
-            alt={item.title[locale]}
-            width={item.w}
-            height={item.h}
-            loading="lazy"
-          />
-          <span class="gal-tile__name">{item.title[locale]}</span>
-        </button>
-      </li>
-    ))
-  }
-</ul>
+{
+  groups.map((group) => (
+    <section class="gal-group">
+      <h3 class="gal-group__name">{group.label}</h3>
+      <ul class="gal-grid">
+        {group.items.map((item) => (
+          <li>
+            <button
+              class="gal-tile"
+              type="button"
+              data-id={item.id}
+              data-src={mediaUrl(item.src)}
+              data-title={item.title[locale]}
+              data-desc={item.desc?.[locale] ?? ''}
+              data-camera={item.camera ?? ''}
+              aria-label={item.title[locale]}
+            >
+              <img
+                src={mediaUrl(item.thumb)}
+                alt={item.title[locale]}
+                width={item.w}
+                height={item.h}
+                loading="lazy"
+              />
+              <span class="gal-tile__name">{item.title[locale]}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))
+}
