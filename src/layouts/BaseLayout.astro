@@ -2,6 +2,7 @@
 import type { MarkdownHeading } from 'astro';
 import '../styles/global.css';
 import Navbar from '../components/Navbar.astro';
+import Backdrop from '../components/Backdrop.astro';
 import Sidebar from '../components/Sidebar.astro';
 import Toc from '../components/Toc.astro';
 import type { Profile } from '../data/profile';
@@ -71,6 +72,9 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
   </head>
 
   <body id="top">
+    {/* 背景效果层：装饰性画布，靠 z-index 与 DOM 顺序压在所有内容之下 */}
+    <Backdrop />
+
     <Navbar profile={profile} locale={locale} />
 
     {/* 装饰性横幅，下方 .page 会盖住它的底部 --banner-overlap */}
