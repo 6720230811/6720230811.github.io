@@ -3,20 +3,24 @@
 /* ============================================================
    设计 Token
 
-   配色层级（Fuwari 的观感核心）：--c-page 是带色调的页面底色，
-   卡片用 --c-card 浮在它上面，卡片内的次级面用 --c-bg-soft。
+  配色层级（Fuwari 的观感核心）：--c-page 是带色调的页面底色，
+  卡片用 --c-card 浮在它上面，卡片内的次级面用 --c-bg-soft。
 
-   明暗由 <html data-theme="light|dark"> 决定，属性由 BaseLayout 里
-   的 head 内联脚本在首次绘制前写好，所以这里只有一份暗色变量。
-   （代价：禁用 JS 时固定为亮色，不再跟随系统）
-   ============================================================ */
+  卡片与次级面是半透明的：背景层的光会透上来（配合 .card/.section 的
+  backdrop-filter 把光模糊掉，文字对比度不受影响）。想让卡片更实就调大
+  这些 alpha，想让光更明显就调小。
+
+  明暗由 <html data-theme="light|dark"> 决定，属性由 BaseLayout 里
+  的 head 内联脚本在首次绘制前写好，所以这里只有一份暗色变量。
+  （代价：禁用 JS 时固定为亮色，不再跟随系统）
+  ============================================================ */
 :root {
   /* 亮色 */
   --c-page: #f0f2f5; /* 页面底色 */
-  --c-card: #ffffff; /* 卡片 */
-  --c-card-hover: #fbfcfd;
-  --c-bg-soft: #f2f4f7; /* 卡片内的次级底色：嵌套卡片、标签、按钮 */
-  --c-float-panel: #ffffff; /* 浮层面板（导航菜单、搜索面板） */
+  --c-card: rgba(255, 255, 255, 0.86); /* 卡片 */
+  --c-card-hover: rgba(251, 252, 253, 0.9);
+  --c-bg-soft: rgba(242, 244, 247, 0.6); /* 卡片内的次级底色：嵌套卡片、标签、按钮 */
+  --c-float-panel: rgba(255, 255, 255, 0.94); /* 浮层面板（导航菜单、搜索面板） */
   --c-text: #1f2328;
   --c-text-muted: #656d76;
   --c-text-faint: #8b949e;
@@ -38,11 +42,11 @@
 
 :root[data-theme='dark'] {
   --c-page: #15181d;
-  --c-card: #23262b;
-  --c-card-hover: #2a2e34;
-  --c-bg-soft: #2b2f35;
+  --c-card: rgba(35, 38, 43, 0.84);
+  --c-card-hover: rgba(42, 46, 52, 0.88);
+  --c-bg-soft: rgba(43, 47, 53, 0.55);
   /* 暗色下浮层要比卡片更深，否则面板和卡片糊在一起 */
-  --c-float-panel: #1c1f24;
+  --c-float-panel: rgba(28, 31, 36, 0.94);
   --c-text: #e6edf3;
   --c-text-muted: #9198a1;
   --c-text-faint: #6e7681;
@@ -191,6 +195,8 @@ h4 {
   border: 1px solid var(--c-border-soft);
   border-radius: var(--radius-lg);
   box-shadow: 0 1px 2px var(--c-shadow-sm);
+  /* 卡片是半透明的，把透上来的背景光模糊掉，正文对比度才不受影响 */
+  backdrop-filter: blur(8px);
 }
 
 /* 可交互卡片：hover 轻微上浮（仅侧栏卡片 / 项目卡 / 论文条目用） */
@@ -242,10 +248,13 @@ h4 {
   height: var(--nav-h);
   max-width: var(--page-max);
   margin: 0 auto;
-  /* Fuwari 的 px-4；面板要溢出到卡片外，所以不能裁切 */
-  padding: 0 1rem;
-  background: var(--c-card);
+  /* Fuwari 的 px-4；搜索面板要溢出到卡片外，所以不能裁切 */
+  /* 用近实底的浮层色，而不是 --c-card + backdrop-filter：
+     backdrop-filter 会让卡片成为内部 fixed 元素的包含块，搜索面板与
+     窄屏菜单是 fixed 的，定位会从「相对视口」变成「相对这张 4.5rem 高的卡片」 */
+  background: var(--c-float-panel);
   border: 1px solid var(--c-border-soft);
+  padding: 0 1rem;
   border-top: none;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   box-shadow: 0 1px 2px var(--c-shadow-sm), 0 6px 16px -10px var(--c-shadow-md);
@@ -1775,6 +1784,7 @@ h4 {
     border: none;
     border-radius: 0;
     box-shadow: none;
+    backdrop-filter: none;
     padding: 0;
     margin-bottom: 1.2rem;
     break-inside: avoid;
