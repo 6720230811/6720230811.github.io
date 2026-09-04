@@ -52,11 +52,13 @@ const payload = items.map((item) => ({
       <span
         id="gal-hint"
         data-desktop={`${t('gallery.hint.look')} · ${t('gallery.hint.move')}`}
-        data-touch={t('gallery.hint.touch')}>{t('gallery.hint.look')}</span
+        data-touch={t('gallery.hint.touch')}
+        data-reset={t('gallery.hint.reset')}>{t('gallery.hint.look')}</span
       >
     </div>
 
     <div class="gal__actions">
+      <button class="gal__btn" id="gal-reset" type="button">{t('gallery.reset')}</button>
       <button
         class="gal__btn"
         id="gal-grid"

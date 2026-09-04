@@ -74,6 +74,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const hint = root.querySelector<HTMLElement>('#gal-hint');
   const gridButton = root.querySelector<HTMLButtonElement>('#gal-grid');
   const immersiveButton = root.querySelector<HTMLButtonElement>('#gal-immersive');
+  const resetButton = root.querySelector<HTMLButtonElement>('#gal-reset');
   const focus = root.querySelector<HTMLElement>('#gal-focus');
   const focusImage = root.querySelector<HTMLImageElement>('#gal-focus-img');
   const focusTitle = root.querySelector<HTMLElement>('#gal-focus-title');
@@ -200,7 +201,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       return;
     }
 
-    const pos = { x: 0, z: layout.side / 2 - 1.1 };
+    const home = { x: 0, z: layout.side / 2 - 1.1 };
+    const pos = { x: home.x, z: home.z };
     const keys = new Set<string>();
     const limit = layout.side / 2 - 0.55;
     let yaw = 0;
@@ -220,6 +222,28 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       room.camera.position.set(pos.x, EYE_HEIGHT, pos.z);
       room.camera.rotation.set(pitch, yaw, 0, 'YXZ');
     }
+
+    /**
+     * 回正视角：立刻站回门口、视线放平。
+     * 不做补间 —— 转晕的时候要的是马上稳住，不是再看一段动画。
+     */
+    function resetView(): void {
+      keys.clear();
+      target = null;
+      pendingFocus = null;
+      pos.x = home.x;
+      pos.z = home.z;
+      yaw = 0;
+      pitch = 0;
+      applyCamera();
+      room.render();
+    }
+
+    resetButton?.addEventListener('click', () => {
+      resetView();
+      // 沉浸模式下画布本来就在手里，不用抢焦点
+      if (!immersive) canvas.focus();
+    });
 
     /** 一帧的位移；返回是否动过（没动且没脏就不重画） */
     function step(dt: number): boolean {
@@ -346,6 +370,12 @@ export function mountGallery(rootEl: HTMLElement | null): void {
 
     document.addEventListener('keydown', (event) => {
       if (isTyping(event.target) || isFocusOpen()) return;
+      // R 随时可用：转晕了还得先去找画布聚焦就太晚了
+      if (event.code === 'KeyR') {
+        event.preventDefault();
+        resetView();
+        return;
+      }
       if (document.activeElement !== canvas && !immersive) return;
       if (!event.key.startsWith('Arrow') && !/^Key[WASD]$/.test(event.code)) return;
       keys.add(event.code);
@@ -368,7 +398,9 @@ export function mountGallery(rootEl: HTMLElement | null): void {
 
     if (hint) {
       const touch = window.matchMedia('(pointer: coarse)').matches;
-      hint.textContent = hint.dataset[touch ? 'touch' : 'desktop'] ?? hint.textContent;
+      const base = hint.dataset[touch ? 'touch' : 'desktop'] ?? hint.textContent;
+      const reset = hint.dataset.reset;
+      hint.textContent = reset ? `${base} · ${reset}` : base;
     }
 
     setMode('3d');
