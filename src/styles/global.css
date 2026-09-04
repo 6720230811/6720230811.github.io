@@ -144,7 +144,13 @@ h4 {
    ============================================================ */
 .backdrop {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  /* 必须显式给 100%：canvas 是替换元素，width/height 为 auto 时会用 width/height
+     属性里的像素尺寸，而脚本为了性能把画布设成了半分辨率，只写 inset: 0 的话
+     它只会铺满视口左上角一块，下半屏和右半屏都是空的 */
+  width: 100%;
+  height: 100%;
   z-index: 1;
   pointer-events: none;
 
