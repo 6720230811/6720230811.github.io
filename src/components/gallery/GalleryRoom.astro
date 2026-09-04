@@ -1,0 +1,99 @@
+---
+import { mediaUrl, type GalleryItem, type GalleryMood } from '../../data/gallery';
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+interface Props {
+  items: readonly GalleryItem[];
+  mood: GalleryMood;
+  locale: Locale;
+  roomId: string;
+}
+
+const { items, mood, locale, roomId } = Astro.props;
+const t = useTranslations(locale);
+
+/**
+ * 只把渲染需要的最小字段交给脚本，不整份 schema 塞进 HTML。
+ * （尺寸未知的先给 null，纹理载入后按真实宽高校正画框比例）
+ */
+const payload = items.map((item) => ({
+  id: item.id,
+  type: item.type,
+  src: mediaUrl(item.src),
+  thumb: mediaUrl(item.thumb),
+  w: item.w ?? null,
+  h: item.h ?? null,
+  title: item.title[locale],
+  desc: item.desc?.[locale] ?? '',
+  camera: item.camera ?? '',
+  place: item.place ?? null,
+}));
+---
+
+{/*
+  3D 房间的宿主。默认隐藏（.gal-page[data-mode='grid'] 里 display:none），
+  脚本确认能用 WebGL 之后才把容器切到 data-mode='3d' 并挂载画布。
+*/}
+<div
+  class="gal"
+  id="gal"
+  data-room={roomId}
+  data-items={JSON.stringify(payload)}
+  data-label-loading={t('gallery.loading')}
+  data-label-camera={t('gallery.meta.camera')}
+  style={`--gal-wall:${mood.wall};--gal-floor:${mood.floor};--gal-light:${mood.light}`}
+>
+  <canvas class="gal__canvas" id="gal-canvas" tabindex="0" aria-label={t('gallery.title')}></canvas>
+
+  <div class="gal__progress" id="gal-progress" hidden><span></span></div>
+
+  <div class="gal__hud">
+    <div class="gal__hint">
+      <span
+        id="gal-hint"
+        data-desktop={`${t('gallery.hint.look')} · ${t('gallery.hint.move')}`}
+        data-touch={t('gallery.hint.touch')}>{t('gallery.hint.look')}</span
+      >
+    </div>
+
+    <div class="gal__actions">
+      <button
+        class="gal__btn"
+        id="gal-grid"
+        type="button"
+        data-label-grid={t('gallery.gridMode')}
+        data-label-room={t('gallery.roomMode')}>{t('gallery.gridMode')}</button
+      >
+      <button
+        class="gal__btn"
+        id="gal-immersive"
+        type="button"
+        aria-pressed="false"
+        data-label-immersive={t('gallery.immersive')}
+        data-label-exit={t('gallery.exit')}>{t('gallery.immersive')}</button
+      >
+    </div>
+  </div>
+
+  {/* 走近看：DOM 浮层，文字比画进 3D 里清晰，键盘也能用 */}
+  <div class="gal__focus" id="gal-focus" role="dialog" aria-modal="true" aria-label={t('gallery.title')}>
+    <figure class="gal__figure">
+      <img id="gal-focus-img" alt="" />
+      <figcaption class="gal__caption">
+        <h2 id="gal-focus-title"></h2>
+        <p id="gal-focus-desc"></p>
+        <small id="gal-focus-meta"></small>
+      </figcaption>
+      <div class="gal__nav">
+        <button class="gal__btn" id="gal-focus-prev" type="button">{t('gallery.prev')}</button>
+        <button class="gal__btn" id="gal-focus-next" type="button">{t('gallery.next')}</button>
+        <button class="gal__btn" id="gal-focus-close" type="button">{t('gallery.close')}</button>
+      </div>
+    </figure>
+  </div>
+</div>
+
+<script>
+  import { mountGallery } from '../../lib/gallery';
+  mountGallery(document.getElementById('gal'));
+</script>

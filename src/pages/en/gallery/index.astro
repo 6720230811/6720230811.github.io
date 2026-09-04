@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Section from '../../../components/Section.astro';
+import RoomIndex from '../../../components/gallery/RoomIndex.astro';
+import '../../../styles/gallery.css';
+import { profile } from '../../../data/profile';
+import { toLocale, useTranslations } from '../../../i18n/ui';
+
+const locale = toLocale('en');
+const t = useTranslations(locale);
+const p = profile[locale];
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${t('gallery.title')} · ${p.name}`}
+  description={t('gallery.desc')}
+>
+  <Section title={t('gallery.title')} icon="🖼">
+    <RoomIndex view="theme" locale={locale} />
+  </Section>
+</BaseLayout>

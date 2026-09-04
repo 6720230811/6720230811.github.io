@@ -1,0 +1,42 @@
+---
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+---
+
+{/*
+  网格模式的灯箱。用原生 <dialog>：焦点陷阱、Esc 关闭、::backdrop 都是白送的。
+  内容由 lib/gallery/lightbox.ts 填。
+*/}
+<dialog
+  class="gal-lb"
+  id="gal-lightbox"
+  aria-label={t('gallery.title')}
+  data-label-camera={t('gallery.meta.camera')}
+>
+  <div class="gal-lb__inner">
+    <img id="gal-lb-img" alt="" />
+
+    <div>
+      <div class="gal-lb__title" id="gal-lb-title"></div>
+      <p class="gal-lb__desc" id="gal-lb-desc"></p>
+      <div class="gal-lb__meta" id="gal-lb-meta"></div>
+    </div>
+
+    <div class="gal-lb__bar">
+      <button class="btn" id="gal-lb-prev" type="button">{t('gallery.prev')}</button>
+      <button class="btn" id="gal-lb-next" type="button">{t('gallery.next')}</button>
+      <button class="btn" id="gal-lb-close" type="button">{t('gallery.close')}</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  import { initGridLightbox } from '../../lib/gallery/lightbox';
+  initGridLightbox();
+</script>

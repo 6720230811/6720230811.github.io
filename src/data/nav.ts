@@ -18,5 +18,6 @@ export interface NavItem {
 export const navItems: readonly NavItem[] = [
   { key: 'nav.home', path: '' },
   { key: 'nav.blog', path: 'blog' },
+  { key: 'nav.gallery', path: 'gallery' },
   { key: 'nav.friends', path: 'friends' },
 ];

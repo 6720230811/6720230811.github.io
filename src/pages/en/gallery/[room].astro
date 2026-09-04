@@ -1,0 +1,74 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Section from '../../../components/Section.astro';
+import GalleryRoom from '../../../components/gallery/GalleryRoom.astro';
+import GalleryGrid from '../../../components/gallery/GalleryGrid.astro';
+import GalleryLightbox from '../../../components/gallery/GalleryLightbox.astro';
+import '../../../styles/gallery.css';
+import { profile } from '../../../data/profile';
+import { roomById, roomLabel, roomMood, rooms } from '../../../data/gallery';
+import { toLocale, useTranslations } from '../../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+// 与中文房间页同一套做法，只是路径前缀是 /en/gallery/
+export function getStaticPaths() {
+  return [
+    ...rooms('theme').map((room) => ({ params: { room: room.id }, props: { room } })),
+    ...rooms('year').map((room) => ({ params: { room: room.id }, props: { room } })),
+  ];
+}
+
+const { room } = Astro.props;
+
+const locale = toLocale('en');
+const t = useTranslations(locale);
+const p = profile[locale];
+
+const found = roomById(room.view, room.id);
+if (!found) return Astro.redirect(getRelativeLocaleUrl(locale, 'gallery'));
+
+const mood = roomMood(found);
+const label = roomLabel(found, locale);
+const intro = mood.intro?.[locale] ?? `${found.items.length} ${t('gallery.itemCount')}`;
+
+const backUrl =
+  found.view === 'year'
+    ? `${getRelativeLocaleUrl(locale, 'gallery')}year/`
+    : getRelativeLocaleUrl(locale, 'gallery');
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${label} · ${t('gallery.title')}`}
+  description={intro}
+>
+  <Section title={label} icon="🖼">
+    <div class="gal-page" id="gal-page" data-mode="grid">
+      <div class="gal-head">
+        <div class="gal-head__title">
+          <span class="gal-head__view">{t(`gallery.view.${found.view}`)}</span>
+          <p class="gal-head__intro">{intro}</p>
+        </div>
+
+        <div class="gal-head__tools">
+          <div class="gal-views">
+            <button class="gal-view" id="gal-mode-3d" type="button" aria-pressed="false">
+              {t('gallery.roomMode')}
+            </button>
+            <button class="gal-view" id="gal-mode-grid" type="button" aria-pressed="true">
+              {t('gallery.gridMode')}
+            </button>
+          </div>
+          <a class="gal-view" href={backUrl}>{t('gallery.back')}</a>
+        </div>
+      </div>
+
+      <p class="gal-fallback" id="gal-fallback" hidden>{t('gallery.fallback.notice')}</p>
+
+      <GalleryRoom items={found.items} mood={mood} locale={locale} roomId={found.id} />
+      <GalleryGrid items={found.items} locale={locale} />
+      <GalleryLightbox locale={locale} />
+    </div>
+  </Section>
+</BaseLayout>

@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "base": "",
+  "items": [
+    {
+      "id": "city-01",
+      "type": "image",
+      "src": "city-01.jpg",
+      "thumb": "thumbs/city-01.jpg",
+      "w": 1216,
+      "h": 832,
+      "theme": "city",
+      "year": 2024,
+      "title": { "zh": "末班公交", "en": "Last Bus" },
+      "desc": {
+        "zh": "天桥上等了四十分钟，车流在下面拖成一条条光线。",
+        "en": "Forty minutes on the footbridge, traffic smearing into light below."
+      },
+      "camera": "Sony A7C · 35mm f/1.8",
+      "tags": ["夜景", "长曝光"]
+    },
+    {
+      "id": "city-02",
+      "type": "image",
+      "src": "city-02.jpg",
+      "thumb": "thumbs/city-02.jpg",
+      "w": 1216,
+      "h": 832,
+      "theme": "city",
+      "year": 2024,
+      "title": { "zh": "便利店", "en": "Convenience Store" },
+      "desc": {
+        "zh": "雨刚停，整条街只剩这一块亮着。",
+        "en": "The rain had just stopped; this was the only lit thing on the street."
+      },
+      "camera": "Sony A7C · 35mm f/1.8",
+      "tags": ["夜景", "街拍"]
+    },
+    {
+      "id": "city-03",
+      "type": "image",
+      "src": "city-03.jpg",
+      "thumb": "thumbs/city-03.jpg",
+      "w": 1216,
+      "h": 832,
+      "theme": "city",
+      "year": 2025,
+      "title": { "zh": "天台", "en": "Rooftop" },
+      "desc": {
+        "zh": "天黑之前最后十分钟，楼顶风很大。",
+        "en": "The last ten minutes before dark, and it was windy up there."
+      },
+      "camera": "Fujifilm X100V",
+      "tags": ["黄昏"]
+    },
+    {
+      "id": "sea-01",
+      "type": "image",
+      "src": "sea-01.jpg",
+      "thumb": "thumbs/sea-01.jpg",
+      "w": 832,
+      "h": 1216,
+      "theme": "sea",
+      "year": 2025,
+      "title": { "zh": "渔港清晨", "en": "Fishing Port, Dawn" },
+      "desc": {
+        "zh": "五点半，雾还没散，船都在原地。",
+        "en": "Half past five, the mist had not lifted, and the boats had not moved."
+      },
+      "camera": "Sony A7C · 55mm",
+      "tags": ["海", "清晨"]
+    },
+    {
+      "id": "sea-02",
+      "type": "image",
+      "src": "sea-02.jpg",
+      "thumb": "thumbs/sea-02.jpg",
+      "w": 1216,
+      "h": 832,
+      "theme": "sea",
+      "year": 2025,
+      "title": { "zh": "退潮", "en": "Low Tide" },
+      "desc": {
+        "zh": "湿沙把天空又还给了一遍。",
+        "en": "The wet sand gave the sky back once more."
+      },
+      "camera": "Sony A7C · 55mm",
+      "tags": ["海"]
+    },
+    {
+      "id": "sea-03",
+      "type": "image",
+      "src": "sea-03.jpg",
+      "thumb": "thumbs/sea-03.jpg",
+      "w": 1216,
+      "h": 832,
+      "theme": "sea",
+      "year": 2024,
+      "title": { "zh": "浪", "en": "Waves" },
+      "desc": {
+        "zh": "慢门把水变成了雾，石头还在原地。",
+        "en": "A slow shutter turned the water into mist; the rocks stayed."
+      },
+      "camera": "Sony A7C · 24mm",
+      "tags": ["海", "长曝光"]
+    }
+  ],
+  "moods": {
+    "theme:city": {
+      "wall": "#2b2f36",
+      "floor": "#1c1f24",
+      "light": "#ffd9a8",
+      "intro": { "zh": "城市的房间，天黑之后", "en": "The city room, after dark" }
+    },
+    "theme:sea": {
+      "wall": "#e6e9ec",
+      "floor": "#cfd6d9",
+      "light": "#cfe6ff",
+      "intro": { "zh": "海边的房间，有雾的早晨", "en": "The sea room, a misty morning" }
+    },
+    "year:2024": {
+      "wall": "#3a3230",
+      "floor": "#241f1e",
+      "light": "#ffc9a0"
+    },
+    "year:2025": {
+      "wall": "#e8e4dc",
+      "floor": "#c9c4bb",
+      "light": "#fff3e0"
+    }
+  },
+  "labels": {
+    "theme": {
+      "city": { "zh": "城市", "en": "City" },
+      "sea": { "zh": "海", "en": "Sea" }
+    }
+  }
+}

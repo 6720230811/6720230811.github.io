@@ -1,0 +1,78 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/Section.astro';
+import GalleryRoom from '../../components/gallery/GalleryRoom.astro';
+import GalleryGrid from '../../components/gallery/GalleryGrid.astro';
+import GalleryLightbox from '../../components/gallery/GalleryLightbox.astro';
+import '../../styles/gallery.css';
+import { profile } from '../../data/profile';
+import { roomById, roomLabel, roomMood, rooms } from '../../data/gallery';
+import { toLocale, useTranslations } from '../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+// 两种策展共用一个动态路由：房间 id 自带前缀（theme-city / year-2024），不会撞
+export function getStaticPaths() {
+  return [
+    ...rooms('theme').map((room) => ({ params: { room: room.id }, props: { room } })),
+    ...rooms('year').map((room) => ({ params: { room: room.id }, props: { room } })),
+  ];
+}
+
+const { room } = Astro.props;
+
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+
+// 静态生成时 props 已带 room，这里再兜一次底，避免手改 url 时整页报错
+const found = roomById(room.view, room.id);
+if (!found) return Astro.redirect(getRelativeLocaleUrl(locale, 'gallery'));
+
+const mood = roomMood(found);
+const label = roomLabel(found, locale);
+const intro = mood.intro?.[locale] ?? `${found.items.length} ${t('gallery.itemCount')}`;
+
+// 回到同一策展的房间索引：按时间布展的房间回 /gallery/year/
+const backUrl =
+  found.view === 'year'
+    ? `${getRelativeLocaleUrl(locale, 'gallery')}year/`
+    : getRelativeLocaleUrl(locale, 'gallery');
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${label} · ${t('gallery.title')}`}
+  description={intro}
+>
+  <Section title={label} icon="🖼">
+    {/* data-mode 由脚本切换：默认 grid（也是无 JS / 无 WebGL 的形态），能用 3D 才切到 3d */}
+    <div class="gal-page" id="gal-page" data-mode="grid">
+      <div class="gal-head">
+        <div class="gal-head__title">
+          <span class="gal-head__view">{t(`gallery.view.${found.view}`)}</span>
+          <p class="gal-head__intro">{intro}</p>
+        </div>
+
+        <div class="gal-head__tools">
+          {/* 房间 / 网格：3D 挂不起来时脚本会把这两个按钮收掉 */}
+          <div class="gal-views">
+            <button class="gal-view" id="gal-mode-3d" type="button" aria-pressed="false">
+              {t('gallery.roomMode')}
+            </button>
+            <button class="gal-view" id="gal-mode-grid" type="button" aria-pressed="true">
+              {t('gallery.gridMode')}
+            </button>
+          </div>
+          <a class="gal-view" href={backUrl}>{t('gallery.back')}</a>
+        </div>
+      </div>
+
+      <p class="gal-fallback" id="gal-fallback" hidden>{t('gallery.fallback.notice')}</p>
+
+      <GalleryRoom items={found.items} mood={mood} locale={locale} roomId={found.id} />
+      <GalleryGrid items={found.items} locale={locale} />
+      <GalleryLightbox locale={locale} />
+    </div>
+  </Section>
+</BaseLayout>

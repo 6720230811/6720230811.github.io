@@ -1,0 +1,48 @@
+---
+import { mediaUrl, roomLabel, type GalleryRoom } from '../../data/gallery';
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+interface Props {
+  rooms: readonly GalleryRoom[];
+  locale: Locale;
+  /** 房间页面的 URL 前缀，如 '/gallery/' 或 '/en/gallery/' */
+  base: string;
+}
+
+const { rooms, locale, base } = Astro.props;
+const t = useTranslations(locale);
+
+/** 主题房间里标一下年份跨度，年份房间直接显示件数就够了 */
+function subtitle(room: GalleryRoom): string {
+  const years = room.items.map((item) => item.year);
+  const min = Math.min(...years);
+  const max = Math.max(...years);
+  return min === max ? `${min}` : `${min}–${max}`;
+}
+---
+
+{/* 房间索引：一排「门」，封面用房间里第一件作品的缩略图 */}
+<ul class="doors">
+  {
+    rooms.map((room) => {
+      const cover = room.items[0];
+      return (
+        <li>
+          <a class="door" href={`${base}${room.id}/`}>
+            <div class="door__frame">
+              {cover && <img src={mediaUrl(cover.thumb)} alt="" loading="lazy" />}
+              <div class="door__label">
+                <span class="door__name">{roomLabel(room, locale)}</span>
+                <span class="door__meta">
+                  {room.view === 'theme'
+                    ? subtitle(room)
+                    : `${room.items.length} ${t('gallery.itemCount')}`}
+                </span>
+              </div>
+            </div>
+          </a>
+        </li>
+      );
+    })
+  }
+</ul>

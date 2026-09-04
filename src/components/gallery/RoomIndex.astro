@@ -1,0 +1,42 @@
+---
+import DoorGrid from './DoorGrid.astro';
+import { rooms, type GalleryView } from '../../data/gallery';
+import { useTranslations, type Locale } from '../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+/**
+ * 房间索引：导语 + 策展切换 + 一排门。
+ * 按主题布展（/gallery/）与按时间布展（/gallery/year/）只差一个 view，
+ * 四个页面（中英 × 两种策展）共用这一份。
+ */
+interface Props {
+  view: GalleryView;
+  locale: Locale;
+}
+
+const { view, locale } = Astro.props;
+const t = useTranslations(locale);
+const list = rooms(view);
+const base = getRelativeLocaleUrl(locale, 'gallery'); // '/gallery/' 或 '/en/gallery/'
+---
+
+<p class="list-summary">{t('gallery.desc')}</p>
+
+<nav class="gal-head__tools" aria-label={t('gallery.title')}>
+  <div class="gal-views">
+    <a class="gal-view" href={base} aria-current={view === 'theme' ? 'page' : undefined}>
+      {t('gallery.view.theme')}
+    </a>
+    <a class="gal-view" href={`${base}year/`} aria-current={view === 'year' ? 'page' : undefined}>
+      {t('gallery.view.year')}
+    </a>
+  </div>
+</nav>
+
+{
+  list.length === 0 ? (
+    <p class="empty-hint">{t('gallery.empty')}</p>
+  ) : (
+    <DoorGrid rooms={list} locale={locale} base={base} />
+  )
+}

@@ -1,0 +1,498 @@
+/* ============================================================
+   /gallery 画廊样式
+
+   只写画廊特有的部分，配色与尺寸沿用 global.css 的 --c-* / --radius*。
+   层级说明：房间画布在 .page（z-index 10）里，背景光（1）在它下面、
+   顶栏（30）在它上面。沉浸模式不去压顶栏的层级（.page 自成层叠上下文，
+   子元素再高的 z-index 也盖不过顶栏），而是直接把站点 chrome 隐藏掉。
+   ============================================================ */
+
+/* ---------- 房间页顶部：返回 + 标题 + 视图切换 ---------- */
+.gal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.gal-head__title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.gal-head__title h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.gal-head__intro {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--c-text-faint);
+}
+
+/* 视图切换：与后台分区同款的胶囊 */
+.gal-views {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.3rem;
+  background: var(--c-bg-soft);
+  border: 1px solid var(--c-border-soft);
+  border-radius: 999px;
+}
+
+/* 策展方式的小标签：按主题布展 / 按时间布展 */
+.gal-head__view {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--c-accent);
+}
+
+/* 降级说明：跑不动 3D 时脚本把它显示出来 */
+.gal-fallback {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.85rem;
+  border: 1px dashed var(--c-border-soft);
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  font-size: 0.84rem;
+  color: var(--c-text-muted);
+}
+
+.gal-head__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gal-view {
+  padding: 0.32rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 同一枚胶囊也当按钮用（网格 / 房间切换），先抹掉浏览器默认的按钮外观 */
+button.gal-view {
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.gal-view:hover {
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+.gal-view[aria-current='page'],
+button.gal-view[aria-pressed='true'] {
+  color: var(--c-accent);
+  background: var(--c-card);
+  box-shadow: 0 1px 3px var(--c-shadow-sm);
+}
+
+/* ---------- 房间（3D 画布） ---------- */
+.gal {
+  position: relative;
+  margin-top: 1.1rem;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius-lg);
+  /* 纹理没加载完之前，先露出房间地板色，避免一片黑 */
+  background: var(--gal-floor, var(--c-bg-soft));
+  overflow: hidden;
+}
+
+.gal__canvas {
+  display: block;
+  width: 100%;
+  height: min(72vh, 640px);
+  /* 画布自己接管手势：否则拖动看向会变成页面滚动 */
+  touch-action: none;
+  cursor: grab;
+}
+
+.gal__canvas:active {
+  cursor: grabbing;
+}
+
+.gal__canvas:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -2px;
+}
+
+/* 加载进度：顶部一条细线 */
+.gal__progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.gal__progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--c-accent);
+  transition: width 0.2s ease;
+}
+
+.gal__progress[data-done] {
+  opacity: 0;
+  transition: opacity 0.4s ease 0.2s;
+}
+
+/* 底部操作与提示条：房间可能很亮也可能很暗，所以自带一层渐变底 */
+.gal__hud {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 1.6rem 0.9rem 0.75rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+  color: #fff;
+  font-size: 0.82rem;
+}
+
+.gal__hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+}
+
+.gal__actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* HUD 上的按钮：半透明，压在画面上不抢戏 */
+.gal__btn {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.gal__btn:hover {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: #fff;
+}
+
+/* ---------- 走近看：DOM 浮层（比在 3D 里画文字清晰得多） ---------- */
+.gal__focus {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  overflow-y: auto;
+}
+
+.gal__focus[data-open] {
+  display: grid;
+}
+
+.gal__figure {
+  margin: 0;
+  max-width: min(52rem, 100%);
+  display: grid;
+  gap: 0.7rem;
+  justify-items: center;
+}
+
+.gal__figure img {
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+.gal__caption {
+  max-width: 40rem;
+  text-align: center;
+}
+
+.gal__caption h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.gal__caption p {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+  opacity: 0.85;
+}
+
+.gal__caption small {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  opacity: 0.65;
+}
+
+.gal__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ---------- 网格（降级视图 / 无 JS 路径） ---------- */
+.gal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem;
+  margin: 1.2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gal-tile {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gal-tile img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.gal-tile:hover img,
+.gal-tile:focus-visible img {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px -4px var(--c-shadow-md);
+}
+
+.gal-tile__name {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+/* ---------- 灯箱（网格模式用 <dialog>，自带焦点陷阱与 Esc） ---------- */
+.gal-lb {
+  max-width: min(94vw, 70rem);
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.gal-lb::backdrop {
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.gal-lb__inner {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  background: var(--c-card);
+  border-radius: var(--radius-lg);
+  color: var(--c-text);
+}
+
+.gal-lb__inner img {
+  max-width: 100%;
+  max-height: 66vh;
+  margin: 0 auto;
+  border-radius: var(--radius-sm);
+}
+
+.gal-lb__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.gal-lb__title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.gal-lb__desc {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--c-text-muted);
+}
+
+.gal-lb__meta {
+  font-size: 0.78rem;
+  color: var(--c-text-faint);
+}
+
+/* ---------- 房间索引：一排「门」 ---------- */
+.doors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+  margin: 1.3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.door {
+  display: block;
+  color: inherit;
+  transition: transform 0.18s ease;
+}
+
+.door:hover {
+  transform: translateY(-3px);
+  text-decoration: none;
+}
+
+.door__frame {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  box-shadow: 0 1px 2px var(--c-shadow-sm);
+}
+
+.door__frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 底部压一层暗，白字才站得住 */
+.door__frame::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 55%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.68), transparent);
+}
+
+.door__label {
+  position: absolute;
+  z-index: 1;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: 0.75rem;
+  color: #fff;
+}
+
+.door__name {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.door__meta {
+  display: block;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+/* ---------- 模式切换：3D 与网格二选一 ---------- */
+.gal-page[data-mode='3d'] .gal-grid {
+  display: none;
+}
+
+.gal-page[data-mode='grid'] .gal {
+  display: none;
+}
+
+/* ---------- 沉浸模式：隐藏站点 chrome，房间铺满视口 ---------- */
+body.is-immersive {
+  overflow: hidden;
+}
+
+/* .section 用了 backdrop-filter（global.css），这会让它成为内部 fixed 元素的
+   包含块——沉浸模式的 .gal 是 fixed，会被定位到 .section 而不是视口。
+   临时摘掉滤镜，包含块就回到视口，房间才能真的铺满屏幕。
+   房间铺满后整张 .section 都被盖住，看不到差别。 */
+body.is-immersive .section {
+  backdrop-filter: none;
+}
+
+body.is-immersive .navbar,
+body.is-immersive .hero,
+body.is-immersive .footer,
+body.is-immersive .toc,
+body.is-immersive .sidebar,
+body.is-immersive .backdrop,
+body.is-immersive .backdrop-grain,
+body.is-immersive .gal-head {
+  display: none;
+}
+
+body.is-immersive .gal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 50;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+body.is-immersive .gal__canvas {
+  height: 100vh;
+}
+
+body.is-immersive .gal__focus img {
+  max-height: 68vh;
+}
+
+/* ---------- 打印与减少动效 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .door,
+  .door:hover,
+  .gal-tile img,
+  .gal-tile:hover img {
+    transform: none;
+    transition: none;
+  }
+}
+
+@media print {
+  /* 纸上看不了 3D，直接把网格打出来 */
+  .gal,
+  .gal__hud,
+  .gal__focus,
+  .gal-head {
+    display: none;
+  }
+
+  .gal-page[data-mode='3d'] .gal-grid {
+    display: grid;
+  }
+}
