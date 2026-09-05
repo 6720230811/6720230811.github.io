@@ -213,8 +213,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const cx = (wall.a.x + wall.b.x) / 2;
     const cz = (wall.a.z + wall.b.z) / 2;
     pos.set(cx, wallHeight / 2, cz);
+    // 墙的正面（+Z 面）朝走廊内侧 = -normal（normal 是朝外的）
     const rotation = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(0, Math.atan2(wall.normal.x, wall.normal.z), 0),
+      new THREE.Euler(0, Math.atan2(-wall.normal.x, -wall.normal.z), 0),
     );
     walls.setMatrixAt(i, matrix.compose(pos, rotation, scale.set(wall.length, wallHeight, 1)));
   });
@@ -228,9 +229,14 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const wall = plan.walls[i];
     const cx = (wall.a.x + wall.b.x) / 2;
     const cz = (wall.a.z + wall.b.z) / 2;
-    pos.set(cx, 0.06, cz);
+    // 踢脚线贴在墙的走廊那一侧：从墙中心线往里挪半墙厚
+    pos.set(
+      cx - wall.normal.x * (0.1 + 0.02),
+      0.06,
+      cz - wall.normal.z * (0.1 + 0.02),
+    );
     const rotation = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(0, Math.atan2(wall.normal.x, wall.normal.z), 0),
+      new THREE.Euler(0, Math.atan2(-wall.normal.x, -wall.normal.z), 0),
     );
     baseboards.setMatrixAt(i, matrix.compose(pos, rotation, scale.set(wall.length, 1, 1)));
   }

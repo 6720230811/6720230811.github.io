@@ -17,10 +17,8 @@
 import {
   CELL,
   FLO as FLO_INFO,
-  ORDER,
   WALL_T,
   roomSpawns,
-  spawnYaw,
   type Pt,
   type WallSegment,
   generateWalls,
@@ -146,10 +144,10 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
   const walls = generateWalls();
   const obstacles = walls.map((wall) => wallObstacle(wall, WALL_T));
 
-  // 每个房间的出生点：沿 Hilbert 均匀切 N 份（rooms 与 wall 段的索引对齐）
-  const spawnPoints = roomSpawns(rooms.length, walls);
+  // 每个房间的出生点：落在 Hilbert 曲线（走廊正中）上，按房间数均匀切 N 份
+  const spawnPoints = roomSpawns(rooms.length);
   const spaces: SpaceSpec[] = rooms.map((room, index) => {
-    const entry = spawnPoints[index] ?? { pt: { x: 0, z: 0 }, yaw: 0 };
+    const entry = spawnPoints[index] ?? { pt: { x: CELL * 0.5, z: CELL * 0.5 }, yaw: 0 };
     return {
       id: room.id,
       label: room.label,
@@ -163,7 +161,7 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
       spawn: { x: entry.pt.x, z: entry.pt.z, yaw: entry.yaw },
     };
   });
-  void spawnYaw;
+  void walls;
 
   // 挂画：沿 Hilbert 一侧均匀分布，间隔 ≥ 1.6 m，按 rooms 的展品循环
   const placements: Placement[] = [];
@@ -192,22 +190,22 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
     const item = items[i % items.length];
     const cx = (wall.a.x + wall.b.x) / 2;
     const cz = (wall.a.z + wall.b.z) / 2;
-    // 墙心在 Hilbert 曲线上，墙厚 0.2 m 往两侧；画作挂在 +normal 那一侧（走
-    // 廊方向）的墙面上。nx, nz 就是 normal，画心法线与墙的 +normal 同向 →
-    // 摄像头从 +normal 侧看过来就是画作的正面。
+    // 墙的法线朝**外**（背离走廊），画挂在朝走廊那一侧：-normal
+    const nx = -wall.normal.x;
+    const nz = -wall.normal.z;
     const aspect = aspectOf(item);
     const size = Math.max(0.8, item.place?.size ?? MAX_SIZE);
     const { fw, fh } = boxOf(size, aspect);
     const y = (item.place?.v ?? 1.55) + 0.001;
-    const ry = Math.atan2(wall.normal.x, wall.normal.z);
+    const ry = Math.atan2(nx, nz);
     const spaceId = spaces[Math.floor((i / usedWalls.length) * spaces.length)]?.id ?? '';
 
     placements.push({
       id: item.id,
       spaceId,
-      x: cx + wall.normal.x * ART_INSET,
+      x: cx + nx * ART_INSET,
       y,
-      z: cz + wall.normal.z * ART_INSET,
+      z: cz + nz * ART_INSET,
       ry,
       fw,
       fh,
