@@ -128,7 +128,10 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const diagonal = Math.hypot(spanX, spanZ);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#dadde2');
+  // 雾：参考那种远处轻轻晕开的感觉。浅冷灰，密度别大 —— 走廊只有 2.6 m 宽，
+  // 太浓会把近处也糊掉。MeshBasicMaterial 默认吃雾，所以远处的画也会跟着淡。
+  scene.fog = new THREE.FogExp2(0xd7dbe0, 0.028);
+  scene.background = new THREE.Color('#d7dbe0');
   // near 不能太小：0.05 配 195 的 far 是 ~3900:1 的近远比，深度缓冲精度不够，
   // 接近共面的面会逐帧翻转 → 墙在闪。0.25 的近远比约 800:1，稳定得多。
   // （碰撞系统保证人离墙 ≥ 0.35 m，near=0.25 不会穿帮）
@@ -195,8 +198,20 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     new THREE.MeshBasicMaterial({
       map: track(makeSoftGlow()),
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.75,
       blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  // 画布外沿那一圈极细的暗边：画布是「嵌进墙里」的，边上会有一线阴影。
+  // 只有 1.5 cm、很淡 —— 参考里画没有外框，就靠这一线把画布从墙里分出来。
+  const insetMat = track(
+    new THREE.MeshBasicMaterial({
+      color: '#3A3E44',
+      transparent: true,
+      opacity: 0.5,
       depthWrite: false,
       toneMapped: false,
       side: THREE.DoubleSide,
@@ -204,6 +219,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   );
   const haloGeo = track(new THREE.PlaneGeometry(1, 1));
   const canvasGeo = track(new THREE.PlaneGeometry(1, 1));
+  const insetGeo = track(new THREE.PlaneGeometry(1, 1));
 
   // ---- 白墙：每段 Hilbert 墙一个 InstancedMesh ----
   // 墙面用矩形面片：宽 = 墙长，高 = 4 m，挂在 y=2（半高）处
@@ -312,10 +328,16 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     halo.scale.set(art.w * 2.3, art.h * 2.3, 1);
     group.add(halo);
 
-    // 2) 画布：白底（纹理到达后被替换）
+    // 2) 凹陷暗边：比画布大 3 cm（一圈 1.5 cm），垫在画布下面露出一线
+    const inset = new THREE.Mesh(insetGeo, insetMat);
+    inset.position.z = 0.035;
+    inset.scale.set(art.w + 0.03, art.h + 0.03, 1);
+    group.add(inset);
+
+    // 3) 画布：白底（纹理到达后被替换）。不带 fog:false —— 远处也要跟着雾淡下去
     const picture = new THREE.Mesh(
       canvasGeo,
-      new THREE.MeshBasicMaterial({ map: placeholder, toneMapped: false, fog: false }),
+      new THREE.MeshBasicMaterial({ map: placeholder, toneMapped: false }),
     );
     picture.userData.id = placement.id;
     picture.position.z = 0.05;
@@ -461,9 +483,9 @@ function makeTiledMarble(): THREE.CanvasTexture {
       base.data[i + 2] = Math.max(0, Math.min(255, base.data[i + 2] + n + 2));
     }
     ctx.putImageData(base, 0, 0);
-    // 拼缝：每 1/4 画一条暗灰线
-    ctx.strokeStyle = 'rgba(60,64,70,0.22)';
-    ctx.lineWidth = 2;
+    // 拼缝：参考能清楚看到 1.5 m 的方格线，线要够深才读得出来
+    ctx.strokeStyle = 'rgba(38,42,48,0.55)';
+    ctx.lineWidth = 4;
     for (let i = 1; i < 4; i += 1) {
       ctx.beginPath();
       ctx.moveTo(0, (i / 4) * size);
@@ -474,13 +496,25 @@ function makeTiledMarble(): THREE.CanvasTexture {
       ctx.lineTo((i / 4) * size, size);
       ctx.stroke();
     }
-    // 缝内更深的阴影
-    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+    // 缝内的高光（大理石拼缝边上会亮一点）
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 2;
     for (let i = 1; i < 4; i += 1) {
       ctx.beginPath();
-      ctx.moveTo(0, (i / 4) * size + 1);
-      ctx.lineTo(size, (i / 4) * size + 1);
+      ctx.moveTo(0, (i / 4) * size - 3);
+      ctx.lineTo(size, (i / 4) * size - 3);
       ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo((i / 4) * size - 3, 0);
+      ctx.lineTo((i / 4) * size - 3, size);
+      ctx.stroke();
+    }
+    // 拼缝交叉处的暗角，让格子有「块」的感觉
+    ctx.fillStyle = 'rgba(30,34,40,0.10)';
+    for (let i = 0; i < 4; i += 1) {
+      for (let j = 0; j < 4; j += 1) {
+        ctx.fillRect((i / 4) * size - 2, (j / 4) * size - 2, 4, 4);
+      }
     }
   }
   const tex = new THREE.CanvasTexture(canvas);
