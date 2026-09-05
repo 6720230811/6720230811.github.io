@@ -18,6 +18,7 @@
  *  守住碰撞；space.id = `room-<roomId>`，换房间时 URL 不变（这建筑没门）。
  */
 import * as THREE from 'three';
+import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { hallStyle, type HallStyleId, type SurfaceKind } from './styles';
 import { environmentTexture, wallLabelTexture } from './surfaces';
 import type { FloorPlan } from './plan';
@@ -165,16 +166,6 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       side: THREE.DoubleSide,
     }),
   );
-  // 地面：浅灰大理石 + 拼缝（参考那种 1.5 m 左右的方格）—— canvas 现画
-  const floorMat = track(
-    new THREE.MeshStandardMaterial({
-      map: track(makeTiledMarble()),
-      color: '#D8DAE0',
-      roughness: 0.15,
-      metalness: 0.0,
-      envMapIntensity: 1.7,
-    }),
-  );
   const baseboardMat = track(
     new THREE.MeshStandardMaterial({ color: '#8A8E94', roughness: 0.55 }),
   );
@@ -268,20 +259,39 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   baseboards.userData.isWall = true;
   scene.add(baseboards);
 
-  // ---- 反光大理石地面：一整片大平面，跨越整个建筑（被墙挡也无所谓，墙就在它上面）----
-  const floor = new THREE.Mesh(
-    track(new THREE.PlaneGeometry(plan.bounds.x2 - plan.bounds.x1, plan.bounds.z2 - plan.bounds.z1)),
-    floorMat,
+  // ---- 地面：Reflector 真反射（参考那种「画在地上能看见倒影」）----
+  // Reflector 会用镜像相机把场景再渲一遍 —— 一帧渲两次，所以贴图别开太大
+  // （512² 够用），地面也只此一处用它。
+  const plateGeo = new THREE.PlaneGeometry(spanX, spanZ);
+  const mirror = new Reflector(plateGeo, {
+    clipBias: 0.003,
+    textureWidth: 512,
+    textureHeight: 512,
+    color: 0xc6cad0, // 反射色调：越暗反射越弱，抛光石材不是完美镜子
+  });
+  mirror.rotation.x = -Math.PI / 2;
+  mirror.position.set((plan.bounds.x1 + plan.bounds.x2) / 2, 0, (plan.bounds.z1 + plan.bounds.z2) / 2);
+  mirror.userData.isFloor = true;
+  scene.add(mirror);
+  disposables.push(plateGeo, mirror);
+
+  // 砖缝盖在反射上：透明底 + 暗缝线，只有缝挡住反射，其余透出倒影 ——
+  // 这就是抛光大理石拼砖的观感
+  const groutMat = track(
+    new THREE.MeshBasicMaterial({
+      map: track(makeTileGrouts()),
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      toneMapped: false,
+    }),
   );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(
-    (plan.bounds.x1 + plan.bounds.x2) / 2,
-    0,
-    (plan.bounds.z1 + plan.bounds.z2) / 2,
-  );
-  floor.receiveShadow = true;
-  floor.userData.isFloor = true;
-  scene.add(floor);
+  const groutGeo = track(new THREE.PlaneGeometry(spanX, spanZ));
+  const grout = new THREE.Mesh(groutGeo, groutMat);
+  grout.rotation.x = -Math.PI / 2;
+  // 离镜面 1 cm：太近会 z-fighting（尤其在贴近地面的掠射角上）
+  grout.position.set((plan.bounds.x1 + plan.bounds.x2) / 2, 0.01, (plan.bounds.z1 + plan.bounds.z2) / 2);
+  scene.add(grout);
 
   // ---- 平顶 ----
   const ceiling = new THREE.Mesh(
@@ -398,7 +408,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 
       const artHit = raycaster.intersectObjects(pickables, false)[0];
       if (artHit) return { kind: 'art', id: String(artHit.object.userData.id) };
-      const floorHit = raycaster.intersectObject(floor, false)[0];
+      const floorHit = raycaster.intersectObject(mirror, false)[0];
       if (floorHit) return { kind: 'floor', x: floorHit.point.x, z: floorHit.point.z };
       return null;
     },
@@ -443,6 +453,63 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   };
 }
 
+/**
+ * 砖缝贴图：**透明底 + 暗缝线**，盖在 Reflector 上用。
+ * 只有缝那一线会挡住反射，缝与缝之间透出倒影 —— 抛光大理石拼砖的观感。
+ * （之前那版是不透明的大理石底 + 线，地面就没有倒影了）
+ */
+function makeTileGrouts(): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, size, size);
+    // 缝：1.5 m 一格（贴图 repeat 与地面尺寸对齐，见下方 repeat）
+    ctx.strokeStyle = 'rgba(46,50,56,0.85)';
+    ctx.lineWidth = 3;
+    for (let i = 1; i < 4; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, (i / 4) * size);
+      ctx.lineTo(size, (i / 4) * size);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo((i / 4) * size, 0);
+      ctx.lineTo((i / 4) * size, size);
+      ctx.stroke();
+    }
+    // 缝边高光：石材拼缝边上会亮一点
+    ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+    ctx.lineWidth = 2;
+    for (let i = 1; i < 4; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, (i / 4) * size - 3);
+      ctx.lineTo(size, (i / 4) * size - 3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo((i / 4) * size - 3, 0);
+      ctx.lineTo((i / 4) * size - 3, size);
+      ctx.stroke();
+    }
+    // 交叉处压深一点，格子才有「块」的感觉
+    ctx.fillStyle = 'rgba(40,44,50,0.75)';
+    for (let i = 0; i < 4; i += 1) {
+      for (let j = 0; j < 4; j += 1) {
+        ctx.fillRect((i / 4) * size - 2, (j / 4) * size - 2, 4, 4);
+      }
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  // 1.5 m 一格：48 m 的地面 → 32 个 repeat
+  tex.repeat.set(32, 32);
+  tex.anisotropy = 4;
+  return tex;
+}
+
 /** 画的软光晕：中心亮的径向渐变（参考那种「画周围一圈光」，软边） */
 function makeSoftGlow(): THREE.CanvasTexture {
   const size = 256;
@@ -461,69 +528,6 @@ function makeSoftGlow(): THREE.CanvasTexture {
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-/** 浅灰大理石地面，1.5 m 方格拼缝（参考那种带线缝的反射地面） */
-function makeTiledMarble(): THREE.CanvasTexture {
-  const size = 1024;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    // 底色 + 噪点
-    ctx.fillStyle = '#D8DAE0';
-    ctx.fillRect(0, 0, size, size);
-    const base = ctx.getImageData(0, 0, size, size);
-    for (let i = 0; i < base.data.length; i += 4) {
-      const n = (Math.random() - 0.5) * 18;
-      base.data[i] = Math.max(0, Math.min(255, base.data[i] + n));
-      base.data[i + 1] = Math.max(0, Math.min(255, base.data[i + 1] + n));
-      base.data[i + 2] = Math.max(0, Math.min(255, base.data[i + 2] + n + 2));
-    }
-    ctx.putImageData(base, 0, 0);
-    // 拼缝：参考能清楚看到 1.5 m 的方格线，线要够深才读得出来
-    ctx.strokeStyle = 'rgba(38,42,48,0.55)';
-    ctx.lineWidth = 4;
-    for (let i = 1; i < 4; i += 1) {
-      ctx.beginPath();
-      ctx.moveTo(0, (i / 4) * size);
-      ctx.lineTo(size, (i / 4) * size);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo((i / 4) * size, 0);
-      ctx.lineTo((i / 4) * size, size);
-      ctx.stroke();
-    }
-    // 缝内的高光（大理石拼缝边上会亮一点）
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx.lineWidth = 2;
-    for (let i = 1; i < 4; i += 1) {
-      ctx.beginPath();
-      ctx.moveTo(0, (i / 4) * size - 3);
-      ctx.lineTo(size, (i / 4) * size - 3);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo((i / 4) * size - 3, 0);
-      ctx.lineTo((i / 4) * size - 3, size);
-      ctx.stroke();
-    }
-    // 拼缝交叉处的暗角，让格子有「块」的感觉
-    ctx.fillStyle = 'rgba(30,34,40,0.10)';
-    for (let i = 0; i < 4; i += 1) {
-      for (let j = 0; j < 4; j += 1) {
-        ctx.fillRect((i / 4) * size - 2, (j / 4) * size - 2, 4, 4);
-      }
-    }
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  // 1.5 m 一格 → 48 m 边长需要 32 个 repeat
-  tex.repeat.set(32, 32);
-  tex.anisotropy = 4;
   return tex;
 }
 
