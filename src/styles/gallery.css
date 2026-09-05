@@ -105,6 +105,17 @@ button.gal-view[aria-pressed='true'] {
   box-shadow: 0 1px 3px var(--c-shadow-sm);
 }
 
+/* 采光验证的入口：不是第三种策展，单独一枚描边胶囊放在切换器外面 */
+.gal-view--accent {
+  border: 1px solid var(--c-border-soft);
+  color: var(--c-text-muted);
+}
+
+.gal-view--accent:hover {
+  border-color: var(--c-accent);
+  background: var(--c-card);
+}
+
 /* ---------- 房间（3D 画布） ---------- */
 .gal {
   position: relative;
@@ -553,6 +564,133 @@ body.is-immersive .gal__focus img {
   .gal-tile img,
   .gal-tile:hover img {
     transform: none;
+    transition: none;
+  }
+}
+
+/* ============================================================
+  /gallery/kimbell/ 采光验证：单摆线拱那一间
+  画布铺满内容区宽度，HUD 压在左下角（与画廊 3D 那套 HUD 同款观感）
+  ============================================================ */
+
+.light-spec {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  margin: 0 0 1rem;
+}
+
+.light-spec__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.light-spec dt {
+  font-size: 0.78rem;
+  color: var(--c-text-faint);
+}
+
+.light-spec dd {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.light {
+  position: relative;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #0d0f12;
+}
+
+.light__canvas {
+  display: block;
+  width: 100%;
+  height: min(72vh, 34rem);
+  touch-action: none; /* 拖视角时别让页面跟着滚 */
+}
+
+/* 场景没挂起来时，画布留着但压暗，降级说明浮在中间 */
+.light[data-ready='false'] .light__canvas {
+  filter: grayscale(1) brightness(0.5);
+}
+
+.light__hud {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  width: min(320px, calc(100% - 28px));
+  padding: 12px 14px 14px;
+  border-radius: 10px;
+  background: rgba(16, 18, 22, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  color: #e8e8e6;
+  user-select: none;
+}
+
+.light__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.light__clock {
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.light__state {
+  font-size: 0.74rem;
+  opacity: 0.7;
+}
+
+.light__hud input[type='range'] {
+  width: 100%;
+  margin: 8px 0 10px;
+  accent-color: #d8b26a;
+}
+
+.light__stats {
+  margin: 0;
+  font: 11.5px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.72;
+  white-space: pre;
+}
+
+.light__hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  opacity: 0.5;
+}
+
+.light__fallback {
+  position: absolute;
+  inset: auto 0 50% 0;
+  margin: 0;
+  padding: 0 1.5rem;
+  text-align: center;
+  color: var(--c-text-muted);
+  font-size: 0.88rem;
+}
+
+.light__back {
+  margin: 1rem 0 0;
+}
+
+@media print {
+  .light {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .light__canvas {
     transition: none;
   }
 }

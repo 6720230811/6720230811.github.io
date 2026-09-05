@@ -25,6 +25,9 @@ const views: { key: GalleryView; href: string }[] = [
   { key: 'year', href: `${base}year/` },
   { key: 'hall', href: `${base}halls/` },
 ];
+
+/** 采光验证那间单摆线拱的入口（/gallery/kimbell/） */
+const lightUrl = `${base}kimbell/`;
 ---
 
 <p class="list-summary">{t('gallery.desc')}</p>
@@ -39,6 +42,7 @@ const views: { key: GalleryView; href: string }[] = [
       ))
     }
   </div>
+  <a class="gal-view gal-view--accent" href={lightUrl}>☀ {t('gallery.light.entry')}</a>
 </nav>
 
 {

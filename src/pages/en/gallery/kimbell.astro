@@ -1,0 +1,90 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Section from '../../../components/Section.astro';
+import '../../../styles/gallery.css';
+import { profile } from '../../../data/profile';
+import { toLocale, useTranslations } from '../../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+const locale = toLocale('en');
+const t = useTranslations(locale);
+const p = profile[locale];
+const backUrl = getRelativeLocaleUrl(locale, 'gallery'); // '/gallery/' 或 '/en/gallery/'
+
+const cards: [string, string][] = [
+  [t('gallery.light.spec.span'), '6.10 m'],
+  [t('gallery.light.spec.rise'), '1.941 m'],
+  [t('gallery.light.spec.spring'), '4.159 m'],
+  [t('gallery.light.spec.length'), '30.48 m'],
+  [t('gallery.light.spec.slot'), '0.60 m'],
+];
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${t('gallery.light.title')} · ${t('gallery.title')}`}
+  description={t('gallery.light.desc')}
+>
+  <Section title={t('gallery.light.title')} icon="☀">
+    <p class="list-summary">{t('gallery.light.desc')}</p>
+
+    <dl class="light-spec">
+      {
+        cards.map(([key, value]) => (
+          <div class="light-spec__row">
+            <dt>{key}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))
+      }
+    </dl>
+
+    <div
+      class="light"
+      id="light"
+      data-ready="false"
+      data-label-fps={t('gallery.light.stats.fps')}
+      data-label-segments={t('gallery.light.stats.segments')}
+      data-label-vertices={t('gallery.light.stats.vertices')}
+      data-label-triangles={t('gallery.light.stats.triangles')}
+      data-label-calls={t('gallery.light.stats.calls')}
+    >
+      <canvas
+        class="light__canvas"
+        id="light-canvas"
+        tabindex="0"
+        aria-label={t('gallery.light.title')}
+      ></canvas>
+
+      <div class="light__hud">
+        <div class="light__row">
+          <span class="light__clock" id="light-clock">12:00</span>
+          <span class="light__state" id="light-state"></span>
+        </div>
+        <input
+          id="light-time"
+          type="range"
+          min="6"
+          max="19"
+          step="0.25"
+          value="12"
+          aria-label={t('gallery.light.slider')}
+        />
+        <pre class="light__stats" id="light-stats"></pre>
+        <p class="light__hint">{t('gallery.light.hint')}</p>
+      </div>
+
+      <p class="light__fallback" id="light-fallback" hidden>{t('gallery.light.fallback')}</p>
+    </div>
+
+    <p class="light__back">
+      <a class="gal-view" href={backUrl}>{t('gallery.back')}</a>
+    </p>
+  </Section>
+</BaseLayout>
+
+<script>
+  import { mountLight } from '../../../lib/light';
+  mountLight(document.getElementById('light'));
+</script>

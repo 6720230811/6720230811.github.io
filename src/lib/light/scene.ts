@@ -12,6 +12,7 @@
  * 红线：场景内不放任何家具、雕塑、logo、文字招牌；贴图全部程序化生成。
  */
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   APEX_H,
   LENGTH,
@@ -46,6 +47,73 @@ const REFLECTOR = {
   thickness: 0.05, // 相对厚度 t/c
   segments: 160,
 };
+
+/** 一间摆线拱采光验证场景的完整句柄（页面脚本只拿这些） */
+export interface LightStudy {
+  setTime(hour: number): SunState;
+  setSize(width: number, height: number): void;
+  render(): void;
+  stats(): { segments: number; vertices: number; triangles: number };
+  /** 上一帧的 draw call 数（渲染器统计） */
+  calls(): number;
+  dispose(): void;
+}
+
+/**
+ * 建一间采光验证场景；设备跑不了 WebGL 就返回 null，由页面退回说明文字。
+ * 渲染器、相机、轨道控制都在这里建好 —— 页面脚本（index.ts）不 import three，
+ * 不支持的设备连这个 chunk 都不会下载。
+ */
+export function createLightStudy(canvas: HTMLCanvasElement): LightStudy | null {
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  } catch {
+    return null;
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.82;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const gallery = buildGallery(renderer);
+
+  // 相机：站在拱的一头、人眼高度，朝另一头看整条天光缝
+  const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 200);
+  camera.position.set(0.15, 1.62, -LENGTH / 2 + 2.4);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, APEX_H * 0.45, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.minDistance = 1.2;
+  controls.maxDistance = SPAN * 6;
+  controls.maxPolarAngle = Math.PI * 0.92;
+  controls.update();
+
+  return {
+    setTime: (hour) => gallery.setTime(hour),
+    setSize(width, height) {
+      if (width <= 0 || height <= 0) return;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    },
+    render() {
+      controls.update();
+      renderer.render(gallery.scene, camera);
+    },
+    stats: () => gallery.stats(),
+    calls: () => renderer.info.render.calls,
+    dispose() {
+      controls.dispose();
+      gallery.dispose();
+      renderer.dispose();
+    },
+  };
+}
 
 export interface Gallery {
   scene: THREE.Scene;
