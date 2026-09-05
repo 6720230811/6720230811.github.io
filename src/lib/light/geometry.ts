@@ -202,45 +202,74 @@ export function wingLoop(opts: {
 }
 
 /**
- * 端墙：矩形 + 摆线拱形封口（手工拼三角形）。
+ * 端墙：矩形 + 摆线拱形封口。
  *
- * ShapeGeometry 会用 earcut 加 Steiner 点，端墙上就会看到三角网；改成从角点
- * 发散的扇形，端墙只有矩形与拱形的轮廓线，看着像一面清水混凝土板。
+ * 不带门洞时用手写的扇形三角化（earcut 会加 Steiner 点，端墙上会看到三角网）；
+ * 带门洞时改用 Shape + 洞 + ShapeGeometry —— 扇形三角化绕不过门洞那个缺口。
+ * 门洞那版再把 UV 按 uvScale 缩一遍，否则贴图按米重复、密得不正常。
  */
-export function buildEndWallGeometry(profile: Pt[], spring = SPRING_H): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
+export function buildEndWallGeometry(
+  profile: Pt[],
+  spring = SPRING_H,
+  door?: { width: number; height: number },
+  uvScale = 4,
+): THREE.BufferGeometry {
   const halfSpan = -profile[0].x; // SPAN/2
 
-  // 顶点顺序：BL → BR → 摆线从 TL（=archTop[0]）出发一路到 TR（=archTop[end]）
-  // archTop[0] 与 archTop[end] 在 spring 高度（y=0 时 + spring），也就是矩形顶边两端
-  const push = (x: number, y: number, u: number, v: number): void => {
-    positions.push(x, y, 0, 0);
-    uvs.push(u, v);
-  };
+  if (!door) {
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    const push = (x: number, y: number, u: number, v: number): void => {
+      positions.push(x, y, 0, 0);
+      uvs.push(u, v);
+    };
 
-  push(-halfSpan, 0, 0, 0); // BL
-  push(halfSpan, 0, 1, 0); // BR
-  const height = spring + RISE;
-  for (let i = 0; i < profile.length; i += 1) {
-    const p = profile[i];
-    push(p.x, spring + p.y, 0.5 + p.x / (2 * halfSpan), (spring + p.y) / height);
+    push(-halfSpan, 0, 0, 0); // BL
+    push(halfSpan, 0, 1, 0); // BR
+    const height = spring + RISE;
+    for (let i = 0; i < profile.length; i += 1) {
+      const p = profile[i];
+      push(p.x, spring + p.y, 0.5 + p.x / (2 * halfSpan), (spring + p.y) / height);
+    }
+
+    // 从 BL 发散的扇形：BL → v[i] → v[i+1]，最后关回 BR
+    for (let i = 2; i < profile.length + 1; i += 1) indices.push(0, i, i + 1);
+    indices.push(0, profile.length + 1, 1);
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 4));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    return geometry;
   }
 
-  // 从 BL 发散的扇形：BL → v[i] → v[i+1]
-  // 第一个 i=2：BL → archTop[0]=TL → archTop[1]
-  // ...
-  // 最后一个 i=end：BL → archTop[end-1] → archTop[end]=TR
-  // 关上：BL → TR → BR
-  const last = positions.length / 4 - 1; // TR = archTop[end]
-  for (let i = 2; i < last; i += 1) indices.push(0, i, i + 1);
-  indices.push(0, last, 1);
+  // 带门洞：外轮廓（矩形 + 摆线拱）挖一个居中的矩形洞
+  const shape = new THREE.Shape();
+  shape.moveTo(-halfSpan, 0);
+  shape.lineTo(halfSpan, 0);
+  for (let i = profile.length - 1; i >= 0; i -= 1) {
+    shape.lineTo(profile[i].x, spring + profile[i].y);
+  }
+  shape.closePath();
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 4));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
+  const hole = new THREE.Path();
+  hole.moveTo(-door.width / 2, 0);
+  hole.lineTo(door.width / 2, 0);
+  hole.lineTo(door.width / 2, door.height);
+  hole.lineTo(-door.width / 2, door.height);
+  hole.closePath();
+  shape.holes.push(hole);
+
+  const geometry = new THREE.ShapeGeometry(shape);
+  const uv = geometry.getAttribute('uv');
+  const position = geometry.getAttribute('position');
+  for (let i = 0; i < uv.count; i += 1) {
+    uv.setXY(i, position.getX(i) / uvScale, position.getY(i) / uvScale);
+  }
+  uv.needsUpdate = true;
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   return geometry;

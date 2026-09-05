@@ -364,11 +364,13 @@ export function mountGallery(rootEl: HTMLElement | null): void {
 
       if (where) where.textContent = `${hereLabel}：${space.label}`;
 
-      // URL 只换最后一段，?item= 之类的查询串原样留着
+      // URL 换最后一段，但用**房间** id 而不是拱 id：同一种策展可能挂在
+      // 好几个拱上，在它们之间走动时不该把地址栏换来换去
+      const slug = space.roomId || space.id;
       const url = new URL(window.location.href);
       const parts = url.pathname.split('/').filter(Boolean);
       if (parts.length > 0) {
-        parts[parts.length - 1] = space.id;
+        parts[parts.length - 1] = slug;
         url.pathname = `/${parts.join('/')}/`;
         window.history.replaceState(null, '', url);
       }
@@ -376,7 +378,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       const heading = document.getElementById('gal-room-title');
       if (heading) heading.textContent = space.label;
       const intro = document.getElementById('gal-room-intro');
-      const room = rooms.find((item) => item.id === space.id);
+      const room = rooms.find((item) => item.id === slug);
       if (intro && room) intro.textContent = room.intro;
     }
 

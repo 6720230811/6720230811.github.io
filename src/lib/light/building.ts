@@ -75,7 +75,22 @@ export interface Building {
   dispose(): void;
 }
 
-export function buildBuilding(): Building {
+export interface BuildingOptions {
+  /**
+   * 填充墙与山墙是否开门洞：采光研究那页不需要（只看一个拱），
+   * 画廊那页要能从一个拱走到下一个拱，所以开门。
+   */
+  doorways?: boolean;
+  /**
+   * 每个拱的墙面材质（按策展形制取，索引与 VAULTS 对齐）；
+   * 不传则全场洞石（真实建筑的做法）。
+   */
+  vaultWalls?: readonly (THREE.Material | undefined)[];
+}
+
+export function buildBuilding(options: BuildingOptions = {}): Building {
+  const doorways = options.doorways ?? false;
+  const vaultWalls = options.vaultWalls;
   const group = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
   const track = <T extends { dispose(): void }>(item: T): T => {
@@ -253,8 +268,11 @@ export function buildBuilding(): Building {
   slots.instanceMatrix.needsUpdate = true;
   group.add(slots);
 
+  const doors = doorways ? { width: 2.4, height: 2.6 } : undefined;
+
   // ---------- 端墙：实体（山墙）/ 玻璃（门厅）；'open' 的不砌 ----------
-  const endGeometry = track(buildEndWallGeometry(profile, SPRING_H));
+  // 要走人时山墙中部留一个 2.4 × 2.6 的门洞（同排两个拱之间由此连通）
+  const endGeometry = track(buildEndWallGeometry(profile, SPRING_H, doors));
   const endsOf = (kind: EndKind): { vault: (typeof VAULTS)[number]; side: 'west' | 'east' }[] =>
     VAULTS.flatMap((vault) =>
       ([['west', vault.west], ['east', vault.east]] as ['west' | 'east', EndKind][])
@@ -335,24 +353,52 @@ export function buildBuilding(): Building {
   group.add(columns);
 
   // ---------- 填充墙：两道，沿 X 贯通；墙顶到拱面留楔形收口缝 ----------
-  const panelGeometry = track(new THREE.BoxGeometry(WALL_SEG_LEN, WALL_H, WALL_T));
-  const panels = new THREE.InstancedMesh(panelGeometry, travertine, VAULTS.length * 2);
-  panels.castShadow = true;
-  panels.receiveShadow = true;
-  let panel = 0;
+  // 需要走人的时候（画廊）在拱的中部开门洞：门洞 2.4 m 宽，正好落在
+  // 中间两个挂画位之间（挂位间距 4.6，画框宽 1.4），不会切到画
+  const DOOR_W = 2.4;
+  const DOOR_H = 2.6;
+  const panelGroups = new Map<THREE.Material, { x: number; z: number; w: number; y: number; h: number }[]>();
+  const addPanel = (material: THREE.Material, x: number, y: number, z: number, w: number, h: number): void => {
+    const list = panelGroups.get(material) ?? [];
+    list.push({ x, y, z, w, h });
+    panelGroups.set(material, list);
+  };
+
+  const panelMeshes: THREE.InstancedMesh[] = [];
   for (const wallZ of WALL_Z) {
-    for (const vault of VAULTS) {
+    VAULTS.forEach((vault, vaultIndex) => {
       // 只砌紧邻这道墙的那一排（排距 7.32，隔一排是 10.98）
-      if (Math.abs(vault.z - wallZ) > 4.2) continue;
+      if (Math.abs(vault.z - wallZ) > 4.2) return;
       const normal: -1 | 1 = vault.z < wallZ ? -1 : 1;
-      pos.set(vault.x, WALL_H / 2, wallZ + normal * (WALL_T / 2));
-      panels.setMatrixAt(panel, matrix.compose(pos, quat, scale));
-      panel += 1;
-    }
+      const z = wallZ + normal * (WALL_T / 2);
+      const material = vaultWalls?.[vaultIndex] ?? travertine;
+
+      if (!doorways) {
+        addPanel(material, vault.x, WALL_H / 2, z, WALL_SEG_LEN, WALL_H);
+        return;
+      }
+      // 门洞在拱的中部：两侧各一段墙 + 洞口上方的过梁
+      const side = (WALL_SEG_LEN - DOOR_W) / 2;
+      addPanel(material, vault.x - (DOOR_W + side) / 2, WALL_H / 2, z, side, WALL_H);
+      addPanel(material, vault.x + (DOOR_W + side) / 2, WALL_H / 2, z, side, WALL_H);
+      addPanel(material, vault.x, (WALL_H + DOOR_H) / 2, z, DOOR_W, WALL_H - DOOR_H);
+    });
   }
-  panels.count = panel;
-  panels.instanceMatrix.needsUpdate = true;
-  group.add(panels);
+
+  const unitPanel = track(new THREE.BoxGeometry(1, 1, WALL_T));
+  for (const [material, list] of panelGroups) {
+    const mesh = new THREE.InstancedMesh(unitPanel, material, list.length);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    list.forEach((item, i) => {
+      pos.set(item.x, item.y, item.z);
+      mesh.setMatrixAt(i, matrix.compose(pos, quat, scale.set(item.w, item.h, 1)));
+    });
+    scale.set(1, 1, 1);
+    mesh.instanceMatrix.needsUpdate = true;
+    group.add(mesh);
+    panelMeshes.push(mesh);
+  }
 
   /**
    * 外纵墙：南北两侧各一道，拱从墙顶起拱（这是承重的围护墙，不是填充墙，
@@ -396,12 +442,29 @@ export function buildBuilding(): Building {
   });
   group.add(outdoors);
 
+  // 拾取标记：地面可点（走过去），其余一律当墙挡住
+  group.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (!mesh.userData.isFloor) mesh.userData.isWall = true;
+  });
+
   return {
     group,
     reflectorMaterial,
     dispose() {
       for (const item of disposables) item.dispose();
-      for (const mesh of [shells, ribs, slots, endWalls, lobbyGlass, columns, panels]) {
+      for (const mesh of [
+        shells,
+        ribs,
+        slots,
+        endWalls,
+        lobbyGlass,
+        columns,
+        mullions,
+        rails,
+        ...panelMeshes,
+      ]) {
         mesh.dispose();
       }
     },
@@ -499,6 +562,8 @@ function buildFloors(
     strip.rotation.x = -Math.PI / 2;
     strip.position.set(centerX, 0.01, cursor + width / 2);
     strip.receiveShadow = true;
+    // 拾取标记：地面可点（走过去），其余一律当墙挡住
+    strip.userData.isFloor = true;
     group.add(strip);
     cursor += width;
     useStone = !useStone;
