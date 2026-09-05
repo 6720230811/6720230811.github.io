@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { hallStyle, type HallStyleId, type SurfaceKind } from './styles';
 import { environmentTexture, wallLabelTexture } from './surfaces';
+import { curvePoints } from './hilbert';
 import type { FloorPlan } from './plan';
 
 export interface CreateFloorOptions {
@@ -189,7 +190,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     new THREE.MeshBasicMaterial({
       map: track(makeSoftGlow()),
       transparent: true,
-      opacity: 0.75,
+      // 别太亮：参考里画周围那圈光是「墙被照亮一点」，不是发光的。
+      // 0.75 会把画周边烧成一块白斑，0.3 才对
+      opacity: 0.3,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       toneMapped: false,
@@ -292,6 +295,74 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     (plan.bounds.z1 + plan.bounds.z2) / 2,
   );
   scene.add(ceiling);
+
+  // ---- 天花板的两样东西（之前只有一整块平板，太空）----
+  // 1) 吊顶分缝：跟地面同一套砖缝画法，让天花板能看出是一块块板材铺的
+  const ceilGroutMat = track(
+    new THREE.MeshBasicMaterial({
+      map: track(makeTileGrouts()),
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  const ceilGroutGeo = track(new THREE.PlaneGeometry(spanX, spanZ));
+  const ceilGrout = new THREE.Mesh(ceilGroutGeo, ceilGroutMat);
+  ceilGrout.rotation.x = Math.PI / 2; // 朝下
+  ceilGrout.position.set(
+    (plan.bounds.x1 + plan.bounds.x2) / 2,
+    wallHeight - 0.012,
+    (plan.bounds.z1 + plan.bounds.z2) / 2,
+  );
+  scene.add(ceilGrout);
+
+  // 2) 嵌入式灯带：顺走廊每隔一段一条，装在天花板上。
+  //    既是装饰（天花板不再是一整块），也把「顶光从哪来」交代清楚。
+  const curve = curvePoints();
+  const trofferSpots: { x: number; z: number; yaw: number; length: number }[] = [];
+  for (let i = 0; i < curve.length - 1; i += 2) {
+    const a = curve[i];
+    const b = curve[i + 1];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const length = Math.hypot(dx, dz);
+    if (length < 0.01) continue;
+    trofferSpots.push({
+      x: (a.x + b.x) / 2,
+      z: (a.z + b.z) / 2,
+      yaw: Math.atan2(dx, dz),
+      // 灯带比段短一点，段与段之间留出「暗格」，节奏更好看
+      length: length * 0.72,
+    });
+  }
+  if (trofferSpots.length > 0) {
+    const trofferMat = track(
+      new THREE.MeshBasicMaterial({
+        color: '#FFF8EA',
+        transparent: true,
+        opacity: 0.92,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      }),
+    );
+    const trofferGeo = track(new THREE.PlaneGeometry(1, 1));
+    const troffers = new THREE.InstancedMesh(trofferGeo, trofferMat, trofferSpots.length);
+    // 先把平面放平朝下（绕 X 转 +90° 让法线朝 −Y），再绕世界 Y 转到段的方向。
+    // 四元数要按「先 flat 后 yaw」的顺序乘，直接用 Euler(π/2, yaw, 0) 会转歪。
+    const flatQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
+    for (let i = 0; i < trofferSpots.length; i += 1) {
+      const spot = trofferSpots[i];
+      pos.set(spot.x, wallHeight - 0.05, spot.z);
+      const rotation = new THREE.Quaternion()
+        .setFromEuler(new THREE.Euler(0, spot.yaw, 0))
+        .multiply(flatQuat);
+      troffers.setMatrixAt(i, matrix.compose(pos, rotation, scale.set(0.34, spot.length, 1)));
+    }
+    troffers.instanceMatrix.needsUpdate = true;
+    scene.add(troffers);
+    disposables.push(troffers);
+  }
 
   // ---- 灯光：纯烘焙式柔光 ----
   // 上下天光用浅灰（不要偏暖的米色，不然拱面偏黄），环境贴图用白底
@@ -502,9 +573,10 @@ function makeSoftGlow(): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d');
   if (ctx) {
     const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    g.addColorStop(0, 'rgba(255,252,242,0.95)');
-    g.addColorStop(0.35, 'rgba(255,250,236,0.42)');
-    g.addColorStop(0.7, 'rgba(255,248,232,0.12)');
+    // 中心别压满：0.95 会在画正后方堆出一块死白，0.5 才是「墙被照亮一点」
+    g.addColorStop(0, 'rgba(255,252,242,0.50)');
+    g.addColorStop(0.3, 'rgba(255,250,236,0.22)');
+    g.addColorStop(0.65, 'rgba(255,248,232,0.07)');
     g.addColorStop(1, 'rgba(255,248,232,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);

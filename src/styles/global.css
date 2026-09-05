@@ -484,6 +484,11 @@ h4 {
   gap: 1rem;
 }
 
+/* 不显示侧边栏时主体单列占满，横向更宽（首页以外的页面都走这条） */
+.layout--full {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* ---------- 侧边栏 ---------- */
 .sidebar {
   /* grid 子项默认 stretch，会让 sticky 失效，必须显式 start */

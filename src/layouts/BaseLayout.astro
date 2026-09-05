@@ -23,9 +23,14 @@ interface Props {
    * - 省略：不显示目录（列表页、归档页等）
    */
   toc?: 'sections' | MarkdownHeading[];
+  /**
+   * 左侧个人信息卡（头像 / 姓名 / 简介 / 联系）只在首页出现。
+   * 其它页面不需要它 —— 关掉之后主体是单列，横向更宽（画廊画布也跟着变大）。
+   */
+  showSidebar?: boolean;
 }
 
-const { profile, locale, title, description, toc } = Astro.props;
+const { profile, locale, title, description, toc, showSidebar = false } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const t = useTranslations(locale);
 
@@ -80,9 +85,9 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
     {/* 装饰性横幅，下方 .page 会盖住它的底部 --banner-overlap */}
     <div class="hero" aria-hidden="true" style={`--banner-img: url('${base}banner.jpg')`}></div>
 
-    <div class="page">
-      <div class="layout">
-        <Sidebar profile={profile} locale={locale} />
+    <div class:list={['page', { 'page--full': !showSidebar }]}>
+      <div class:list={['layout', { 'layout--full': !showSidebar }]}>
+        {showSidebar && <Sidebar profile={profile} locale={locale} />}
         <main class="main">
           <slot />
         </main>
