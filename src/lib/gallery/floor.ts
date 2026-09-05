@@ -1,28 +1,38 @@
 /**
- * 3D 展厅：白色展墙美术馆（参考 ClementCariou/virtual-art-gallery）
+ * 3D 展厅：暖灰调美术馆，走廊是一条 Hilbert 曲线围成的迷宫。
  *
- *  白墙、反光大理石地面、平顶、细黑框 + 画心 + 小标签 —— 全靠 HemisphereLight +
- *  PMREM 环境贴图的烘焙式柔光，没有直射阳光。走廊是一条 Hilbert 曲线围成的迷宫。
+ *  暖灰白墙 + 米白顶 + 深灰褐哑光地面 + 石墨灰踢脚，每间房挑一面墙刷灰绿当
+ *  重点墙 —— 全靠 HemisphereLight + PMREM 环境贴图的烘焙式柔光，没有直射阳光。
+ *  16 段墙都是同一座连续建筑的一部分，每段墙直接由 Hilbert 数据生成。画心被
+ *  吸到墙的内侧（走廊一侧），离地 1.55 m。
  *
- *  与之前「并排的厅」不同的是：现在 16 段墙都是同一座连续建筑的一部分，每
- *  段墙直接由 Hilbert 数据生成。画心被吸到墙的内侧（走廊一侧），离地 1.55 m。
- *
- *  画面的关键三件：
- *  - 墙壁纯白 #ECECEC 哑光，让展品本身（照片）成为视觉重心
- *  - 地面是高反射的浅灰大理石（envMapIntensity 1.4，roughness 0.18），画的倒
- *    影落在地上，参考项目的「贵」气主要从这来
- *  - 灯光零直射：HemisphereLight + PMREM 烘焙环境贴图，混凝土墙与石材的反
- *    射自然柔和
+ *  配色是整套统一色温（PALETTE），改色只改那一处：
+ *  - 墙 #E8E4DC 哑光（roughness 0.9）：高漫反射的暖灰白，比纯白更托得住照片
+ *  - 顶 #F3F0E9 更亮一档但不到纯白，天花板因此不再是压下来的一块暗面
+ *  - 地面 #625F59 / roughness 0.62：中性深灰褐哑光石材（不要镜面 —— 倒影会
+ *    把暖灰的空间搅乱，哑光地面才压得住深色墙脚）
+ *  - 踢脚 #3E4140 比地面再深一档，把墙脚收住
+ *  - 点缀墙 #596B61 一间房只刷一面（见 accentWallIndices）
+ *  - 背景与雾 #D8D4CC，跟室内同色温，远处才不会发蓝
  *
  *  交互层 index.ts 不变：plan 提供 obstacles（迷宫里的墙），containsPoint
  *  守住碰撞；space.id = `room-<roomId>`，换房间时 URL 不变（这建筑没门）。
  */
 import * as THREE from 'three';
-import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { hallStyle, type HallStyleId, type SurfaceKind } from './styles';
 import { environmentTexture, wallLabelTexture } from './surfaces';
 import { curvePoints } from './hilbert';
 import type { FloorPlan } from './plan';
+
+/** 整套厅堂的配色：墙、顶、地、踢脚、点缀墙、背景与雾。改色只改这里 */
+const PALETTE = {
+  wall: '#E8E4DC',
+  ceiling: '#F3F0E9',
+  floor: '#625F59',
+  trim: '#3E4140',
+  accent: '#596B61',
+  fog: '#D8D4CC',
+} as const;
 
 export interface CreateFloorOptions {
   canvas: HTMLCanvasElement;
@@ -130,10 +140,10 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const diagonal = Math.hypot(spanX, spanZ);
 
   const scene = new THREE.Scene();
-  // 雾：参考那种远处轻轻晕开的感觉。浅冷灰，密度别大 —— 走廊只有 2.6 m 宽，
+  // 雾：让远处轻轻晕开。暖灰白（与室内同色温），密度别大 —— 走廊只有 2.6 m 宽，
   // 太浓会把近处也糊掉。MeshBasicMaterial 默认吃雾，所以远处的画也会跟着淡。
-  scene.fog = new THREE.FogExp2(0xd7dbe0, 0.028);
-  scene.background = new THREE.Color('#d7dbe0');
+  scene.fog = new THREE.FogExp2(new THREE.Color(PALETTE.fog), 0.028);
+  scene.background = new THREE.Color(PALETTE.fog);
   // near 不能太小：0.05 配 195 的 far 是 ~3900:1 的近远比，深度缓冲精度不够，
   // 接近共面的面会逐帧翻转 → 墙在闪。0.25 的近远比约 800:1，稳定得多。
   // （碰撞系统保证人离墙 ≥ 0.35 m，near=0.25 不会穿帮）
@@ -145,30 +155,48 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     return item;
   };
 
-  // ---- 白墙参考那种带蓝灰调的展墙；平顶压暗（参考是「展墙亮、天花板暗」）----
+  // ---- 墙：暖灰白哑光（roughness 0.9，方案给的 0.85–0.95 取中）----
   // side 必须是 DoubleSide：墙是无厚度的平面，站在隔壁那条走廊看到的是它的
   // 背面 —— 单面材质会被背面剔除，整面墙消失、能看穿到隔壁，一走动就忽隐忽现
   // （之前「墙一直在闪」就是这个）。迷宫的墙两面都得是墙。
-  const white = track(
+  const wallMat = track(
     new THREE.MeshStandardMaterial({
-      color: '#E0E4E8',
-      roughness: 0.55,
+      color: PALETTE.wall,
+      roughness: 0.9,
       metalness: 0,
-      envMapIntensity: 0.85,
+      envMapIntensity: 0.8,
       side: THREE.DoubleSide,
     }),
   );
+  // 点缀墙：一间房只刷一面，色相偏绿但明度压在墙与踢脚之间，不抢画
+  const accentMat = track(
+    new THREE.MeshStandardMaterial({
+      color: PALETTE.accent,
+      roughness: 0.9,
+      metalness: 0,
+      envMapIntensity: 0.7,
+      side: THREE.DoubleSide,
+    }),
+  );
+  // 顶：柔和米白、高漫反射（roughness 0.95）。比墙亮一档且不到纯白 ——
+  // 纯白天花板在环境光下会先过曝，把顶棚的板材分缝吃掉。
   const ceilingMat = track(
     new THREE.MeshStandardMaterial({
-      color: '#7E848B',
+      color: PALETTE.ceiling,
       roughness: 0.95,
       metalness: 0,
-      envMapIntensity: 0.25,
+      envMapIntensity: 0.5,
       side: THREE.DoubleSide,
     }),
   );
+  // 踢脚：石墨灰，比地面再深一档，把墙脚收住
   const baseboardMat = track(
-    new THREE.MeshStandardMaterial({ color: '#8A8E94', roughness: 0.55 }),
+    new THREE.MeshStandardMaterial({
+      color: PALETTE.trim,
+      roughness: 0.6,
+      metalness: 0,
+      envMapIntensity: 0.45,
+    }),
   );
   const placeholder = track(placeholderTexture());
 
@@ -181,7 +209,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   // 负 z 的层会落到墙平面上跟墙 z-fighting（之前就是这么闪的）。
   const canvasMat = track(
     new THREE.MeshStandardMaterial({
-      color: '#F0F0F0',
+      color: '#EDE9E1',
       roughness: 0.85,
       metalness: 0,
     }),
@@ -202,18 +230,29 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const haloGeo = track(new THREE.PlaneGeometry(1, 1));
   const canvasGeo = track(new THREE.PlaneGeometry(1, 1));
 
-  // ---- 白墙：每段 Hilbert 墙一个 InstancedMesh ----
-  // 墙面用矩形面片：宽 = 墙长，高 = 4 m，挂在 y=2（半高）处
+  // ---- 展墙：每段 Hilbert 墙一个 InstancedMesh ----
+  // 墙面用矩形面片：宽 = 墙长，高 = 4 m，挂在 y=2（半高）处。
+  // 分两个 mesh：普通墙走暖灰白，重点墙走灰绿（每间房一面，见 accentWallIndices）
   const wallGeo = track(new THREE.PlaneGeometry(1, 1));
-  const walls = new THREE.InstancedMesh(wallGeo, white, plan.walls.length);
+  const accent = new Set(accentWallIndices(plan));
+  const walls = new THREE.InstancedMesh(wallGeo, wallMat, plan.walls.length - accent.size);
+  const features =
+    accent.size > 0 ? new THREE.InstancedMesh(wallGeo, accentMat, accent.size) : null;
   walls.receiveShadow = true;
   walls.castShadow = false;
   walls.userData.isWall = true;
+  if (features) {
+    features.receiveShadow = true;
+    features.castShadow = false;
+    features.userData.isWall = true;
+  }
   const matrix = new THREE.Matrix4();
   const quat = new THREE.Quaternion();
   const scale = new THREE.Vector3();
   const pos = new THREE.Vector3();
   const wallHeight = 4.0;
+  let plain = 0;
+  let feature = 0;
   plan.walls.forEach((wall, i) => {
     const cx = (wall.a.x + wall.b.x) / 2;
     const cz = (wall.a.z + wall.b.z) / 2;
@@ -222,10 +261,18 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const rotation = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(0, Math.atan2(-wall.normal.x, -wall.normal.z), 0),
     );
-    walls.setMatrixAt(i, matrix.compose(pos, rotation, scale.set(wall.length, wallHeight, 1)));
+    matrix.compose(pos, rotation, scale.set(wall.length, wallHeight, 1));
+    if (accent.has(i) && features) features.setMatrixAt(feature++, matrix);
+    else walls.setMatrixAt(plain++, matrix);
   });
   walls.instanceMatrix.needsUpdate = true;
   scene.add(walls);
+  disposables.push(walls);
+  if (features) {
+    features.instanceMatrix.needsUpdate = true;
+    scene.add(features);
+    disposables.push(features);
+  }
 
   // ---- 踢脚线（深灰窄条，紧贴地面）----
   // 踢脚线：**居中在墙面上**（不是偏一侧）。墙是无厚度平面、且双面可见 ——
@@ -247,29 +294,34 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   baseboards.userData.isWall = true;
   scene.add(baseboards);
 
-  // ---- 地面：Reflector 真反射（参考那种「画在地上能看见倒影」）----
-  // Reflector 会用镜像相机把场景再渲一遍 —— 一帧渲两次，所以贴图别开太大
-  // （512² 够用），地面也只此一处用它。
-  const plateGeo = new THREE.PlaneGeometry(spanX, spanZ);
-  const mirror = new Reflector(plateGeo, {
-    clipBias: 0.003,
-    textureWidth: 512,
-    textureHeight: 512,
-    color: 0xc6cad0, // 反射色调：越暗反射越弱，抛光石材不是完美镜子
-  });
-  mirror.rotation.x = -Math.PI / 2;
-  mirror.position.set((plan.bounds.x1 + plan.bounds.x2) / 2, 0, (plan.bounds.z1 + plan.bounds.z2) / 2);
-  mirror.userData.isFloor = true;
-  scene.add(mirror);
-  disposables.push(plateGeo, mirror);
+  // ---- 地面：中性深灰褐哑光石材 #625F59（roughness 0.62，方案给的 0.55–0.7）----
+  // 特意不用 Reflector：镜面地面会把暖灰的空间搅成两层，深色地面一反光整个
+  // 厅的色温就散了。哑光石材只吃环境光与半球光，地面因此是「托住整间房」的一块。
+  const floorGeo = track(new THREE.PlaneGeometry(spanX, spanZ));
+  const floorMat = track(
+    new THREE.MeshStandardMaterial({
+      color: PALETTE.floor,
+      roughness: 0.62,
+      metalness: 0,
+      envMapIntensity: 0.45,
+    }),
+  );
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(
+    (plan.bounds.x1 + plan.bounds.x2) / 2,
+    0,
+    (plan.bounds.z1 + plan.bounds.z2) / 2,
+  );
+  floor.userData.isFloor = true;
+  scene.add(floor);
 
-  // 砖缝盖在反射上：透明底 + 暗缝线，只有缝挡住反射，其余透出倒影 ——
-  // 这就是抛光大理石拼砖的观感
+  // 砖缝盖在地面上：透明底 + 比地面更深的缝线，1.5 m 一格的石材铺装
   const groutMat = track(
     new THREE.MeshBasicMaterial({
-      map: track(makeTileGrouts()),
+      map: track(makeTileGrouts('dark')),
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.5,
       depthWrite: false,
       toneMapped: false,
     }),
@@ -277,7 +329,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const groutGeo = track(new THREE.PlaneGeometry(spanX, spanZ));
   const grout = new THREE.Mesh(groutGeo, groutMat);
   grout.rotation.x = -Math.PI / 2;
-  // 离镜面 1 cm：太近会 z-fighting（尤其在贴近地面的掠射角上）
+  // 离地面 1 cm：太近会 z-fighting（尤其在贴近地面的掠射角上）
   grout.position.set((plan.bounds.x1 + plan.bounds.x2) / 2, 0.01, (plan.bounds.z1 + plan.bounds.z2) / 2);
   scene.add(grout);
 
@@ -300,9 +352,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   // 1) 吊顶分缝：跟地面同一套砖缝画法，让天花板能看出是一块块板材铺的
   const ceilGroutMat = track(
     new THREE.MeshBasicMaterial({
-      map: track(makeTileGrouts()),
+      map: track(makeTileGrouts('light')),
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.45,
       depthWrite: false,
       toneMapped: false,
     }),
@@ -365,11 +417,12 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   }
 
   // ---- 灯光：纯烘焙式柔光 ----
-  // 上下天光用浅灰（不要偏暖的米色，不然拱面偏黄），环境贴图用白底
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xc0c0c0, 0.75);
+  // 上下天光与室内同色温：顶上是米白，地面反弹取地面的深灰褐 —— 换掉之前的
+  // 中性灰，不然暖灰墙会被冷环境光拉回蓝灰。
+  const hemi = new THREE.HemisphereLight(0xf7f4ec, 0x6e6a63, 0.8);
   scene.add(hemi);
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const equirect = track(environmentTexture('#fafafa', '#b0b0b0'));
+  const equirect = track(environmentTexture('#f6f3ec', '#8b877f'));
   const environment = pmrem.fromEquirectangular(equirect).texture;
   scene.environment = environment;
   scene.environmentIntensity = 0.85;
@@ -438,7 +491,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     camera,
     renderer,
     pickables,
-    blockers: [walls, baseboards],
+    blockers: features ? [walls, features, baseboards] : [walls, baseboards],
     pictures,
 
     setPicture(id, texture) {
@@ -462,7 +515,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 
       const artHit = raycaster.intersectObjects(pickables, false)[0];
       if (artHit) return { kind: 'art', id: String(artHit.object.userData.id) };
-      const floorHit = raycaster.intersectObject(mirror, false)[0];
+      const floorHit = raycaster.intersectObject(floor, false)[0];
       if (floorHit) return { kind: 'floor', x: floorHit.point.x, z: floorHit.point.z };
       return null;
     },
@@ -508,12 +561,15 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 }
 
 /**
- * 砖缝贴图：**透明底 + 暗缝线**，盖在 Reflector 上用。
- * 只有缝那一线会挡住反射，缝与缝之间透出倒影 —— 抛光大理石拼砖的观感。
- * （之前那版是不透明的大理石底 + 线，地面就没有倒影了）
+ * 石材/板材分缝贴图：**透明底 + 缝线**，盖在墙顶地面上用，只有缝那一线着色。
+ * 两套色调：'dark' 是深灰褐地面上的缝（比地面再深一档，缝边的反光只留一点点），
+ * 'light' 是米白顶棚上的缝（浅灰压一层即可，深色缝在亮顶上会像网格线一样跳）。
  */
-function makeTileGrouts(): THREE.CanvasTexture {
+function makeTileGrouts(tone: 'dark' | 'light' = 'dark'): THREE.CanvasTexture {
   const size = 512;
+  const seam = tone === 'dark' ? 'rgba(28,30,32,0.9)' : 'rgba(96,92,86,0.55)';
+  const lip = tone === 'dark' ? 'rgba(255,252,246,0.14)' : 'rgba(255,255,255,0.34)';
+  const knot = tone === 'dark' ? 'rgba(24,26,28,0.8)' : 'rgba(96,92,86,0.5)';
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
@@ -521,7 +577,7 @@ function makeTileGrouts(): THREE.CanvasTexture {
   if (ctx) {
     ctx.clearRect(0, 0, size, size);
     // 缝：1.5 m 一格（贴图 repeat 与地面尺寸对齐，见下方 repeat）
-    ctx.strokeStyle = 'rgba(46,50,56,0.85)';
+    ctx.strokeStyle = seam;
     ctx.lineWidth = 3;
     for (let i = 1; i < 4; i += 1) {
       ctx.beginPath();
@@ -534,7 +590,7 @@ function makeTileGrouts(): THREE.CanvasTexture {
       ctx.stroke();
     }
     // 缝边高光：石材拼缝边上会亮一点
-    ctx.strokeStyle = 'rgba(255,255,255,0.30)';
+    ctx.strokeStyle = lip;
     ctx.lineWidth = 2;
     for (let i = 1; i < 4; i += 1) {
       ctx.beginPath();
@@ -547,7 +603,7 @@ function makeTileGrouts(): THREE.CanvasTexture {
       ctx.stroke();
     }
     // 交叉处压深一点，格子才有「块」的感觉
-    ctx.fillStyle = 'rgba(40,44,50,0.75)';
+    ctx.fillStyle = knot;
     for (let i = 0; i < 4; i += 1) {
       for (let j = 0; j < 4; j += 1) {
         ctx.fillRect((i / 4) * size - 2, (j / 4) * size - 2, 4, 4);
@@ -592,6 +648,33 @@ interface FrameParts {
   mat: THREE.Mesh;
   picture: THREE.Mesh;
   label: THREE.Mesh;
+}
+
+/**
+ * 每间房的一面重点墙：取这间房第一件作品所在的那段墙（下标）。
+ * 画的位置就是「墙中点 + 内法线 × 0.06」，所以找离画最近的那段墙即那面墙 ——
+ * 灰绿因此永远落在重点作品背后，一间房只一面。
+ */
+function accentWallIndices(plan: FloorPlan): number[] {
+  const picked = new Set<string>();
+  const out: number[] = [];
+  for (const placement of plan.placements) {
+    if (picked.has(placement.spaceId)) continue;
+    picked.add(placement.spaceId);
+    let best = -1;
+    let bestDist = Infinity;
+    plan.walls.forEach((wall, i) => {
+      const dx = (wall.a.x + wall.b.x) / 2 - placement.x;
+      const dz = (wall.a.z + wall.b.z) / 2 - placement.z;
+      const dist = dx * dx + dz * dz;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+    if (best >= 0) out.push(best);
+  }
+  return out;
 }
 
 function fitArt(fw: number, fh: number, aspect: number): { w: number; h: number } {
