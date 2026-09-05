@@ -6,8 +6,8 @@ import { getRelativeLocaleUrl } from 'astro:i18n';
 
 /**
  * 房间索引：导语 + 策展切换 + 一排门。
- * 按主题布展（/gallery/）与按时间布展（/gallery/year/）只差一个 view，
- * 四个页面（中英 × 两种策展）共用这一份。
+ * 三种策展（按主题 / 按时间 / 自由展厅）只差一个 view，
+ * 六个页面（中英 × 三种策展）共用这一份。
  */
 interface Props {
   view: GalleryView;
@@ -18,18 +18,26 @@ const { view, locale } = Astro.props;
 const t = useTranslations(locale);
 const list = rooms(view);
 const base = getRelativeLocaleUrl(locale, 'gallery'); // '/gallery/' 或 '/en/gallery/'
+
+/** 三种策展各自的索引页：房间 id 自带前缀（theme- / year- / hall-），不会撞 */
+const views: { key: GalleryView; href: string }[] = [
+  { key: 'theme', href: base },
+  { key: 'year', href: `${base}year/` },
+  { key: 'hall', href: `${base}halls/` },
+];
 ---
 
 <p class="list-summary">{t('gallery.desc')}</p>
 
 <nav class="gal-head__tools" aria-label={t('gallery.title')}>
   <div class="gal-views">
-    <a class="gal-view" href={base} aria-current={view === 'theme' ? 'page' : undefined}>
-      {t('gallery.view.theme')}
-    </a>
-    <a class="gal-view" href={`${base}year/`} aria-current={view === 'year' ? 'page' : undefined}>
-      {t('gallery.view.year')}
-    </a>
+    {
+      views.map((item) => (
+        <a class="gal-view" href={item.href} aria-current={view === item.key ? 'page' : undefined}>
+          {t(`gallery.view.${item.key}`)}
+        </a>
+      ))
+    }
   </div>
 </nav>
 

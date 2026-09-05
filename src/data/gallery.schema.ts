@@ -14,8 +14,11 @@ import { z } from 'zod';
  *   { zh: [...], en: [...] }：图片、尺寸、挂画位置跟语言无关，拆成两份
  *   就让它们有机会对不上
  * - 只存扁平的展品列表，房间在构建时按 theme / year 派生：两种策展视图
- *   共用同一批展品，显式存两份房间会让同一件展品（含位置）重复出现
+ *   共用同一批展品，显式存两份房间会让同一件展品（含位置）重复出现。
+ *   halls 是例外：那是手挑的自由展厅，它只记展品 id（顺序即挂画顺序），
+ *   同一件展品在同一个视图里仍只能出现一次。
  */
+import { HALL_STYLE_IDS } from '../lib/gallery/styles';
 
 /** 一条文案的中英两份 */
 export const LocaleTextSchema = z.object({
@@ -64,12 +67,35 @@ export const GalleryItemSchema = z.object({
     .optional(),
 });
 
+/**
+ * 一间手挑的自由展厅：自己取名、自己定形制、自己挑展品。
+ * 展品只写 id —— 尺寸、标题、挂画位置都在 items 里，写第二遍迟早会对不上。
+ */
+export const HallSchema = z.object({
+  /** 路由 id：房间页是 /gallery/hall-<id>/ */
+  id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  /** 形制：九种复刻的艺术厅之一，见 lib/gallery/styles.ts */
+  style: z.enum(HALL_STYLE_IDS),
+  title: LocaleTextSchema,
+  /** 门牌上的一行导语；省略就只显示件数 */
+  note: LocaleTextSchema.optional(),
+  /** 展品 id，顺序就是挂画顺序 */
+  items: z.array(z.string()),
+});
+
 export const GallerySchema = z
   .object({
     version: z.literal(1),
     /** 素材前缀：'' 表示用仓库里的 public/gallery/；换 CDN 时填 CDN 地址即可 */
     base: z.string().default(''),
     items: z.array(GalleryItemSchema),
+    /** 自由展厅：自己取名、自己挑形制和展品 */
+    halls: z.array(HallSchema).default([]),
+    /**
+     * 派生房间（theme-* / year-*）用哪套形制：键是房间 id。
+     * 没写到的按 rooms() 里的顺序轮流分配（见 styleByRotation）。
+     */
+    styles: z.record(z.string(), z.enum(HALL_STYLE_IDS)).default({}),
     labels: z
       .object({
         theme: z.record(z.string(), LocaleTextSchema).default({}),
@@ -79,8 +105,34 @@ export const GallerySchema = z
   // 按 theme / year 派生房间时，id 重复会让两件展品互相顶掉
   .refine((g) => new Set(g.items.map((i) => i.id)).size === g.items.length, {
     message: 'id 必须唯一',
-  });
+  })
+  .refine((g) => new Set(g.halls.map((h) => h.id)).size === g.halls.length, {
+    message: 'halls.id 必须唯一',
+  })
+  // 自由展厅引用的展品必须存在：写错 id 会在 3D 里留一个空画框
+  .refine(
+    (g) => {
+      const known = new Set(g.items.map((i) => i.id));
+      return g.halls.every((hall) => hall.items.every((id) => known.has(id)));
+    },
+    { message: 'halls.items 里引用了不存在的展品 id' },
+  )
+  // 同一件展品不能同时挂在两间自由展厅里：那一层展厅共用一套画框 id
+  .refine(
+    (g) => {
+      const seen = new Set<string>();
+      for (const hall of g.halls) {
+        for (const id of hall.items) {
+          if (seen.has(id)) return false;
+          seen.add(id);
+        }
+      }
+      return true;
+    },
+    { message: '同一件展品在 halls 里出现了多次' },
+  );
 
 export type GalleryItem = z.infer<typeof GalleryItemSchema>;
 export type Gallery = z.infer<typeof GallerySchema>;
+export type GalleryHall = z.infer<typeof HallSchema>;
 export type LocaleText = z.infer<typeof LocaleTextSchema>;

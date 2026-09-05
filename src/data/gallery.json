@@ -105,6 +105,44 @@
       "tags": ["海", "长曝光"]
     }
   ],
+  "halls": [
+    {
+      "id": "night-walk",
+      "style": "louvre",
+      "title": { "zh": "夜行长廊", "en": "Night Walk" },
+      "note": {
+        "zh": "三条街，一个晚上，深红墙上一路挂过去。",
+        "en": "Three streets, one night, hung the length of a crimson wall."
+      },
+      "items": ["city-01", "city-02", "city-03"]
+    },
+    {
+      "id": "tide",
+      "style": "shoin",
+      "title": { "zh": "潮汐之间", "en": "Between Tides" },
+      "note": {
+        "zh": "木格栅下坐着看海，纸灯把潮气烘暖了一点。",
+        "en": "Sitting under the lattice watching the sea, the paper lamp warming the damp."
+      },
+      "items": ["sea-01", "sea-02"]
+    },
+    {
+      "id": "slow-shutter",
+      "style": "neue",
+      "title": { "zh": "慢门", "en": "Slow Shutter" },
+      "note": {
+        "zh": "两张曝光拖长的照片，放进钢与玻璃的盒子里。",
+        "en": "Two long exposures, placed in a box of steel and glass."
+      },
+      "items": ["sea-03"]
+    }
+  ],
+  "styles": {
+    "theme-city": "louvre",
+    "theme-sea": "kimbell",
+    "year-2024": "uffizi",
+    "year-2025": "whitecube"
+  },
   "labels": {
     "theme": {
       "city": { "zh": "城市", "en": "City" },

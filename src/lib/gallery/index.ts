@@ -20,6 +20,7 @@ import {
   type Waypoint,
   type WallKey,
 } from './plan';
+import { isHallStyleId } from './styles';
 import type { FloorHandle, PickResult } from './floor';
 
 /** 与 GalleryFloor.astro 的 data-rooms 一一对应 */
@@ -40,6 +41,8 @@ interface PayloadRoom {
   id: string;
   label: string;
   intro: string;
+  /** 形制 id（见 styles.ts）；认不出来就退回金贝尔 */
+  style: string;
   items: PayloadItem[];
 }
 
@@ -230,7 +233,12 @@ export function mountGallery(rootEl: HTMLElement | null): void {
 
     const plan = layoutFloor(
       rooms.map(
-        (room): PlanRoomInput => ({ id: room.id, label: room.label, items: room.items }),
+        (room): PlanRoomInput => ({
+          id: room.id,
+          label: room.label,
+          style: isHallStyleId(room.style) ? room.style : 'kimbell',
+          items: room.items,
+        }),
       ),
     );
 

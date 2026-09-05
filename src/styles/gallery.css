@@ -51,6 +51,13 @@
   color: var(--c-accent);
 }
 
+/* 两个标签并排（策展方式 · 形制）时点一颗中点 */
+.gal-head__view + .gal-head__view::before {
+  content: '·';
+  margin-right: 0.6rem;
+  color: var(--c-text-faint);
+}
+
 /* 降级说明：跑不动 3D 时脚本把它显示出来 */
 .gal-fallback {
   margin: 1rem 0 0;
@@ -456,6 +463,32 @@ button.gal-view[aria-pressed='true'] {
   display: block;
   font-size: 0.78rem;
   opacity: 0.85;
+}
+
+/* 形制：这间厅照着哪座艺术厅复刻的（门牌最上面那颗小胶囊） */
+.door__style {
+  display: inline-block;
+  margin-bottom: 0.3rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(2px);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* 自由展厅的导语：两行放不下就截断，别把房间名挤没了 */
+.door__note {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  opacity: 0.78;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* ---------- 模式切换：3D 与网格二选一 ---------- */

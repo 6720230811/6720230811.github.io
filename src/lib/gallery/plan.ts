@@ -1,18 +1,23 @@
 /**
- * 展厅平面：若干并联的筒拱顶展厅（barrel vault），摆线（cycloid）断面，
- * 拱顶中央一条通长的天光缝。相邻拱顶共享一道墙、开拱门连通。
+ * 展厅平面：若干并联的展厅，摆在同一层里，相邻展厅共享一道墙、开拱门连通。
  *
- * 形制参考金贝尔美术馆（Louis Kahn, 1972）：扁而长的拱、顶部一线天光、
- * 光沿弧面洒下来。坐标约定：
- * - 每个拱沿 z 延伸（长度），沿 x 并排（跨度）
- * - 摆线断面：跨度 W 对应矢高 W/π（比半圆扁得多，这是这套比例的关键）
+ * 每间厅有自己的**形制**（见 styles.ts）：跨度、层高、顶棚做法、材质与装饰
+ * 都照着某座真实艺术厅来 —— 金贝尔的摆线筒拱、卢浮宫深红墙的长廊、乌菲齐
+ * 又窄又长的过道、西斯廷的高厅、白盒子、镜厅、钢玻璃盒子、木构厅堂、古根海姆
+ * 的穹顶中庭。各厅跨度不同，所以沿 x 依次排开时房间的宽窄是参差的；长度整层
+ * 共用一个数（端墙要齐，外轮廓才成形）。
+ *
+ * 坐标约定：
+ * - 每间厅沿 z 延伸（长度），沿 x 并排（跨度）
+ * - 筒拱断面是摆线：跨度 W 对应矢高 W×rise（比半圆扁，这是这套比例的关键）
  * - 起拱线以下才是「墙」，挂画只挂两道长墙
- * - 长墙按画框之间的空当立壁柱，分成一间间展位；端墙前摆一条长凳，
- *   家具在地面上的占位（obstacles）要从可行走区里挖掉
+ * - 长墙按画框之间的空当立壁柱（形制要壁柱的才立），分成一间间展位；端墙前
+ *   摆一条长凳，家具在地面上的占位（obstacles）要从可行走区里挖掉
  *
  * 这一层刻意不 import three —— 纯数字进纯数字出，场景（floor.ts）只负责
  * 把下面的规格摆出来。
  */
+import { hallStyle, type HallStyleId } from './styles';
 
 export type WallKey = 'n' | 'e' | 's' | 'w';
 
@@ -39,6 +44,8 @@ export interface PlanItem {
 export interface PlanRoomInput {
   id: string;
   label: string;
+  /** 形制：决定跨度、层高、顶棚与装饰 */
+  style: HallStyleId;
   items: readonly PlanItem[];
 }
 
@@ -48,26 +55,38 @@ export interface ProfilePoint {
   y: number;
 }
 
-/** 一个筒拱顶 */
-export interface VaultSpec {
+/**
+ * 一间厅的顶棚。floor.ts 按 shape 决定怎么盖：
+ * - 'vault' 筒拱（摆线，按 rise 定矢高）
+ * - 'dome' 穹顶（椭圆底，中间开天眼）
+ * - 其余（藻井 / 平顶 / 木格栅 / 钢网格）都是平顶 + 各自的一套梁格与灯
+ */
+export interface CeilingSpec {
   spaceId: string;
-  /** 拱的中心 x */
+  styleId: HallStyleId;
+  /** 厅的中心 x */
   x: number;
   /** 跨度（米） */
   width: number;
-  /** 长度（米），沿 z */
+  /** 长度（米），沿 z；整层统一 */
   length: number;
+  /** 起拱线 / 顶棚高度（米） */
+  height: number;
 }
 
-/** 拱顶两端的封口：起拱线以上的拱形墙面 */
-export interface EndArchSpec {
+/** 顶棚两端的封口：筒拱是拱形墙面，平顶是一整片矩形 */
+export interface EndSpec {
   spaceId: string;
+  styleId: HallStyleId;
   /** 端墙所在的 z */
   z: number;
   /** 朝内：+1 表示朝 +z，-1 表示朝 -z */
   normal: 1 | -1;
   x: number;
   width: number;
+  height: number;
+  /** true：起拱线以上是拱形；false：一整片矩形到顶 */
+  arch: boolean;
 }
 
 /**
@@ -85,6 +104,8 @@ export interface WallFace {
   /** 法线方向：+1 / -1，也是这一面朝向的方向 */
   normal: 1 | -1;
   spaceId: string;
+  /** 墙取哪套材质与装饰：跟着它所在那间厅的形制 */
+  styleId: HallStyleId;
   height: number;
   /** 拱门：沿墙方向的中心与尺寸，floor.ts 会把它拆成左右两段加门楣 */
   door?: { center: number; width: number; height: number };
@@ -109,16 +130,19 @@ export interface DoorSpec {
  */
 export interface PilasterSpec {
   spaceId: string;
+  styleId: HallStyleId;
   /** 墙中心线（世界坐标 x） */
   x: number;
   z: number;
   /** 与所在墙的法线同向：+1 朝 +x，-1 朝 -x */
   normal: 1 | -1;
+  height: number;
 }
 
-/** 长凳：端墙前一条，坐下来回望整条拱顶 */
+/** 长凳：端墙前一条，坐下来回望整条厅 */
 export interface BenchSpec {
   spaceId: string;
+  styleId: HallStyleId;
   x: number;
   z: number;
   width: number;
@@ -152,15 +176,18 @@ export interface Placement {
 export interface SpaceSpec {
   id: string;
   label: string;
+  styleId: HallStyleId;
   rect: Rect;
+  /** 起拱线 / 顶棚高度（米） */
+  height: number;
   spawn: { x: number; z: number; yaw: number };
 }
 
 export interface FloorPlan {
   spaces: SpaceSpec[];
-  vaults: VaultSpec[];
-  /** 每个拱顶两端的拱形封口 */
-  arches: EndArchSpec[];
+  ceilings: CeilingSpec[];
+  /** 顶棚两端的封口 */
+  ends: EndSpec[];
   walls: WallFace[];
   doors: DoorSpec[];
   /** 长墙上分展位的壁柱 */
@@ -174,24 +201,14 @@ export interface FloorPlan {
   bounds: Rect;
 }
 
-/** 起拱线高度：墙到此为止，再往上是拱 */
-export const SPRING_H = 3.2;
 /** 眼睛高度：相机初始高度，也是自动挂画时画框中心想去的高度附近 */
 export const EYE_HEIGHT = 1.6;
 
-/** 单个拱的跨度（金贝尔是 20 英尺，约 6 米出头） */
-const VAULT_W = 6.4;
-/** 拱的最短长度；每两件作品再加一截，免得展厅空得发慌 */
+/** 整层的最短长度；每间厅还会按自己的形制要求再加（见 layoutFloor） */
 const MIN_LEN = 9;
-const LEN_PER_PAIR = 3.2;
-/** 拱门尺寸：比住宅门高，配 3.2m 的墙 */
+/** 拱门尺寸：比住宅门高，配 3m 上下的墙 */
 const DOOR_W = 1.9;
 const DOOR_H = 2.6;
-/** 天光缝与反光翼（floor.ts 用同一组数字，改这里就够了） */
-const SLOT_W = 0.7;
-const WING_W = 0.9;
-/** 天光缝两端各留这么长，别顶到端墙 */
-const SLOT_INSET = 0.6;
 /** 人身半径：离墙这么近就走不过去了 */
 const BODY_R = 0.35;
 /** 拱门可行走区沿进深的外扩，要跨过墙厚，否则过门瞬间「哪都不在」 */
@@ -212,35 +229,43 @@ const BENCH_INSET = 0.85;
 /** 家具四周要留的人身余量：贴着长凳站会站进凳子里 */
 const FURNITURE_CLEAR = 0.28;
 /** 壁柱：画框与壁柱之间留的空白，以及空当窄于此就不立柱 */
+/** 壁柱：画框与壁柱之间留的空白，以及空当窄于此就不立柱 */
 const BAY_PAD = 0.22;
 const PILASTER_MIN_GAP = 0.42;
 
-export const VAULT_METRICS = {
-  width: VAULT_W,
-  slot: SLOT_W,
-  wing: WING_W,
-  slotInset: SLOT_INSET,
-} as const;
-
 /**
- * 摆线（cycloid）拱的断面采样点，从一端起拱点到另一端。
+ * 拱的断面采样点，从一端起拱点到另一端，按**弧长**等距重采样。
  *
- * 按**弧长**等距重采样：摆线在 θ=0 处是尖点，均匀采 θ 会把顶点全挤在
- * 尖点附近，弧面就一段段折线了。floor.ts 拿它建拱壳与端墙拱形，
- * 无头测试也拿它算几何断言 —— 单一真源。
+ * 两种断面：
+ * - 摆线（cycloid）：矢高 = 跨度/π，金贝尔那种又扁又长的拱
+ * - 椭圆弧：其余矢高都用它，起拱处切线竖直、拱顶圆润（半圆是它的特例）
+ *
+ * 按弧长重采样是必须的：摆线在 θ=0 处是尖点，均匀采 θ 会把顶点全挤在尖点
+ * 附近，弧面就一段段折线了。floor.ts 拿它建拱壳与端墙拱形。
  */
-export function vaultProfile(width: number, samples = 64): ProfilePoint[] {
+export function archProfile(width: number, rise: number, samples = 64): ProfilePoint[] {
+  const cycloid = Math.abs(rise - width / Math.PI) < 0.02;
   const r = width / (2 * Math.PI);
+
+  /** t ∈ [0,1]：0 与 1 是两侧起拱点，0.5 是拱顶 */
+  const at = (t: number): ProfilePoint => {
+    if (cycloid) {
+      const a = t * Math.PI * 2;
+      return { x: r * (a - Math.sin(a)) - Math.PI * r, y: r * (1 - Math.cos(a)) };
+    }
+    const a = t * Math.PI;
+    return { x: -(width / 2) * Math.cos(a), y: rise * Math.sin(a) };
+  };
+
   // 先密采一遍算弧长
   const dense = 512;
   const xs: number[] = [];
   const ys: number[] = [];
   const arc: number[] = [0];
   for (let i = 0; i <= dense; i += 1) {
-    const t = (i / dense) * Math.PI * 2;
-    // θ=π 落在拱顶（x=0, y=2r），θ=0 / 2π 落在两侧起拱点
-    xs.push(r * (t - Math.sin(t)) - Math.PI * r);
-    ys.push(r * (1 - Math.cos(t)));
+    const point = at(i / dense);
+    xs.push(point.x);
+    ys.push(point.y);
     if (i > 0) arc.push(arc[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]));
   }
   const total = arc[dense];
@@ -258,11 +283,6 @@ export function vaultProfile(width: number, samples = 64): ProfilePoint[] {
     });
   }
   return points;
-}
-
-/** 摆线拱的矢高：跨度 / π（比半圆扁得多） */
-export function vaultRise(width: number): number {
-  return width / Math.PI;
 }
 
 function aspectOf(item: PlanItem): number {
@@ -298,21 +318,31 @@ function hangSlots(count: number, hasDoor: boolean): number[] {
   return slots;
 }
 
-/** 生成整层平面：并联的筒拱顶展厅 */
+/** 生成整层平面：各间厅按自己的形制并联，相邻两厅之间开拱门 */
 export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
   const count = rooms.length;
-  // 所有拱取统一长度：端墙要齐，外轮廓才成形
+  const styles = rooms.map((room) => hallStyle(room.style));
+
+  /**
+   * 长度整层统一：端墙要齐，外轮廓才成形。
+   * 取每间厅「按自己形制要求的长度」里最大的那个 —— 乌菲齐要 16m，
+   * 隔壁白盒子也得跟着长，但那也比各间参差不齐地拼在一起好看。
+   */
   const length = Math.max(
     MIN_LEN,
-    ...rooms.map((room) => Math.ceil(room.items.length / 2) * LEN_PER_PAIR),
+    ...rooms.map((room, index) => {
+      const { minLen, lenPerPair } = styles[index].metrics;
+      return minLen + Math.ceil(room.items.length / 2) * lenPerPair;
+    }),
   );
   const half = length / 2;
-  const totalWidth = count * VAULT_W;
-  const leftEdge = -totalWidth / 2;
+  // 跨度各不相同：沿 x 一间间铺开，总宽是各间跨度之和
+  const totalWidth = styles.reduce((sum, style) => sum + style.metrics.width, 0);
+  let cursorX = -totalWidth / 2;
 
   const spaces: SpaceSpec[] = [];
-  const vaults: VaultSpec[] = [];
-  const arches: EndArchSpec[] = [];
+  const ceilings: CeilingSpec[] = [];
+  const ends: EndSpec[] = [];
   const walls: WallFace[] = [];
   const doors: DoorSpec[] = [];
   const pilasters: PilasterSpec[] = [];
@@ -321,39 +351,61 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
   const placements: Placement[] = [];
 
   rooms.forEach((room, index) => {
-    const cx = leftEdge + (index + 0.5) * VAULT_W;
-    const x1 = cx - VAULT_W / 2;
-    const x2 = cx + VAULT_W / 2;
+    const style = styles[index];
+    const width = style.metrics.width;
+    const height = style.metrics.height;
+    const x1 = cursorX;
+    const x2 = cursorX + width;
+    const cx = (x1 + x2) / 2;
+    cursorX = x2;
 
     spaces.push({
       id: room.id,
       label: room.label,
+      styleId: style.id,
       rect: { x1, z1: -half, x2, z2: half },
-      // 站在拱的一头，朝另一头看：一眼望穿整条天光缝
+      height,
+      // 站在厅的一头，朝另一头看：一眼望到天光缝（或穹顶的天眼）
       spawn: { x: cx, z: -half + 2, yaw: Math.PI },
     });
-    vaults.push({ spaceId: room.id, x: cx, width: VAULT_W, length });
+    ceilings.push({ spaceId: room.id, styleId: style.id, x: cx, width, length, height });
 
-    // 两端的封口：实体端墙（起拱线以下）+ 拱形（起拱线以上）
+    // 两端的封口：实体端墙 + 拱形（筒拱才有拱形；平顶就一整片到顶）
+    const arch = style.ceiling.kind === 'vault';
     for (const [z, normal] of [
       [-half, 1],
       [half, -1],
     ] as [number, 1 | -1][]) {
-      walls.push({ axis: 'x', a: x1, b: x2, at: z, normal, spaceId: room.id, height: SPRING_H });
-      arches.push({ spaceId: room.id, z, normal, x: cx, width: VAULT_W });
+      walls.push({
+        axis: 'x',
+        a: x1,
+        b: x2,
+        at: z,
+        normal,
+        spaceId: room.id,
+        styleId: style.id,
+        height,
+      });
+      ends.push({ spaceId: room.id, styleId: style.id, z, normal, x: cx, width, height, arch });
     }
 
     // ---- 两道长墙 ----
-    // 左墙（x1）朝 +x，右墙（x2）朝 -x；与邻拱共享的墙上要开拱门
-    const longWalls: { at: number; normal: 1 | -1; hasDoor: boolean }[] = [
-      { at: x1, normal: 1, hasDoor: index > 0 },
-      { at: x2, normal: -1, hasDoor: index < count - 1 },
+    // 左墙（x1）朝 +x，右墙（x2）朝 -x；与邻厅共享的墙上要开拱门
+    const longWalls: { at: number; normal: 1 | -1; neighbour: number | null }[] = [
+      { at: x1, normal: 1, neighbour: index > 0 ? index - 1 : null },
+      { at: x2, normal: -1, neighbour: index < count - 1 ? index + 1 : null },
     ];
+    /** 门洞要矮过两侧较矮的那间厅，否则门楣会穿到隔壁的顶棚里 */
+    const doorHeight = (neighbour: number | null): number =>
+      neighbour === null
+        ? Math.min(DOOR_H, height)
+        : Math.min(DOOR_H, height, styles[neighbour].metrics.height);
 
     for (const wall of longWalls) {
-      const door = wall.hasDoor
-        ? { center: 0, width: DOOR_W, height: DOOR_H }
-        : undefined;
+      const door =
+        wall.neighbour === null
+          ? undefined
+          : { center: 0, width: DOOR_W, height: doorHeight(wall.neighbour) };
       walls.push({
         axis: 'z',
         a: -half,
@@ -361,12 +413,13 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
         at: wall.at,
         normal: wall.normal,
         spaceId: room.id,
-        height: SPRING_H,
+        styleId: style.id,
+        height,
         ...(door ? { door } : {}),
       });
     }
 
-    // 相邻两拱之间的那道墙只有一个门洞，登记一次即可
+    // 相邻两厅之间的那道墙只有一个门洞，登记一次即可
     if (index < count - 1) {
       doors.push({
         id: `${room.id}--${rooms[index + 1].id}`,
@@ -375,20 +428,20 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
         x: x2,
         z: 0,
         width: DOOR_W,
-        height: DOOR_H,
+        height: doorHeight(index + 1),
       });
     }
 
     // ---- 挂画 ----
     // 有拱门的墙尽量不挂画：拱门在墙正中，画挂那儿会被门切断
-    const free = longWalls.filter((wall) => !wall.hasDoor);
+    const free = longWalls.filter((wall) => wall.neighbour === null);
     const use = free.length > 0 ? free : longWalls;
     const counts = use.map(
       (_, wallIndex) => room.items.filter((_, j) => j % use.length === wallIndex).length,
     );
     const perWall = use.map((wall, wallIndex) => ({
       wall,
-      slots: hangSlots(counts[wallIndex], wall.hasDoor),
+      slots: hangSlots(counts[wallIndex], wall.neighbour !== null),
     }));
     /** 每面墙上被画框占掉的一段段（按墙中心线的 x 归类） */
     const bays = new Map<
@@ -411,7 +464,7 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
         placed === 'w' ? longWalls[0] : placed === 'e' ? longWalls[1] : undefined;
       const target = byHand ?? wall;
       const u = item.place?.u ?? slots[withinWall] ?? 0.5;
-      const v = item.place?.v ?? (EYE_HEIGHT + size * 0.12) / SPRING_H;
+      const v = item.place?.v ?? (EYE_HEIGHT + size * 0.12) / height;
 
       const { fw, fh } = boxOf(size, aspectOf(item));
       const z = (u - 0.5) * length;
@@ -419,7 +472,7 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
       // 记下画框在墙上占的一段（两侧各加一点留白），壁柱就立在段与段之间
       const bay = bays.get(target.at) ?? {
         normal: target.normal,
-        hasDoor: target.hasDoor,
+        hasDoor: target.neighbour !== null,
         spans: [],
       };
       bay.spans.push({ z0: z - fw / 2 - BAY_PAD, z1: z + fw / 2 + BAY_PAD });
@@ -429,7 +482,7 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
         id: item.id,
         spaceId: room.id,
         x: target.at + target.normal * ART_INSET,
-        y: v * SPRING_H,
+        y: v * height,
         z,
         ry: target.normal === 1 ? Math.PI / 2 : -Math.PI / 2,
         fw,
@@ -440,7 +493,9 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
     });
 
     // ---- 壁柱：画框之间的空当立一根，一整面长墙就分成了一间间展位 ----
+    // 白盒子那类形制不要壁柱（features.pilasters = false），墙就一整片
     for (const [at, bay] of bays) {
+      if (!style.features.pilasters) break;
       const spans = [...bay.spans].sort((a, b) => a.z0 - b.z0);
       const gaps: { from: number; to: number }[] = [];
       // 从墙的一头走到另一头，把没被画框占掉的空当收集起来
@@ -456,19 +511,35 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
         if (gap.to - gap.from < PILASTER_MIN_GAP) continue;
         // 门洞那一段不立柱：柱子在门口会挡路，也把门套切断
         if (bay.hasDoor && Math.abs(z) < DOOR_W / 2 + 0.25) continue;
-        pilasters.push({ spaceId: room.id, x: at, z, normal: bay.normal });
+        pilasters.push({
+          spaceId: room.id,
+          styleId: style.id,
+          x: at,
+          z,
+          normal: bay.normal,
+          height,
+        });
       }
     }
 
-    // ---- 长凳：端墙前一条，坐下来正好回望整条天光缝 ----
-    const benchZ = half - BENCH_INSET;
-    benches.push({ spaceId: room.id, x: cx, z: benchZ, width: BENCH_W, depth: BENCH_D });
-    obstacles.push({
-      x1: cx - BENCH_W / 2 - FURNITURE_CLEAR,
-      x2: cx + BENCH_W / 2 + FURNITURE_CLEAR,
-      z1: benchZ - BENCH_D / 2 - FURNITURE_CLEAR,
-      z2: benchZ + BENCH_D / 2 + FURNITURE_CLEAR,
-    });
+    // ---- 长凳：端墙前一条，坐下来正好回望整条厅 ----
+    if (style.features.bench) {
+      const benchZ = half - BENCH_INSET;
+      benches.push({
+        spaceId: room.id,
+        styleId: style.id,
+        x: cx,
+        z: benchZ,
+        width: BENCH_W,
+        depth: BENCH_D,
+      });
+      obstacles.push({
+        x1: cx - BENCH_W / 2 - FURNITURE_CLEAR,
+        x2: cx + BENCH_W / 2 + FURNITURE_CLEAR,
+        z1: benchZ - BENCH_D / 2 - FURNITURE_CLEAR,
+        z2: benchZ + BENCH_D / 2 + FURNITURE_CLEAR,
+      });
+    }
   });
 
   const bounds: Rect = {
@@ -478,10 +549,10 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
     z2: Math.max(...spaces.map((space) => space.rect.z2)),
   };
 
-  return { spaces, vaults, arches, walls, doors, pilasters, benches, obstacles, placements, bounds };
+  return { spaces, ceilings, ends, walls, doors, pilasters, benches, obstacles, placements, bounds };
 }
 
-/** 点落在哪个拱顶里（用原始矩形，墙厚算在里面） */
+/** 点落在哪间厅里（用原始矩形，墙厚算在里面） */
 export function spaceAt(plan: FloorPlan, x: number, z: number): SpaceSpec | null {
   for (const space of plan.spaces) {
     const { rect } = space;

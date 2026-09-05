@@ -24,9 +24,20 @@ const zh = {
 
   // 画廊（/gallery）
   'gallery.title': '画廊',
-  'gallery.desc': '几间筒拱顶的展厅，墙上挂着自己的照片。走过去，凑近看。',
+  'gallery.desc': '九种照着真实艺术厅复刻的展厅，墙上挂着自己的照片。走过拱门换一间，凑近看。',
   'gallery.view.theme': '按主题布展',
   'gallery.view.year': '按时间布展',
+  'gallery.view.hall': '自由展厅',
+  // 九种展厅形制的名字（3D 里那间厅长什么样）
+  'gallery.style.kimbell': '金贝尔筒拱厅',
+  'gallery.style.louvre': '卢浮宫大画廊',
+  'gallery.style.uffizi': '乌菲齐长廊',
+  'gallery.style.sistine': '西斯廷礼拜堂',
+  'gallery.style.whitecube': '现代白盒子',
+  'gallery.style.versailles': '凡尔赛镜厅',
+  'gallery.style.neue': '新国家美术馆',
+  'gallery.style.shoin': '东方木构厅堂',
+  'gallery.style.guggenheim': '古根海姆中庭',
   'gallery.itemCount': '件作品',
   'gallery.back': '所有房间',
   'gallery.hint.look': '拖拽鼠标看向四周',
@@ -137,9 +148,20 @@ const en: Record<keyof typeof zh, string> = {
 
   // 画廊（/gallery）
   'gallery.title': 'Gallery',
-  'gallery.desc': 'A few barrel-vaulted halls with my pictures on the walls. Walk up to one and look closely.',
+  'gallery.desc': 'Nine halls rebuilt after real museum rooms, with my pictures on the walls. Walk through an arch into the next one.',
   'gallery.view.theme': 'By theme',
   'gallery.view.year': 'By year',
+  'gallery.view.hall': 'Curated halls',
+  // 九种展厅形制的名字（3D 里那间厅长什么样）
+  'gallery.style.kimbell': 'Kimbell Vault',
+  'gallery.style.louvre': 'Grande Galerie',
+  'gallery.style.uffizi': 'Uffizi Corridor',
+  'gallery.style.sistine': 'Sistine Chapel',
+  'gallery.style.whitecube': 'White Cube',
+  'gallery.style.versailles': 'Hall of Mirrors',
+  'gallery.style.neue': 'Neue Nationalgalerie',
+  'gallery.style.shoin': 'Timber Hall',
+  'gallery.style.guggenheim': 'Guggenheim Rotunda',
   'gallery.itemCount': 'works',
   'gallery.back': 'All rooms',
   'gallery.hint.look': 'Drag to look around',

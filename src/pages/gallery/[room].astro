@@ -6,15 +6,16 @@ import GalleryGrid from '../../components/gallery/GalleryGrid.astro';
 import GalleryLightbox from '../../components/gallery/GalleryLightbox.astro';
 import '../../styles/gallery.css';
 import { profile } from '../../data/profile';
-import { roomById, roomLabel, rooms } from '../../data/gallery';
+import { roomById, roomLabel, roomNote, rooms } from '../../data/gallery';
 import { toLocale, useTranslations } from '../../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
-// 两种策展共用一个动态路由：房间 id 自带前缀（theme-city / year-2024），不会撞
+// 三种策展共用一个动态路由：房间 id 自带前缀（theme-city / year-2024 / hall-night-walk），不会撞
 export function getStaticPaths() {
   return [
     ...rooms('theme').map((room) => ({ params: { room: room.id }, props: { room } })),
     ...rooms('year').map((room) => ({ params: { room: room.id }, props: { room } })),
+    ...rooms('hall').map((room) => ({ params: { room: room.id }, props: { room } })),
   ];
 }
 
@@ -35,21 +36,24 @@ const label = roomLabel(found, locale);
  * 出生。所以要把同一视图的所有房间（含各自的配色与简介）一起交给脚本，
  * 网格也按房间分段列全。
  */
+const base = getRelativeLocaleUrl(locale, 'gallery');
 const siblings = rooms(found.view);
 const floorRooms = siblings.map((item) => ({
   id: item.id,
   label: roomLabel(item, locale),
   intro: `${item.items.length} ${t('gallery.itemCount')}`,
+  style: item.style,
   items: item.items,
 }));
 const total = siblings.reduce((sum, item) => sum + item.items.length, 0);
 const intro = `${siblings.length} ${t('gallery.roomCount')} · ${total} ${t('gallery.itemCount')}`;
 
-// 回到同一策展的房间索引：按时间布展的房间回 /gallery/year/
-const backUrl =
-  found.view === 'year'
-    ? `${getRelativeLocaleUrl(locale, 'gallery')}year/`
-    : getRelativeLocaleUrl(locale, 'gallery');
+// 回到同一策展的房间索引：按时间布展回 /gallery/year/，自由展厅回 /gallery/halls/
+const indexUrl: Record<typeof found.view, string> = {
+  theme: base,
+  year: `${base}year/`,
+  hall: `${base}halls/`,
+};
 ---
 
 <BaseLayout
@@ -64,7 +68,8 @@ const backUrl =
       <div class="gal-head">
         <div class="gal-head__title">
           <span class="gal-head__view">{t(`gallery.view.${found.view}`)}</span>
-          <p class="gal-head__intro" id="gal-room-intro">{intro}</p>
+          <span class="gal-head__view">{t(`gallery.style.${found.style}`)}</span>
+          <p class="gal-head__intro" id="gal-room-intro">{roomNote(found, locale) || intro}</p>
         </div>
 
         <div class="gal-head__tools">
@@ -77,7 +82,7 @@ const backUrl =
               {t('gallery.gridMode')}
             </button>
           </div>
-          <a class="gal-view" href={backUrl}>{t('gallery.back')}</a>
+          <a class="gal-view" href={indexUrl[found.view]}>{t('gallery.back')}</a>
         </div>
       </div>
 
