@@ -38,7 +38,7 @@ export interface FloorHandle {
   pickables: THREE.Object3D[];
   blockers: THREE.Object3D[];
   pictures: Map<string, THREE.Mesh>;
-  setPicture(id: string, texture: THREE.Texture, aspect: number | null): void;
+  setPicture(id: string, texture: THREE.Texture): void;
   pick(clientX: number, clientY: number): PickResult | null;
   viewpoint(id: string): { x: number; z: number; yaw: number } | null;
   setHover(id: string | null): void;
@@ -47,10 +47,11 @@ export interface FloorHandle {
   dispose(): void;
 }
 
-const MAT_W = 0.06; // 卡纸宽
+const MAT_W = 0.06; // 画布与画框之间留一点边距（其实现在不用外框了，保留常量防 import 报错）
 const FRAME_LIP = 0.025;
 const FRAME_DEPTH = 0.04;
-const LABEL_W = 0.22; // 墙签宽
+const LABEL_W = 0.22;
+void MAT_W; void FRAME_LIP; void FRAME_DEPTH; void LABEL_W;
 
 interface Disposable {
   dispose(): void;
@@ -136,66 +137,74 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     return item;
   };
 
-  // ---- 白墙材质（偏亮一点，靠 PMREM + Hemisphere 把拱面打匀）----
+  // ---- 白墙偏冷一点（参考那种带蓝灰调的展墙），平顶压暗天花板 ----
+  // 参考的展墙不是纯白：略微偏蓝灰 + 顶光从天花板下来把墙打亮
   const white = track(
     new THREE.MeshStandardMaterial({
-      color: '#F0F0F0',
-      roughness: 0.62,
+      color: '#E8EAEE',
+      roughness: 0.55,
       metalness: 0,
-      envMapIntensity: 0.9,
+      envMapIntensity: 0.85,
     }),
   );
   const ceilingMat = track(
     new THREE.MeshStandardMaterial({
-      color: '#F8F8F8',
-      roughness: 0.9,
+      color: '#9098A0',
+      roughness: 0.95,
       metalness: 0,
-      envMapIntensity: 0.7,
+      envMapIntensity: 0.3,
     }),
   );
+  // 地面：浅灰大理石 + 拼缝（参考那种 1.5 m 左右的方格）—— canvas 现画
   const floorMat = track(
     new THREE.MeshStandardMaterial({
-      color: '#D6D6D6',
-      roughness: 0.16,
+      map: track(makeTiledMarble()),
+      color: '#D8DAE0',
+      roughness: 0.15,
       metalness: 0.0,
-      envMapIntensity: 1.6,
+      envMapIntensity: 1.7,
     }),
   );
   const baseboardMat = track(
-    new THREE.MeshStandardMaterial({ color: '#9A9A9A', roughness: 0.55 }),
+    new THREE.MeshStandardMaterial({ color: '#8A8E94', roughness: 0.55 }),
   );
-
-  // 形制不同 → 不同的画框与卡纸颜色
-  const styleIds = [...new Set(plan.spaces.map((space) => space.styleId))];
-  const frameMaterials = new Map<HallStyleId, THREE.MeshStandardMaterial>();
-  const matMaterials = new Map<HallStyleId, THREE.MeshStandardMaterial>();
-  for (const id of styleIds) {
-    const style = hallStyle(id);
-    frameMaterials.set(
-      id,
-      track(
-        new THREE.MeshStandardMaterial({
-          color: style.colors.frame,
-          roughness: 0.42,
-          metalness: 0.25,
-        }),
-      ),
-    );
-    matMaterials.set(
-      id,
-      track(
-        new THREE.MeshStandardMaterial({ color: style.colors.mat, roughness: 0.9 }),
-      ),
-    );
-  }
-  const frameOf = (id: HallStyleId): THREE.MeshStandardMaterial =>
-    frameMaterials.get(id) ?? (frameMaterials.get('kimbell') as THREE.MeshStandardMaterial);
-  const matOf = (id: HallStyleId): THREE.MeshStandardMaterial =>
-    matMaterials.get(id) ?? (matMaterials.get('kimbell') as THREE.MeshStandardMaterial);
-
-  const unitPlane = track(new THREE.PlaneGeometry(1, 1));
-  const unitBox = track(new THREE.BoxGeometry(1, 1, 1));
   const placeholder = track(placeholderTexture());
+
+  // 画直接挂：没有外框、没有卡纸（参考的做法）—— 白画布直贴墙面、墙在画
+  // 周围被顶光打亮一圈光晕。这里用三件东西合成这个效果：
+  //   1) canvas 面：1.55 × 1.1 的白画布
+  //   2) 阴影面：画布背后略大一点的加色减淡面（凹进墙里的小阴影）
+  //   3) 光晕面：画布后更大的加色亮面（让墙在画周围被「照亮」）
+  // 不再用形制给的画框与卡纸颜色 —— 那套是金贝尔美术馆的，跟这白色展墙冲突。
+  const canvasMat = track(
+    new THREE.MeshStandardMaterial({
+      color: '#F0F0F0',
+      roughness: 0.85,
+      metalness: 0,
+    }),
+  );
+  const shadowMat = track(
+    new THREE.MeshBasicMaterial({
+      color: '#000000',
+      transparent: true,
+      opacity: 0.12,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  const haloMat = track(
+    new THREE.MeshBasicMaterial({
+      color: '#FFFAEC',
+      transparent: true,
+      opacity: 0.18,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  const haloGeo = track(new THREE.PlaneGeometry(1, 1));
+  const canvasGeo = track(new THREE.PlaneGeometry(1, 1));
+  const shadowGeo = track(new THREE.PlaneGeometry(1, 1));
 
   // ---- 白墙：每段 Hilbert 墙一个 InstancedMesh ----
   // 墙面用矩形面片：宽 = 墙长，高 = 4 m，挂在 y=2（半高）处
@@ -291,54 +300,47 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const parts = new Map<string, FrameParts>();
 
   for (const placement of plan.placements) {
-    const space = plan.spaces.find((item) => item.id === placement.spaceId);
-    const styleId = space?.styleId ?? 'kimbell';
-    const frameMaterial = frameOf(styleId);
-    const matMaterial = matOf(styleId);
-
     const group = new THREE.Group();
     group.position.set(placement.x, placement.y, placement.z);
     group.rotation.y = placement.ry;
 
     const aspect = placement.fw / placement.fh;
     const art = fitArt(placement.fw, placement.fh, aspect);
-    const outer = { w: art.w + MAT_W * 2, h: art.h + MAT_W * 2 };
 
-    const frameMaterialForArt = track(frameMaterial.clone());
-    const frame = new THREE.Mesh(unitBox, frameMaterialForArt);
-    frame.userData.id = placement.id;
-    group.add(frame);
+    // 1) 光晕（additive）：挂在墙上，比画大一圈
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.z = -0.06;
+    halo.scale.set(art.w * 2.6, art.h * 2.6, 1);
+    group.add(halo);
 
-    const mat = new THREE.Mesh(unitPlane, matMaterial);
-    mat.position.z = FRAME_DEPTH / 2 + 0.001;
-    group.add(mat);
+    // 2) 阴影：紧贴墙面、画布外一圈
+    const shade = new THREE.Mesh(shadowGeo, shadowMat);
+    shade.position.z = -0.02;
+    shade.scale.set(art.w + 0.05, art.h + 0.05, 1);
+    group.add(shade);
 
+    // 3) 画布：白底（纹理到达后被替换）
     const picture = new THREE.Mesh(
-      unitPlane,
+      canvasGeo,
       new THREE.MeshBasicMaterial({ map: placeholder, toneMapped: false, fog: false }),
     );
-    picture.position.z = FRAME_DEPTH / 2 + 0.003;
+    picture.userData.id = placement.id;
+    picture.position.z = 0.01;
     group.add(picture);
 
-    // 墙签：标题 + 作者，画在纹理上
+    // 4) 标签（标题 + 作者）—— 画在纹理上、贴在画下面
     const labelMap = track(wallLabelTexture(placement.title, placement.author));
     const labelMaterialForArt = track(
-      new THREE.MeshStandardMaterial({ map: labelMap, roughness: 0.85 }),
+      new THREE.MeshBasicMaterial({ map: labelMap, transparent: true, toneMapped: false }),
     );
-    const label = new THREE.Mesh(unitBox, labelMaterialForArt);
+    const labelGeo = track(new THREE.PlaneGeometry(1, 1));
+    const label = new THREE.Mesh(labelGeo, labelMaterialForArt);
+    label.position.set(0, -art.h / 2 - 0.06, 0.01);
+    label.scale.set(0.34, 0.06, 1);
     group.add(label);
 
-    const entry: FrameParts = {
-      frame,
-      frameMaterial: frameMaterialForArt,
-      mat,
-      picture,
-      label,
-    };
-    applySize(entry, art.w, art.h, outer.w, outer.h);
     pictures.set(placement.id, picture);
-    parts.set(placement.id, entry);
-    pickables.push(frame);
+    pickables.push(picture);
     disposables.push(picture.material as THREE.Material);
     scene.add(group);
   }
@@ -349,27 +351,8 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const scratch = new THREE.Vector3();
   const worldPosition = new THREE.Vector3();
 
-  function applySize(
-    entry: FrameParts,
-    artW: number,
-    artH: number,
-    outerW: number,
-    outerH: number,
-  ): void {
-    entry.picture.scale.set(artW, artH, 1);
-    entry.mat.scale.set(outerW - FRAME_LIP * 2, outerH - FRAME_LIP * 2, 1);
-    entry.frame.scale.set(outerW, outerH, FRAME_DEPTH);
-    entry.label.scale.set(LABEL_W, LABEL_W / 5, 0.008);
-    entry.label.position.set(0, -outerH / 2 - LABEL_W / 10 - 0.05, -FRAME_DEPTH / 2);
-  }
-
-  function resizeFrame(id: string, aspect: number): void {
-    const entry = parts.get(id);
-    const placement = plan.placements.find((item) => item.id === id);
-    if (!entry || !placement) return;
-    const art = fitArt(placement.fw, placement.fh, aspect);
-    applySize(entry, art.w, art.h, art.w + MAT_W * 2, art.h + MAT_W * 2);
-  }
+  /** hover 时把对应画的光晕亮一档 —— 没有外框可高亮，就亮光晕 */
+  const originalHaloOpacity = haloMat.opacity;
 
   return {
     scene,
@@ -379,7 +362,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     blockers: [walls, baseboards],
     pictures,
 
-    setPicture(id, texture, aspect) {
+    setPicture(id, texture) {
       const picture = pictures.get(id);
       if (!picture) return;
       const material = picture.material as THREE.MeshBasicMaterial;
@@ -387,7 +370,6 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       material.map = texture;
       material.needsUpdate = true;
       if (previous && previous !== placeholder) previous.dispose();
-      if (aspect) resizeFrame(id, aspect);
     },
 
     pick(clientX, clientY) {
@@ -399,32 +381,28 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       );
       raycaster.setFromCamera(pointer, camera);
 
-      // 拾取顺序：画 → 墙 → 地面。地面在最末（要走过去）。
       const artHit = raycaster.intersectObjects(pickables, false)[0];
       if (artHit) return { kind: 'art', id: String(artHit.object.userData.id) };
       const floorHit = raycaster.intersectObject(floor, false)[0];
       if (floorHit) return { kind: 'floor', x: floorHit.point.x, z: floorHit.point.z };
-      // 打到墙上（含踢脚线）→ 不响应
       return null;
     },
 
     viewpoint(id) {
-      const frame = pickables.find((mesh) => mesh.userData.id === id);
-      if (!frame) return null;
-      frame.getWorldQuaternion(quaternion);
+      const mesh = pickables.find((m) => m.userData.id === id);
+      if (!mesh) return null;
+      mesh.getWorldQuaternion(quaternion);
       const normal = scratch.set(0, 0, 1).applyQuaternion(quaternion);
-      frame.getWorldPosition(worldPosition);
+      mesh.getWorldPosition(worldPosition);
       return {
-        x: worldPosition.x + normal.x * 1.2,
-        z: worldPosition.z + normal.z * 1.2,
+        x: worldPosition.x + normal.x * 1.4,
+        z: worldPosition.z + normal.z * 1.4,
         yaw: Math.atan2(normal.x, normal.z),
       };
     },
 
     setHover(id) {
-      for (const [key, entry] of parts) {
-        entry.frameMaterial.emissive.setHex(key === id ? 0x303030 : 0x000000);
-      }
+      haloMat.opacity = id ? 0.32 : originalHaloOpacity;
     },
 
     setSize(width, height) {
@@ -448,6 +426,57 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       renderer.dispose();
     },
   };
+}
+
+/** 浅灰大理石地面，1.5 m 方格拼缝（参考那种带线缝的反射地面） */
+function makeTiledMarble(): THREE.CanvasTexture {
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    // 底色 + 噪点
+    ctx.fillStyle = '#D8DAE0';
+    ctx.fillRect(0, 0, size, size);
+    const base = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < base.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 18;
+      base.data[i] = Math.max(0, Math.min(255, base.data[i] + n));
+      base.data[i + 1] = Math.max(0, Math.min(255, base.data[i + 1] + n));
+      base.data[i + 2] = Math.max(0, Math.min(255, base.data[i + 2] + n + 2));
+    }
+    ctx.putImageData(base, 0, 0);
+    // 拼缝：每 1/4 画一条暗灰线
+    ctx.strokeStyle = 'rgba(60,64,70,0.22)';
+    ctx.lineWidth = 2;
+    for (let i = 1; i < 4; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, (i / 4) * size);
+      ctx.lineTo(size, (i / 4) * size);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo((i / 4) * size, 0);
+      ctx.lineTo((i / 4) * size, size);
+      ctx.stroke();
+    }
+    // 缝内更深的阴影
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+    for (let i = 1; i < 4; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, (i / 4) * size + 1);
+      ctx.lineTo(size, (i / 4) * size + 1);
+      ctx.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  // 1.5 m 一格 → 48 m 边长需要 32 个 repeat
+  tex.repeat.set(32, 32);
+  tex.anisotropy = 4;
+  return tex;
 }
 
 interface FrameParts {

@@ -601,11 +601,9 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     let broken = 0;
     await Promise.all(
       items.map(async (item) => {
-        // 一件坏了不拖累整间展厅，只是这件一直停在缩略图上
-        const declared = item.w && item.h ? item.w / item.h : null;
         try {
           const thumb = await loadTexture(item.thumb);
-          floor.setPicture(item.id, thumb.texture, thumb.aspect ?? declared);
+          floor.setPicture(item.id, thumb.texture);
           bump();
         } catch {
           broken += 1;
@@ -615,13 +613,14 @@ export function mountGallery(rootEl: HTMLElement | null): void {
         }
         try {
           const full = await loadTexture(item.src);
-          floor.setPicture(item.id, full.texture, full.aspect);
+          floor.setPicture(item.id, full.texture);
           bump();
         } catch {
           bump();
         }
       }),
     );
+    void broken;
 
     if (broken === items.length) {
       // 一张都没挂上，展厅是空的，不如直接给网格
