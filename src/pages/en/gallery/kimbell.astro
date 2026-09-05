@@ -3,6 +3,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 import Section from '../../../components/Section.astro';
 import '../../../styles/gallery.css';
 import { profile } from '../../../data/profile';
+import { gallery, mediaUrl } from '../../../data/gallery';
 import { toLocale, useTranslations } from '../../../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
@@ -11,12 +12,29 @@ const t = useTranslations(locale);
 const p = profile[locale];
 const backUrl = getRelativeLocaleUrl(locale, 'gallery'); // '/gallery/' 或 '/en/gallery/'
 
-const cards: [string, string][] = [
-  [t('gallery.light.spec.span'), '6.10 m'],
-  [t('gallery.light.spec.rise'), '1.941 m'],
-  [t('gallery.light.spec.spring'), '4.159 m'],
-  [t('gallery.light.spec.length'), '30.48 m'],
-  [t('gallery.light.spec.slot'), '0.60 m'],
+const specs: [string, string][] = [
+  [t('gallery.light.spec.vaults'), '16 (6 + 4 + 6)'],
+  [t('gallery.light.spec.span'), '30.48 × 6.10 × 6.10 m'],
+  [t('gallery.light.spec.rise'), '1.942 m (cycloid rise 2r)'],
+  [t('gallery.light.spec.spring'), '4.158 m'],
+  [t('gallery.light.spec.slot'), '0.61 m'],
+  [t('gallery.light.spec.column'), '0.61 m sq. × 64'],
+];
+
+/** The building gives the walls; the data layer gives the pictures. */
+const items = gallery.items.map((item) => ({
+  id: item.id,
+  thumb: mediaUrl(item.thumb),
+  src: mediaUrl(item.src),
+  w: item.w ?? null,
+  h: item.h ?? null,
+}));
+
+const views: { key: string; label: string }[] = [
+  { key: 'plan', label: t('gallery.light.view.plan') },
+  { key: 'section', label: t('gallery.light.view.section') },
+  { key: 'longitudinal', label: t('gallery.light.view.longitudinal') },
+  { key: 'eye', label: t('gallery.light.view.eye') },
 ];
 ---
 
@@ -31,7 +49,7 @@ const cards: [string, string][] = [
 
     <dl class="light-spec">
       {
-        cards.map(([key, value]) => (
+        specs.map(([key, value]) => (
           <div class="light-spec__row">
             <dt>{key}</dt>
             <dd>{value}</dd>
@@ -44,6 +62,7 @@ const cards: [string, string][] = [
       class="light"
       id="light"
       data-ready="false"
+      data-items={JSON.stringify(items)}
       data-label-fps={t('gallery.light.stats.fps')}
       data-label-segments={t('gallery.light.stats.segments')}
       data-label-vertices={t('gallery.light.stats.vertices')}
@@ -56,6 +75,21 @@ const cards: [string, string][] = [
         tabindex="0"
         aria-label={t('gallery.light.title')}
       ></canvas>
+
+      <div class="light__views">
+        {
+          views.map((view, index) => (
+            <button
+              class="gal-view"
+              type="button"
+              data-view={view.key}
+              aria-pressed={index === 3 ? 'true' : 'false'}
+            >
+              {view.label}
+            </button>
+          ))
+        }
+      </div>
 
       <div class="light__hud">
         <div class="light__row">

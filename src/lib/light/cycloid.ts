@@ -20,14 +20,18 @@ export const RISE = 2 * R; // 摆线矢高 = 跨度 / π
 export const APEX_H = 6.1; // 室内净高（拱顶内表面）
 export const SPRING_H = APEX_H - RISE; // 起拱线高度
 export const LENGTH = 30.48; // 拱长（100 ft）
-export const SLOT_W = 0.6; // 天窗缝宽
+export const SLOT_W = 0.61; // 天窗缝宽（2 ft）
 export const SHELL_T = 0.22; // 混凝土拱壳厚
 export const WALL_T = 0.2; // 侧墙厚
 
-/** 摆线断面的网格段数（验收项：段数越多越接近解析曲线） */
-export const PROFILE_SEGMENTS = 192;
-/** 沿拱长方向的网格段数（长度方向是直纹，分段只为阴影与顶点色过渡） */
-export const LENGTH_SEGMENTS = 96;
+/**
+ * 摆线断面的网格段数。
+ * 单拱研究时用到 192；整馆 16 拱要一起进 4096² 的阴影图，64 段已经看不出折线
+ * （矢高只有 1.94 m，弦长误差 < 0.1 mm）。
+ */
+export const PROFILE_SEGMENTS = 64;
+/** 沿拱长方向的网格段数：拱壳是直纹面，分段只为阴影过渡，8 段已够 */
+export const LENGTH_SEGMENTS = 8;
 
 export interface Pt {
   x: number;

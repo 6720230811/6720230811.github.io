@@ -618,6 +618,36 @@ body.is-immersive .gal__focus img {
   filter: grayscale(1) brightness(0.5);
 }
 
+/* 视角预设：俯视 / 横剖面 / 纵剖面 / 人视 */
+.light__views {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  border-radius: 999px;
+  background: rgba(16, 18, 22, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.light__views .gal-view {
+  color: rgba(232, 232, 230, 0.72);
+  font-size: 0.78rem;
+  padding: 0.24rem 0.7rem;
+}
+
+.light__views .gal-view:hover {
+  color: #fff;
+}
+
+.light__views .gal-view[aria-pressed='true'] {
+  color: #16181c;
+  background: #d8b26a;
+}
+
 .light__hud {
   position: absolute;
   left: 14px;

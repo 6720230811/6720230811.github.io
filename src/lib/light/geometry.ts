@@ -68,15 +68,20 @@ export function loftShell(
 
   const at = (s: number, i: number, outer: 0 | 1): number => (s * count + i) * 2 + outer;
 
-  // 索引：内表面朝室内（绕序取 t × z 的方向），外表面反过来
-  for (let s = 0; s < lengthSegments; s += 1) {
-    for (let i = 0; i < count - 1; i += 1) {
-      const a = at(s, i, 0);
-      const b = at(s, i + 1, 0);
-      const c = at(s + 1, i, 0);
-      const d = at(s + 1, i + 1, 0);
-      indices.push(a, b, d, a, d, c); // 内
-      indices.push(at(s, i, 1), at(s + 1, i + 1, 1), at(s, i + 1, 1), at(s, i, 1), at(s + 1, i, 1), at(s + 1, i + 1, 1)); // 外
+  // 索引：内表面朝室内（绕序取 t × z 的方向），外表面反过来。
+  // 先写满内表面、再写满外表面：两个表面各成一个连续的索引区间，
+  // 好让调用方用 addGroup 给内外表面挂不同材质（混凝土 / 铅铜屋面）。
+  for (let pass = 0; pass < 2; pass += 1) {
+    const outer = pass as 0 | 1;
+    for (let s = 0; s < lengthSegments; s += 1) {
+      for (let i = 0; i < count - 1; i += 1) {
+        const a = at(s, i, outer);
+        const b = at(s, i + 1, outer);
+        const c = at(s + 1, i, outer);
+        const d = at(s + 1, i + 1, outer);
+        if (outer === 0) indices.push(a, b, d, a, d, c);
+        else indices.push(a, d, b, a, c, d);
+      }
     }
   }
 
