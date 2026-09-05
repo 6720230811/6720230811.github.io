@@ -9,7 +9,9 @@
     "build": "astro build && pagefind --site dist",
     "preview": "astro preview",
     "check": "astro check",
-    "search:index": "pagefind --site dist"
+    "search:index": "pagefind --site dist",
+    "light:dev": "npm --prefix tools/kimbell-light run dev",
+    "light:check": "npm --prefix tools/kimbell-light run build"
   },
   "dependencies": {
     "astro": "^7.2.10",
