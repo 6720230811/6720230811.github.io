@@ -196,21 +196,8 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       side: THREE.DoubleSide,
     }),
   );
-  // 画布外沿那一圈极细的暗边：画布是「嵌进墙里」的，边上会有一线阴影。
-  // 只有 1.5 cm、很淡 —— 参考里画没有外框，就靠这一线把画布从墙里分出来。
-  const insetMat = track(
-    new THREE.MeshBasicMaterial({
-      color: '#3A3E44',
-      transparent: true,
-      opacity: 0.5,
-      depthWrite: false,
-      toneMapped: false,
-      side: THREE.DoubleSide,
-    }),
-  );
   const haloGeo = track(new THREE.PlaneGeometry(1, 1));
   const canvasGeo = track(new THREE.PlaneGeometry(1, 1));
-  const insetGeo = track(new THREE.PlaneGeometry(1, 1));
 
   // ---- 白墙：每段 Hilbert 墙一个 InstancedMesh ----
   // 墙面用矩形面片：宽 = 墙长，高 = 4 m，挂在 y=2（半高）处
@@ -238,20 +225,18 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   scene.add(walls);
 
   // ---- 踢脚线（深灰窄条，紧贴地面）----
-  const baseGeo = track(new THREE.BoxGeometry(1, 0.12, 0.04));
+  // 踢脚线：**居中在墙面上**（不是偏一侧）。墙是无厚度平面、且双面可见 ——
+  // 相邻两条走廊都要看到踢脚，所以让它骑在墙面上、两侧各凸出 2 cm。
+  // （之前按「墙有 0.2 m 厚」算偏移 0.12，结果整条踢脚悬在走廊里 10 cm）
+  const baseGeo = track(new THREE.BoxGeometry(1, 0.14, 0.04));
   const baseboards = new THREE.InstancedMesh(baseGeo, baseboardMat, plan.walls.length);
   for (let i = 0; i < plan.walls.length; i += 1) {
     const wall = plan.walls[i];
     const cx = (wall.a.x + wall.b.x) / 2;
     const cz = (wall.a.z + wall.b.z) / 2;
-    // 踢脚线贴在墙的走廊那一侧：从墙中心线往里挪半墙厚
-    pos.set(
-      cx - wall.normal.x * (0.1 + 0.02),
-      0.06,
-      cz - wall.normal.z * (0.1 + 0.02),
-    );
+    pos.set(cx, 0.07, cz);
     const rotation = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(0, Math.atan2(-wall.normal.x, -wall.normal.z), 0),
+      new THREE.Euler(0, Math.atan2(wall.normal.x, wall.normal.z), 0),
     );
     baseboards.setMatrixAt(i, matrix.compose(pos, rotation, scale.set(wall.length, 1, 1)));
   }
@@ -338,13 +323,11 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     halo.scale.set(art.w * 2.3, art.h * 2.3, 1);
     group.add(halo);
 
-    // 2) 凹陷暗边：比画布大 3 cm（一圈 1.5 cm），垫在画布下面露出一线
-    const inset = new THREE.Mesh(insetGeo, insetMat);
-    inset.position.z = 0.035;
-    inset.scale.set(art.w + 0.03, art.h + 0.03, 1);
-    group.add(inset);
-
-    // 3) 画布：白底（纹理到达后被替换）。不带 fog:false —— 远处也要跟着雾淡下去
+    // 2) 画布：白底（纹理到达后被替换）。
+    //    参考里画**没有任何外框** —— 之前那圈 1.5 cm 暗边是画蛇添足，
+    //    而且冷深灰压在冷灰蓝墙 + 暖白光晕上，三种色调打架。现在只留
+    //    光晕把画布从墙里托出来，画布本身不带边框。
+    //    不带 fog:false —— 远处也要跟着雾淡下去
     const picture = new THREE.Mesh(
       canvasGeo,
       new THREE.MeshBasicMaterial({ map: placeholder, toneMapped: false }),
