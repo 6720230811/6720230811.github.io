@@ -1,35 +1,30 @@
 /**
- * 展厅平面：整座金贝尔美术馆的 16 个摆线筒拱，每个拱是一间展厅。
+ * 展厅平面：Hilbert 曲线生成的一座连续展墙迷宫（48×48 m）。
  *
- * 与上一版（若干并联的厅排成一条）最大的不同：建筑真的在那儿了。
- * 16 个拱分三排（南 6、中 4、北 6）落在一个平台上，拱与拱之间：
- * - 同排相邻的两个拱：在共用的那道山墙上开门洞，沿拱长方向串起来
- * - 相邻两排之间：在填充墙上开门洞，横向串起来
- * 于是整座建筑是连通的，可以从最南一排一路走到最北一排。
+ *  整体思路是：16×16 = 256 个 cell 排成 Hilbert 曲线，相邻 cell 间都砌上墙
+ * （墙高 4 m、厚 0.2 m）。整座建筑是一条蜿蜒的走廊，沿着 Hilbert 走 256 段。
+ * 房间按策展切 N 份，每份的中点是这个房间的出生点 —— 换房间 = 传送到不
+ * 同的出生点（不是换空间）。这样每个 /gallery/[room]/ 看到的都是同一座建筑，
+ * 只是进去的地方不同。
  *
- * 每个拱挂一种策展（rooms[i % rooms.length]）：走进一个拱，URL、页面标题
- * 与 HUD 就换成它挂的那种策展；同一种策展可能挂在好几个拱上，它们的
- * SpaceSpec.roomId 相同、id 不同（id 是拱，roomId 是房间）。
+ *  walls 是 Hilbert 走过的每一段，按米坐标（× CELL）。obstacles 取每段墙的
+ *  AABB 略微膨胀（wallT/2 + 人身余量）—— 用来做行走碰撞。placements
+ *  是 N 个挂画点（循环取 gallery.items），分布在走廊一侧的墙上，间距 ≥ 1.6 m。
  *
- * 这一层刻意不 import three —— 纯数字进纯数字出，场景（floor.ts）只负责
- * 把下面的规格摆出来。
+ *  这一层刻意不 import three —— 纯数字进纯数字出，场景（floor.ts）只负责
+ *  把下面的规格摆出来。
  */
 import {
-  APEX,
-  BUILDING_X,
-  BUILDING_Z,
-  COL,
-  COLUMNS,
-  HANG_COUNT,
-  HANG_STEP,
-  HANG_Y,
-  VAULTS,
-  VAULT_LEN as VAULT_LENGTH,
-  VAULT_W,
-  WALL_SEG_LEN,
+  CELL,
+  FLO as FLO_INFO,
+  ORDER,
   WALL_T,
-  WALL_Z,
-} from '../light/layout';
+  roomSpawns,
+  spawnYaw,
+  type Pt,
+  type WallSegment,
+  generateWalls,
+} from './hilbert';
 import type { HallStyleId } from './styles';
 
 export type WallKey = 'n' | 'e' | 's' | 'w';
@@ -48,39 +43,21 @@ export interface PlanItem {
   /** 原图像素宽高，未知为 null（先按 3:2 挂，纹理来了再校正） */
   w: number | null;
   h: number | null;
-  /** 手指定的挂位：n/s = 拱南北两侧填充墙内立面，u 沿拱长 0~1，v 高度 0~1 */
+  /** 手指定位：n/s = 走廊一侧的墙，u 沿墙 0~1，v 高度 0~1 */
   place: { wall: WallKey; u: number; v: number; size?: number } | null;
-  /** 展签用：标题与相机型号 */
+  /** 展签用：标题与作者 */
   title?: string;
-  camera?: string;
+  author?: string;
 }
 
 export interface PlanRoomInput {
   id: string;
   label: string;
-  /** 形制：决定这个拱的墙面做法与画框颜色 */
+  /** 形制：决定墙面做法与画框颜色 */
   style: HallStyleId;
   items: readonly PlanItem[];
 }
 
-/** 门洞所在的墙沿哪个方向延伸：'z' = 山墙（法线沿 X），'x' = 填充墙（法线沿 Z） */
-export type WallAxis = 'x' | 'z';
-
-/** 门洞：连通两个拱，也是可行走区的桥 */
-export interface DoorSpec {
-  id: string;
-  /** 门两侧的拱 */
-  a: string;
-  b: string;
-  axis: WallAxis;
-  x: number;
-  z: number;
-  /** 门洞宽度（沿墙方向） */
-  width: number;
-  height: number;
-}
-
-/** 家具（这里是柱子）在地面上的占位（含人身余量），可行走区要绕开它 */
 export interface Obstacle {
   x1: number;
   z1: number;
@@ -95,250 +72,188 @@ export interface Placement {
   x: number;
   y: number;
   z: number;
-  /** 绕 y 轴的朝向：画心法线指向展厅内侧 */
+  /** 绕 y 轴的朝向：画心法线指向展厅内侧（走廊一侧） */
   ry: number;
   fw: number;
   fh: number;
   /** 展签文字 */
   title: string;
-  camera: string;
+  author: string;
 }
 
 export interface SpaceSpec {
-  /** 拱的 id（唯一） */
   id: string;
-  /** 挂在这个拱上的策展房间 id（同一种策展可能挂在好几个拱上） */
-  roomId: string;
   label: string;
   styleId: HallStyleId;
   rect: Rect;
-  /** 拱顶内表面高度 */
-  height: number;
   spawn: { x: number; z: number; yaw: number };
 }
 
 export interface FloorPlan {
-  spaces: SpaceSpec[];
-  doors: DoorSpec[];
-  /** 柱子占位：containsPoint 要把它们挖掉 */
+  /** 所有 Hilbert 墙段（场景用来建几何，碰撞用 obstacle） */
+  walls: WallSegment[];
+  /** 墙的 AABB 障碍物（碰撞用） */
   obstacles: Obstacle[];
+  /** N 个房间（按策展切），每个对应一段出生点 */
+  spaces: SpaceSpec[];
+  /** 全部挂画位（沿 Hilbert 一侧墙排布） */
   placements: Placement[];
-  /** 建筑包围盒，用来定相机远平面 */
+  /** 建筑包围盒 */
   bounds: Rect;
 }
 
 /** 眼睛高度：相机初始高度 */
 export const EYE_HEIGHT = 1.6;
 
-/** 门洞尺寸：2.4 m 宽、2.6 m 高（填充墙 3.2 m 高，上面留 0.6 m 过梁） */
+/** 门洞尺寸：走廊里不开门（连续开放），但空间之间靠出生点切换 */
 const DOOR_W = 2.4;
 const DOOR_H = 2.6;
 /** 人身半径：离墙这么近就走不过去了 */
 const BODY_R = 0.35;
-/** 门洞可行走区沿进深的外扩，要跨过墙厚，否则过门瞬间「哪都不在」 */
-const DOOR_DEPTH = 0.85;
-/** 画心离墙面的距离 */
-const ART_INSET = 0.13;
-/** 单件作品的最大长边 */
-const MAX_SIZE = 1.4;
+/** 挂画中心线离墙面的距离 */
+const ART_INSET = 0.06;
+/** 挂画长边（米）：走廊宽 3 m —— 画别挂太大，挡住走动 */
+const ART_LONG = 1.6;
+const MAX_SIZE = 1.6;
 const DEFAULT_ASPECT = 3 / 2;
-/** 柱子四周的人身余量 */
-const COLUMN_CLEAR = 0.3;
 
 function aspectOf(item: PlanItem): number {
   return item.w && item.h ? item.w / item.h : DEFAULT_ASPECT;
 }
-
 function boxOf(size: number, aspect: number): { fw: number; fh: number } {
   return aspect >= 1 ? { fw: size, fh: size / aspect } : { fw: size * aspect, fh: size };
 }
 
 /**
- * 一个拱的挂画位：南北两侧填充墙内立面各 HANG_COUNT 个。
- * 只有这一侧确实临着另一排（也就是有填充墙）时才有挂位。
+ * 把一段墙用它的 AABB 化作 Obstacle（稍向厚度方向膨胀一点）——
+ *  这是个近似：AABB 比真实的旋转矩形更胖，角落里会多挡一点点，但走路
+ *  不会穿墙，遇到弯道会绕过去。
  */
-function hangSlotsOf(vaultIndex: number): { x: number; z: number; ry: number; face: WallKey }[] {
-  const vault = VAULTS[vaultIndex];
-  const out: { x: number; z: number; ry: number; face: WallKey }[] = [];
-  const startX =
-    vault.x - WALL_SEG_LEN / 2 + (WALL_SEG_LEN - (HANG_COUNT - 1) * HANG_STEP) / 2;
-
-  for (const wallZ of WALL_Z) {
-    if (Math.abs(vault.z - wallZ) > 4.2) continue;
-    const normal: -1 | 1 = vault.z < wallZ ? -1 : 1;
-    // normal = -1：墙在拱的北边（墙的南面朝这个拱）；+1：墙在拱的南边
-    const face: WallKey = normal === -1 ? 'n' : 's';
-    for (let i = 0; i < HANG_COUNT; i += 1) {
-      out.push({
-        x: startX + i * HANG_STEP,
-        z: wallZ + normal * (WALL_T / 2 + ART_INSET),
-        // 画心法线指向拱内：墙在南边（normal=+1）时朝 −z
-        ry: normal === 1 ? Math.PI : 0,
-        face,
-      });
-    }
-  }
-  return out;
+function wallObstacle(wall: WallSegment, thickness: number): Obstacle {
+  const margin = thickness / 2 + BODY_R;
+  return {
+    x1: Math.min(wall.a.x, wall.b.x) - margin,
+    x2: Math.max(wall.a.x, wall.b.x) + margin,
+    z1: Math.min(wall.a.z, wall.b.z) - margin,
+    z2: Math.max(wall.a.z, wall.b.z) + margin,
+  };
 }
 
-/** 生成整层平面：16 个拱，每个拱挂一种策展 */
+/**
+ * 生成 Hilbert 画廊布局：256 段墙 + N 个房间出生点 + 挂画位。
+ */
 export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
-  const spaces: SpaceSpec[] = [];
-  const doors: DoorSpec[] = [];
-  const placements: Placement[] = [];
+  const walls = generateWalls();
+  const obstacles = walls.map((wall) => wallObstacle(wall, WALL_T));
 
-  // ---- 每个拱 = 一间展厅 ----
-  VAULTS.forEach((vault, index) => {
-    const room = rooms.length > 0 ? rooms[index % rooms.length] : undefined;
-    spaces.push({
-      id: `vault-${vault.id}`,
-      roomId: room?.id ?? '',
-      label: room?.label ?? vault.id,
-      styleId: room?.style ?? 'kimbell',
+  // 每个房间的出生点：沿 Hilbert 均匀切 N 份（rooms 与 wall 段的索引对齐）
+  const spawnPoints = roomSpawns(rooms.length, walls);
+  const spaces: SpaceSpec[] = rooms.map((room, index) => {
+    const entry = spawnPoints[index] ?? { pt: { x: 0, z: 0 }, yaw: 0 };
+    return {
+      id: room.id,
+      label: room.label,
+      styleId: room.style,
       rect: {
-        x1: vault.x - VAULT_LENGTH / 2,
-        z1: vault.z - VAULT_W / 2,
-        x2: vault.x + VAULT_LENGTH / 2,
-        z2: vault.z + VAULT_W / 2,
+        x1: FLO_INFO.min,
+        z1: FLO_INFO.min,
+        x2: FLO_INFO.max,
+        z2: FLO_INFO.max,
       },
-      height: APEX,
-      // 站在拱的西端朝东看：一眼望穿整条天窗缝
-      spawn: { x: vault.x - VAULT_LENGTH / 2 + 2, z: vault.z, yaw: -Math.PI / 2 },
-    });
+      spawn: { x: entry.pt.x, z: entry.pt.z, yaw: entry.yaw },
+    };
   });
+  void spawnYaw;
 
-  // ---- 门洞 ----
-  // 同排相邻两拱：山墙上开门（墙沿 Z 延伸，法线沿 X）
-  const byRow = new Map<string, typeof VAULTS>();
-  for (const vault of VAULTS) {
-    const list = byRow.get(vault.row) ?? [];
-    list.push(vault);
-    byRow.set(vault.row, list);
+  // 挂画：沿 Hilbert 一侧均匀分布，间隔 ≥ 1.6 m，按 rooms 的展品循环
+  const placements: Placement[] = [];
+  const items = rooms.flatMap((room) => room.items);
+  if (items.length === 0) {
+    return { walls, obstacles, spaces, placements, bounds: boundsOf(FLO_INFO.min, FLO_INFO.max) };
   }
-  for (const list of byRow.values()) {
-    for (let i = 0; i < list.length - 1; i += 1) {
-      const a = list[i];
-      const b = list[i + 1];
-      doors.push({
-        id: `door-${a.id}-${b.id}`,
-        a: `vault-${a.id}`,
-        b: `vault-${b.id}`,
-        axis: 'z',
-        x: (a.x + b.x) / 2,
-        z: a.z,
-        width: DOOR_W,
-        height: DOOR_H,
-      });
+  // 在每一段墙上挂 0 或 1 件画（挂画中心在墙中点），相邻两段之间的最小距离
+  // ≥ 1.6 m（不挨着）。沿 Hilbert 顺序均匀排
+  const placementStep = 1; // 每段墙挂一件（有些墙被跳过）
+  const usedWalls: WallSegment[] = [];
+  for (let i = 0; i < walls.length; i += placementStep) {
+    const wall = walls[i];
+    if (wall.length < 1.0) continue; // 太短的墙不挂画
+    // 跟上一件画的距离：墙段的中点 + 内法线 - 上件画位置
+    if (placements.length > 0) {
+      const last = placements[placements.length - 1];
+      const dx = last.x - (wall.a.x + wall.b.x) / 2;
+      const dz = last.z - (wall.a.z + wall.b.z) / 2;
+      if (Math.hypot(dx, dz) < 1.6) continue;
     }
-  }
-  // 相邻两排之间：填充墙上开门（墙沿 X 延伸，法线沿 Z）
-  for (let i = 0; i < VAULTS.length; i += 1) {
-    for (let j = i + 1; j < VAULTS.length; j += 1) {
-      const a = VAULTS[i];
-      const b = VAULTS[j];
-      if (a.row === b.row) continue;
-      if (Math.abs(a.x - b.x) > 0.01) continue; // 只连同一条 X 轴线上的两个拱
-      if (Math.abs(a.z - b.z) > 8) continue; // 只连相邻两排
-      doors.push({
-        id: `door-${a.id}-${b.id}`,
-        a: `vault-${a.id}`,
-        b: `vault-${b.id}`,
-        axis: 'x',
-        x: a.x,
-        z: (a.z + b.z) / 2,
-        width: DOOR_W,
-        height: DOOR_H,
-      });
-    }
+    usedWalls.push(wall);
   }
 
-  // ---- 柱子是障碍物 ----
-  const obstacles: Obstacle[] = COLUMNS.map((column) => ({
-    x1: column.x - COL / 2 - COLUMN_CLEAR,
-    x2: column.x + COL / 2 + COLUMN_CLEAR,
-    z1: column.z - COL / 2 - COLUMN_CLEAR,
-    z2: column.z + COL / 2 + COLUMN_CLEAR,
-  }));
+  usedWalls.forEach((wall, i) => {
+    const item = items[i % items.length];
+    const cx = (wall.a.x + wall.b.x) / 2;
+    const cz = (wall.a.z + wall.b.z) / 2;
+    // 墙心在 Hilbert 曲线上，墙厚 0.2 m 往两侧；画作挂在 +normal 那一侧（走
+    // 廊方向）的墙面上。nx, nz 就是 normal，画心法线与墙的 +normal 同向 →
+    // 摄像头从 +normal 侧看过来就是画作的正面。
+    const aspect = aspectOf(item);
+    const size = Math.max(0.8, item.place?.size ?? MAX_SIZE);
+    const { fw, fh } = boxOf(size, aspect);
+    const y = (item.place?.v ?? 1.55) + 0.001;
+    const ry = Math.atan2(wall.normal.x, wall.normal.z);
+    const spaceId = spaces[Math.floor((i / usedWalls.length) * spaces.length)]?.id ?? '';
 
-  // ---- 挂画 ----
-  VAULTS.forEach((vault, index) => {
-    const room = rooms.length > 0 ? rooms[index % rooms.length] : undefined;
-    if (!room || room.items.length === 0) return;
-    const slots = hangSlotsOf(index);
-    if (slots.length === 0) return;
-
-    room.items.forEach((item, i) => {
-      // 手指定的墙：'n' 北墙、's' 南墙；'e'/'w' 是山墙，不挂画，退回网格
-      const wanted = item.place?.wall;
-      const manual = wanted === 'n' || wanted === 's' ? wanted : null;
-      const pool = manual ? slots.filter((slot) => slot.face === manual) : slots;
-      const use = pool.length > 0 ? pool : slots;
-      const slot = use[i % use.length];
-      const within = Math.floor(i / use.length);
-      const u = item.place?.u ?? (within + 0.5) / Math.max(Math.ceil(use.length / HANG_COUNT), 1);
-      const size = Math.max(0.6, item.place?.size ?? MAX_SIZE);
-      const v = item.place?.v ?? (HANG_Y + size * 0.1) / APEX;
-      const { fw, fh } = boxOf(size, aspectOf(item));
-
-      placements.push({
-        id: item.id,
-        spaceId: `vault-${vault.id}`,
-        // 手指定 u 时沿拱长定位，否则落在网格挂位上
-        x: item.place ? vault.x - VAULT_LENGTH / 2 + u * VAULT_LENGTH : slot.x,
-        y: v * APEX,
-        z: slot.z,
-        ry: slot.ry,
-        fw,
-        fh,
-        title: item.title ?? '',
-        camera: item.camera ?? '',
-      });
+    placements.push({
+      id: item.id,
+      spaceId,
+      x: cx + wall.normal.x * ART_INSET,
+      y,
+      z: cz + wall.normal.z * ART_INSET,
+      ry,
+      fw,
+      fh,
+      title: item.title ?? '',
+      author: item.author ?? '',
     });
   });
 
   return {
-    spaces,
-    doors,
+    walls,
     obstacles,
+    spaces,
     placements,
-    bounds: { x1: BUILDING_X.min, z1: BUILDING_Z.min, x2: BUILDING_X.max, z2: BUILDING_Z.max },
+    bounds: boundsOf(FLO_INFO.min, FLO_INFO.max),
   };
 }
 
-/** 点落在哪个拱里（用原始矩形，墙厚算在里面） */
-export function spaceAt(plan: FloorPlan, x: number, z: number): SpaceSpec | null {
-  for (const space of plan.spaces) {
-    const { rect } = space;
-    if (x >= rect.x1 && x <= rect.x2 && z >= rect.z1 && z <= rect.z2) return space;
-  }
-  return null;
+function boundsOf(min: number, max: number): Rect {
+  return { x1: min, z1: min, x2: max, z2: max };
 }
 
-/** 能不能站在这儿：不撞柱子、在拱内（离墙 BODY_R），或在门洞里（门洞是两个拱的桥） */
+/** 离 (x, z) 最近出生点对应的房间 —— 在连续画廊里走到哪儿，「当前房间」就是
+ *  离你最近的出生点（每个出生点代表一种策展在 Hilbert 上的一段）。 */
+export function spaceAt(plan: FloorPlan, x: number, z: number): SpaceSpec | null {
+  if (plan.spaces.length === 0) return null;
+  let best = plan.spaces[0];
+  let bestDist = (x - best.spawn.x) ** 2 + (z - best.spawn.z) ** 2;
+  for (let i = 1; i < plan.spaces.length; i += 1) {
+    const d =
+      (x - plan.spaces[i].spawn.x) ** 2 + (z - plan.spaces[i].spawn.z) ** 2;
+    if (d < bestDist) {
+      best = plan.spaces[i];
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+/** 能不能站在这儿：不撞墙（在迷宫里走） */
 export function containsPoint(plan: FloorPlan, x: number, z: number): boolean {
   for (const obstacle of plan.obstacles) {
     if (x >= obstacle.x1 && x <= obstacle.x2 && z >= obstacle.z1 && z <= obstacle.z2) {
       return false;
     }
   }
-  for (const space of plan.spaces) {
-    const { rect } = space;
-    if (
-      x >= rect.x1 + BODY_R &&
-      x <= rect.x2 - BODY_R &&
-      z >= rect.z1 + BODY_R &&
-      z <= rect.z2 - BODY_R
-    ) {
-      return true;
-    }
-  }
-  for (const door of plan.doors) {
-    // 门洞是一条沿墙方向的带子：沿墙给宽度，垂直墙给进深
-    const along = door.axis === 'z' ? z - door.z : x - door.x;
-    const across = door.axis === 'z' ? x - door.x : z - door.z;
-    if (Math.abs(along) <= door.width / 2 && Math.abs(across) <= DOOR_DEPTH) return true;
-  }
-  return false;
+  return true;
 }
 
 export interface Waypoint {
@@ -346,49 +261,13 @@ export interface Waypoint {
   z: number;
 }
 
-/**
- * 从 from 走到 to 的途经点。同一个拱里直走（矩形是凸的）；跨拱就在
- * 「门洞连接成的图」上做一次 BFS —— 从南排走到北排得穿过中间那一排。
- */
-export function routeTo(plan: FloorPlan, from: Waypoint, to: Waypoint): Waypoint[] {
-  const a = spaceAt(plan, from.x, from.z);
-  const b = spaceAt(plan, to.x, to.z);
-  if (!a || !b || a.id === b.id) return [to];
-
-  const cameFrom = new Map<string, { space: string; door: DoorSpec }>();
-  const seen = new Set<string>([a.id]);
-  const queue: string[] = [a.id];
-
-  while (queue.length > 0) {
-    const current = queue.shift() as string;
-    if (current === b.id) break;
-    for (const door of plan.doors) {
-      const next = door.a === current ? door.b : door.b === current ? door.a : null;
-      if (!next || seen.has(next)) continue;
-      seen.add(next);
-      cameFrom.set(next, { space: current, door });
-      queue.push(next);
-    }
-  }
-  if (!seen.has(b.id)) return [to];
-
-  // 回溯出沿途要穿过的门
-  const route: DoorSpec[] = [];
-  let cursor = b.id;
-  while (cursor !== a.id) {
-    const step = cameFrom.get(cursor);
-    if (!step) break;
-    route.unshift(step.door);
-    cursor = step.space;
-  }
-
-  const path: Waypoint[] = route.map((door) => ({ x: door.x, z: door.z }));
-  path.push(to);
-  return path;
+/** 走直线：从 from 到 to 的途经点（没有门，直接穿 —— 在迷宫里走直线会被墙挡） */
+export function routeTo(_plan: FloorPlan, _from: Waypoint, to: Waypoint): Waypoint[] {
+  return [to];
 }
 
-/** 出生点：指定拱那一头的视角；找不到就用第一个拱 */
+/** 出生点：按 room id 找到对应房间的 spawn；找不到就用第一个房间 */
 export function spawnOf(plan: FloorPlan, spaceId: string): { x: number; z: number; yaw: number } {
-  const space = plan.spaces.find((item) => item.id === spaceId || item.roomId === spaceId);
+  const space = plan.spaces.find((item) => item.id === spaceId);
   return space?.spawn ?? plan.spaces[0].spawn;
 }

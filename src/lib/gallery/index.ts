@@ -364,9 +364,9 @@ export function mountGallery(rootEl: HTMLElement | null): void {
 
       if (where) where.textContent = `${hereLabel}：${space.label}`;
 
-      // URL 换最后一段，但用**房间** id 而不是拱 id：同一种策展可能挂在
-      // 好几个拱上，在它们之间走动时不该把地址栏换来换去
-      const slug = space.roomId || space.id;
+      // URL 换最后一段：连续画廊里没有「换厅」——space.id 就是 roomId，
+      // 走到哪儿当前房间就是离你出生点最近的那个；只有从首页点不同门才会传送到不同空间
+      const slug = space.id;
       const url = new URL(window.location.href);
       const parts = url.pathname.split('/').filter(Boolean);
       if (parts.length > 0) {
@@ -380,6 +380,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       const intro = document.getElementById('gal-room-intro');
       const room = rooms.find((item) => item.id === slug);
       if (intro && room) intro.textContent = room.intro;
+      // space.id 就是 roomId（连续画廊里没有「换厅」，房间只决定出生点）
+      void hereId;
     }
 
     function frame(now: number): void {
