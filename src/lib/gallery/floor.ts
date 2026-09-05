@@ -129,7 +129,10 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#dadde2');
-  const camera = new THREE.PerspectiveCamera(70, 1, 0.05, diagonal * 2 + 60);
+  // near 不能太小：0.05 配 195 的 far 是 ~3900:1 的近远比，深度缓冲精度不够，
+  // 接近共面的面会逐帧翻转 → 墙在闪。0.25 的近远比约 800:1，稳定得多。
+  // （碰撞系统保证人离墙 ≥ 0.35 m，near=0.25 不会穿帮）
+  const camera = new THREE.PerspectiveCamera(70, 1, 0.25, diagonal * 2 + 60);
 
   const disposables: Disposable[] = [];
   const track = <T extends Disposable>(item: T): T => {
@@ -137,22 +140,26 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     return item;
   };
 
-  // ---- 白墙偏冷一点（参考那种带蓝灰调的展墙），平顶压暗天花板 ----
-  // 参考的展墙不是纯白：略微偏蓝灰 + 顶光从天花板下来把墙打亮
+  // ---- 白墙参考那种带蓝灰调的展墙；平顶压暗（参考是「展墙亮、天花板暗」）----
+  // side 必须是 DoubleSide：墙是无厚度的平面，站在隔壁那条走廊看到的是它的
+  // 背面 —— 单面材质会被背面剔除，整面墙消失、能看穿到隔壁，一走动就忽隐忽现
+  // （之前「墙一直在闪」就是这个）。迷宫的墙两面都得是墙。
   const white = track(
     new THREE.MeshStandardMaterial({
-      color: '#E8EAEE',
+      color: '#E0E4E8',
       roughness: 0.55,
       metalness: 0,
       envMapIntensity: 0.85,
+      side: THREE.DoubleSide,
     }),
   );
   const ceilingMat = track(
     new THREE.MeshStandardMaterial({
-      color: '#9098A0',
+      color: '#7E848B',
       roughness: 0.95,
       metalness: 0,
-      envMapIntensity: 0.3,
+      envMapIntensity: 0.25,
+      side: THREE.DoubleSide,
     }),
   );
   // 地面：浅灰大理石 + 拼缝（参考那种 1.5 m 左右的方格）—— canvas 现画
@@ -171,11 +178,12 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const placeholder = track(placeholderTexture());
 
   // 画直接挂：没有外框、没有卡纸（参考的做法）—— 白画布直贴墙面、墙在画
-  // 周围被顶光打亮一圈光晕。这里用三件东西合成这个效果：
-  //   1) canvas 面：1.55 × 1.1 的白画布
-  //   2) 阴影面：画布背后略大一点的加色减淡面（凹进墙里的小阴影）
-  //   3) 光晕面：画布后更大的加色亮面（让墙在画周围被「照亮」）
-  // 不再用形制给的画框与卡纸颜色 —— 那套是金贝尔美术馆的，跟这白色展墙冲突。
+  // 周围被顶光打亮一圈光晕。用两件东西合成：
+  //   1) 光晕面：径向渐变（软边，参考那种），additive 混合，比画大一圈
+  //   2) 画布面：白底（纹理到达后被替换）
+  //
+  // 两层的 z 偏移都必须是**正的**（朝走廊一侧）：墙是一张无厚度的平面，
+  // 负 z 的层会落到墙平面上跟墙 z-fighting（之前就是这么闪的）。
   const canvasMat = track(
     new THREE.MeshStandardMaterial({
       color: '#F0F0F0',
@@ -183,28 +191,19 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       metalness: 0,
     }),
   );
-  const shadowMat = track(
-    new THREE.MeshBasicMaterial({
-      color: '#000000',
-      transparent: true,
-      opacity: 0.12,
-      depthWrite: false,
-      toneMapped: false,
-    }),
-  );
   const haloMat = track(
     new THREE.MeshBasicMaterial({
-      color: '#FFFAEC',
+      map: track(makeSoftGlow()),
       transparent: true,
-      opacity: 0.18,
+      opacity: 0.5,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       toneMapped: false,
+      side: THREE.DoubleSide,
     }),
   );
   const haloGeo = track(new THREE.PlaneGeometry(1, 1));
   const canvasGeo = track(new THREE.PlaneGeometry(1, 1));
-  const shadowGeo = track(new THREE.PlaneGeometry(1, 1));
 
   // ---- 白墙：每段 Hilbert 墙一个 InstancedMesh ----
   // 墙面用矩形面片：宽 = 墙长，高 = 4 m，挂在 y=2（半高）处
@@ -307,35 +306,29 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const aspect = placement.fw / placement.fh;
     const art = fitArt(placement.fw, placement.fh, aspect);
 
-    // 1) 光晕（additive）：挂在墙上，比画大一圈
+    // 层间距别太小：0.004 m 在几米外深度精度不够，会跟墙 z-fighting
     const halo = new THREE.Mesh(haloGeo, haloMat);
-    halo.position.z = -0.06;
-    halo.scale.set(art.w * 2.6, art.h * 2.6, 1);
+    halo.position.z = 0.02;
+    halo.scale.set(art.w * 2.3, art.h * 2.3, 1);
     group.add(halo);
 
-    // 2) 阴影：紧贴墙面、画布外一圈
-    const shade = new THREE.Mesh(shadowGeo, shadowMat);
-    shade.position.z = -0.02;
-    shade.scale.set(art.w + 0.05, art.h + 0.05, 1);
-    group.add(shade);
-
-    // 3) 画布：白底（纹理到达后被替换）
+    // 2) 画布：白底（纹理到达后被替换）
     const picture = new THREE.Mesh(
       canvasGeo,
       new THREE.MeshBasicMaterial({ map: placeholder, toneMapped: false, fog: false }),
     );
     picture.userData.id = placement.id;
-    picture.position.z = 0.01;
+    picture.position.z = 0.05;
     group.add(picture);
 
-    // 4) 标签（标题 + 作者）—— 画在纹理上、贴在画下面
+    // 3) 标签（标题 + 作者）—— 画在纹理上、贴在画下面
     const labelMap = track(wallLabelTexture(placement.title, placement.author));
     const labelMaterialForArt = track(
       new THREE.MeshBasicMaterial({ map: labelMap, transparent: true, toneMapped: false }),
     );
     const labelGeo = track(new THREE.PlaneGeometry(1, 1));
     const label = new THREE.Mesh(labelGeo, labelMaterialForArt);
-    label.position.set(0, -art.h / 2 - 0.06, 0.01);
+    label.position.set(0, -art.h / 2 - 0.07, 0.05);
     label.scale.set(0.34, 0.06, 1);
     group.add(label);
 
@@ -426,6 +419,27 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       renderer.dispose();
     },
   };
+}
+
+/** 画的软光晕：中心亮的径向渐变（参考那种「画周围一圈光」，软边） */
+function makeSoftGlow(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, 'rgba(255,252,242,0.95)');
+    g.addColorStop(0.35, 'rgba(255,250,236,0.42)');
+    g.addColorStop(0.7, 'rgba(255,248,232,0.12)');
+    g.addColorStop(1, 'rgba(255,248,232,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 /** 浅灰大理石地面，1.5 m 方格拼缝（参考那种带线缝的反射地面） */
