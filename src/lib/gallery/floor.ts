@@ -176,35 +176,56 @@ function rectOf(a: Vec2, b: Vec2): Rect {
 
 /**
  * 长廊的矩形分解：每段一块（沿段方向 4 m 宽），每个转角再补一块 4×4 的方块。
- *  相邻两块会重叠 —— 但天花/地面都是同一材质、同一高度，重叠看不出来
- *  （z-fighting 只在颜色不同时才暴露）。
+ *
+ *  转角方块必须先定下来、再从各段里挖掉：段与转角方块一样高、一样平，
+ *  叠在一起就是两片共面的面 —— 章节交界处两块颜色不同，会 z-fighting
+ *  （天花与地面在转角处整片闪色）。挖掉之后只剩边贴边，不再重叠。
+ *
+ *  转角方块用「进来那一段」的颜色：章节在转角之后才换，拐弯时颜色是渐的，
+ *  不会在转身的地方突然跳一下。
  */
 function corridorBands(): Band[] {
   const half = CORRIDOR.width / 2;
   const out: Band[] = [];
+  const corners: Rect[] = [];
+  for (let i = 1; i + 1 < CORRIDOR_PATH.length; i += 1) {
+    const p = CORRIDOR_PATH[i];
+    corners.push({ x1: p.x - half, z1: p.z - half, x2: p.x + half, z2: p.z + half });
+  }
+
   for (let i = 0; i + 1 < CORRIDOR_PATH.length; i += 1) {
     const a = CORRIDOR_PATH[i];
     const b = CORRIDOR_PATH[i + 1];
     const horizontal = Math.abs(a.z - b.z) < 1e-6;
-    out.push({
-      x1: horizontal ? Math.min(a.x, b.x) : a.x - half,
-      x2: horizontal ? Math.max(a.x, b.x) : a.x + half,
-      z1: horizontal ? a.z - half : Math.min(a.z, b.z),
-      z2: horizontal ? a.z + half : Math.max(a.z, b.z),
-      zone: corridorZone(nearestArc((a.x + b.x) / 2, (a.z + b.z) / 2)),
-      along: horizontal ? 'x' : 'z',
-    });
+    const zone = corridorZone(nearestArc((a.x + b.x) / 2, (a.z + b.z) / 2));
+    const along: Band['along'] = horizontal ? 'x' : 'z';
+    let pieces: Rect[] = [
+      {
+        x1: horizontal ? Math.min(a.x, b.x) : a.x - half,
+        x2: horizontal ? Math.max(a.x, b.x) : a.x + half,
+        z1: horizontal ? a.z - half : Math.min(a.z, b.z),
+        z2: horizontal ? a.z + half : Math.max(a.z, b.z),
+      },
+    ];
+    for (const corner of corners) {
+      pieces = pieces.flatMap((piece) => subtract(piece, corner));
+    }
+    for (const piece of pieces) {
+      out.push({ x1: piece.x1, z1: piece.z1, x2: piece.x2, z2: piece.z2, zone, along });
+    }
   }
+
   // 转角：补一块 4×4，把两段之间的方角填上
   for (let i = 1; i + 1 < CORRIDOR_PATH.length; i += 1) {
     const p = CORRIDOR_PATH[i];
+    const prev = CORRIDOR_PATH[i - 1];
     out.push({
       x1: p.x - half,
-      x2: p.x + half,
       z1: p.z - half,
+      x2: p.x + half,
       z2: p.z + half,
-      zone: corridorZone(nearestArc(p.x, p.z)),
-      along: Math.abs(CORRIDOR_PATH[i].x - CORRIDOR_PATH[i - 1].x) < 1e-6 ? 'z' : 'x',
+      zone: corridorZone(nearestArc((p.x + prev.x) / 2, (p.z + prev.z) / 2)),
+      along: Math.abs(p.x - prev.x) < 1e-6 ? 'z' : 'x',
     });
   }
   return out;
@@ -489,6 +510,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     return material;
   };
 
+  /** 所有地面块：点地面走过去要对它们整体做射线检测 */
+  const floorMeshes: THREE.Mesh[] = [];
+
   /** 铺一块地面：共用的 1×1 plane，靠 scale 撑到实际尺寸 */
   const addFloor = (band: Band, y: number): void => {
     const width = band.x2 - band.x1;
@@ -499,31 +523,45 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     mesh.position.set((band.x1 + band.x2) / 2, y, (band.z1 + band.z2) / 2);
     mesh.userData.isFloor = true;
     scene.add(mesh);
-    if (y === 0) floorPick = mesh;
+    // 每一块都收进「点地面走过去」的射线目标：只收其中一块的话，
+    // 点到别的段落就没反应（房间地面、支廊都得能点）
+    floorMeshes.push(mesh);
   };
 
-  let floorPick: THREE.Mesh | null = null;
   for (const band of corridor) addFloor(band, 0);
   for (const band of branchBands) addFloor(band, 0.005);
+  /**
+   * 房间：各铺一块。中央大厅与潮汐之间的矩形有 1×2 m 的一小块重叠，
+   *  两块地面同高会闪、两块天花高度不同会在厅里压出一块低顶 ——
+   *  后铺的把重叠处让给先铺的，谁也不叠谁。
+   */
+  const roomPieces: Rect[] = [];
+  const roomRects = (rect: Rect): Rect[] => {
+    let pieces = [rect];
+    for (const taken of roomPieces) pieces = pieces.flatMap((piece) => subtract(piece, taken));
+    return pieces;
+  };
   for (const room of ROOMS) {
-    addFloor(
-      {
-        x1: room.rect.x1,
-        z1: room.rect.z1,
-        x2: room.rect.x2,
-        z2: room.rect.z2,
-        zone: room.id,
-        along: 'x',
-      },
-      0.01,
-    );
+    const pieces = roomRects(room.rect);
+    roomPieces.push(room.rect);
+    for (const piece of pieces) {
+      addFloor(
+        { x1: piece.x1, z1: piece.z1, x2: piece.x2, z2: piece.z2, zone: room.id, along: 'x' },
+        0.01,
+      );
+    }
   }
 
-  /** 铺一块天花：长廊的要先挖掉房间（房间的顶比长廊高） */
+  /** 铺一块天花：长廊的要先挖掉房间（房间的顶比长廊高）和支廊（支廊顶与长廊
+   *  同高 3.6 m，两片共面照样会闪，长廊把那块让给支廊） */
+  const ceilingHoles: Rect[] = [
+    ...roomHoles,
+    ...branchBands.map((band) => ({ x1: band.x1, z1: band.z1, x2: band.x2, z2: band.z2 })),
+  ];
   const addCeiling = (band: Band): void => {
     const mats = zoneMats.get(band.zone) ?? fallback;
     let pieces: Rect[] = [{ x1: band.x1, z1: band.z1, x2: band.x2, z2: band.z2 }];
-    for (const hole of roomHoles) {
+    for (const hole of ceilingHoles) {
       pieces = pieces.flatMap((piece) => subtract(piece, hole));
     }
     for (const piece of pieces) {
@@ -537,17 +575,23 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   for (const band of corridor) addCeiling(band);
   for (const band of branchBands) addCeiling(band);
   // 房间：各按自己的净高铺一块（比长廊高，是空间层次的主要来源）
+  const ceilingPieces: Rect[] = [];
   for (const room of ROOMS) {
     const mats = zoneMats.get(room.id) ?? fallback;
-    const mesh = new THREE.Mesh(unitPlane, mats.ceiling);
-    mesh.rotation.x = Math.PI / 2;
-    mesh.scale.set(room.rect.x2 - room.rect.x1, room.rect.z2 - room.rect.z1, 1);
-    mesh.position.set(
-      (room.rect.x1 + room.rect.x2) / 2,
-      zoneSpec(room.id).ceiling,
-      (room.rect.z1 + room.rect.z2) / 2,
-    );
-    scene.add(mesh);
+    let pieces = [room.rect];
+    for (const taken of ceilingPieces) pieces = pieces.flatMap((piece) => subtract(piece, taken));
+    ceilingPieces.push(room.rect);
+    for (const piece of pieces) {
+      const mesh = new THREE.Mesh(unitPlane, mats.ceiling);
+      mesh.rotation.x = Math.PI / 2;
+      mesh.scale.set(piece.x2 - piece.x1, piece.z2 - piece.z1, 1);
+      mesh.position.set(
+        (piece.x1 + piece.x2) / 2,
+        zoneSpec(room.id).ceiling,
+        (piece.z1 + piece.z2) / 2,
+      );
+      scene.add(mesh);
+    }
   }
 
   // ---- 章节分界的铜灰嵌条：只放在分区交界那一线，不铺满地面 ----
@@ -652,12 +696,17 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const along = (at: number): { x: number; z: number } =>
       horizontal ? { x: door.x + at, z: door.z } : { x: door.x, z: door.z + at };
 
-    // 门楣：门洞是整层高的口子，门楣把门顶到天花之间那截补成墙
-    const lintelHeight = Math.max(0.05, ceiling - door.height);
+    // 门楣：门洞是整层高的口子，门楣把门顶到天花之间那截补成墙。
+    //  顶端故意顶过天花 5 cm：墙材质是 DoubleSide，门楣顶面要是正好落在天花
+    //  平面上，两个面共面会 z-fighting —— 天花色与墙色交替闪。顶过头的那截
+    //  被天花挡在后面，看不见。
+    // 底面也要让开：序厅那道 3.4 m 的门正好等于它的净高，门楣底面会与天花共面
+    const lintelBottom = Math.min(door.height, ceiling - 0.03);
+    const lintelHeight = Math.max(0.1, ceiling + 0.05 - lintelBottom);
     boxJobs.push({
       material: mats.wall,
       x: door.x,
-      y: door.height + lintelHeight / 2,
+      y: lintelBottom + lintelHeight / 2,
       z: door.z,
       w: door.width + 0.4,
       h: lintelHeight,
@@ -679,10 +728,11 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
         yaw,
       });
     }
+    // 底面比门楣低 1 cm：两个底面同高同样会闪，让门套的底面压在下面
     boxJobs.push({
       material: jambMat,
       x: door.x,
-      y: door.height + JAMB.width / 2,
+      y: door.height + JAMB.width / 2 - 0.01,
       z: door.z,
       w: door.width + JAMB.width * 2,
       h: JAMB.width,
@@ -1044,8 +1094,8 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
           slot: Number(artHit.object.userData.slot ?? -1),
         };
       }
-      if (floorPick) {
-        const floorHit = raycaster.intersectObject(floorPick, false)[0];
+      if (floorMeshes.length > 0) {
+        const floorHit = raycaster.intersectObjects(floorMeshes, false)[0];
         if (floorHit) return { kind: 'floor', x: floorHit.point.x, z: floorHit.point.z };
       }
       return null;
