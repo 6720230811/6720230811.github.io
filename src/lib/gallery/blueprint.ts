@@ -148,6 +148,13 @@ export interface Zone {
   };
   /** 可移动展墙的正 / 反 / 主题三色（临展厅） */
   screen?: { front: string; back: string; theme: string };
+  /**
+   * 墙脚 / 墙顶的内凹阴影缝（米）。
+   *  规格不要凸出的粗踢脚线：墙脚一律 50 mm 内凹暗缝；
+   *  只有深色天花那一圈再留 30 mm 顶缝（让天花显得悬浮）。
+   *  沉浸展厅例外：不设踢脚，墙地交接 20 mm。
+   */
+  trim?: { base?: number; top?: number };
   ceilingColor: string;
   floorColor: string;
   /** 地面大模块尺寸（米） */
@@ -331,6 +338,8 @@ export const ZONES: Zone[] = [
     floorColor: '#292C2D',
     floorModule: [2.4, 2.4],
     kind: 'room',
+    // 不设踢脚线：墙地交接只留 20 mm 内凹缝；天花也是深色的，顶上同样留缝
+    trim: { base: 0.02, top: 0.03 },
   },
   {
     id: 'large',
@@ -341,6 +350,8 @@ export const ZONES: Zone[] = [
     accentRatio: 0.2,
     // 两条平行黑色轨道灯槽：作品灯那一档 4000 K
     slot: { width: 0.16, kelvin: 4000 },
+    // 墙与深色天花之间那道 30 mm 缝：天花看着像浮着
+    trim: { base: 0.05, top: 0.03 },
     ceilingColor: '#363837',
     floorColor: '#5B574F',
     floorModule: [2, 2],

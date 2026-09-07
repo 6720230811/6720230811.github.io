@@ -37,8 +37,12 @@ import {
 } from './surfaces';
 import type { FloorPlan, Placement, WallSegment } from './plan';
 
-/** 踢脚线：高 0.075 m、厚 0.025 m、颜色 #3F413E（规格） */
-const TRIM = { height: 0.075, thickness: 0.025, color: '#3F413E' } as const;
+/**
+ * 墙脚 / 墙顶的阴影缝。规格不要凸出的粗踢脚线：
+ *  墙脚 50 mm 内凹暗缝（沉浸厅 20 mm、不设踢脚），深色天花那一圈再留 30 mm 顶缝。
+ *  缝是画在墙面前的暗色面片（离墙 12 mm，不反光），不是凸出来的板。
+ */
+const TRIM = { base: 0.05, gap: 0.012, color: '#232726' } as const;
 /** 门套：深 0.22 m（拱券 0.25）、宽 0.12 m、颜色 #3E4140 */
 const JAMB = { width: 0.12, color: '#3E4140' } as const;
 /** 灯槽：宽 0.2 m，向主挂画墙偏 0.7 m，每 10 m 断 1.5 m（规格 8–12 m） */
@@ -404,9 +408,15 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   }
   const fallback = zoneMats.get('night') ?? [...zoneMats.values()][0];
 
-  const trimMat = track(
-    new THREE.MeshStandardMaterial({ color: TRIM.color, roughness: 0.65, metalness: 0 }),
-  );
+  /** 阴影缝的暗色材质：按颜色共用一份（内凹的缝不反光，用 basic 材质） */
+  const gapMats = new Map<string, THREE.MeshBasicMaterial>();
+  const gapMaterial = (color: string): THREE.MeshBasicMaterial => {
+    const cached = gapMats.get(color);
+    if (cached) return cached;
+    const material = track(new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+    gapMats.set(color, material);
+    return material;
+  };
   const jambMat = track(
     new THREE.MeshStandardMaterial({ color: JAMB.color, roughness: 0.6, metalness: 0 }),
   );
@@ -529,8 +539,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     else revealByColor.set(job.color, [job]);
   }
   for (const [color, jobs] of revealByColor) {
-    // 内凹的缝自己不反光：用 basic 材质，颜色就是缝的暗色
-    const material = track(new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+    const material = gapMaterial(color);
     const mesh = new THREE.InstancedMesh(revealGeo, material, jobs.length);
     jobs.forEach((job, i) => {
       pos.set(job.x, REVEAL_BOTTOM + job.height / 2, job.z);
@@ -593,20 +602,46 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     themedZones.add(wall.zone);
   }
 
-  // ---- 踢脚线：骑在墙面上，两侧都看得见 ----
-  const baseGeo = track(new THREE.BoxGeometry(1, TRIM.height, TRIM.thickness));
-  const baseboards = new THREE.InstancedMesh(baseGeo, trimMat, plan.walls.length);
-  plan.walls.forEach((wall, i) => {
-    pos.set((wall.a.x + wall.b.x) / 2, TRIM.height / 2, (wall.a.z + wall.b.z) / 2);
-    euler.set(0, Math.atan2(wall.normal.x, wall.normal.z), 0);
-    quat.setFromEuler(euler);
-    baseboards.setMatrixAt(i, matrix.compose(pos, quat, scale.set(wall.length, 1, 1)));
-  });
-  baseboards.instanceMatrix.needsUpdate = true;
-  baseboards.userData.isWall = true;
-  scene.add(baseboards);
-  disposables.push(baseboards);
-  blockers.push(baseboards);
+  // ---- 墙脚 / 墙顶的横向阴影缝 ----
+  //  墙段本来就在门洞处断开（walls.ts 的 splitByGaps），所以缝不会跨过门洞 ——
+  //  规格特意交代了这一条。
+  interface TrimGap {
+    x: number;
+    z: number;
+    yaw: number;
+    length: number;
+    y: number;
+    height: number;
+  }
+  const trims: TrimGap[] = [];
+  for (const wall of plan.walls) {
+    // 可移动展墙自己有正反面，不在这儿加缝
+    if (wall.kind === 'partition' && zoneSpec(wall.zone).screen) continue;
+    const own = zoneSpec(wall.zone).trim;
+    const base = own?.base ?? TRIM.base;
+    const top = own?.top ?? 0;
+    if (base <= 0 && top <= 0) continue;
+
+    const inward = { x: -wall.normal.x, z: -wall.normal.z };
+    const x = (wall.a.x + wall.b.x) / 2 + inward.x * TRIM.gap;
+    const z = (wall.a.z + wall.b.z) / 2 + inward.z * TRIM.gap;
+    const yaw = Math.atan2(inward.x, inward.z);
+    if (base > 0) trims.push({ x, z, yaw, length: wall.length, y: base / 2, height: base });
+    if (top > 0) {
+      trims.push({ x, z, yaw, length: wall.length, y: wall.height - top / 2, height: top });
+    }
+  }
+  if (trims.length > 0) {
+    const mesh = new THREE.InstancedMesh(revealGeo, gapMaterial(TRIM.color), trims.length);
+    trims.forEach((job, i) => {
+      pos.set(job.x, job.y, job.z);
+      quat.setFromEuler(euler.set(0, job.yaw, 0));
+      mesh.setMatrixAt(i, matrix.compose(pos, quat, scale.set(job.length, job.height, 1)));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+    disposables.push(mesh);
+  }
 
   // ---- 地面与天花：长廊按「段 + 转角」铺，房间各铺一块 ----
   const roomHoles = ROOMS.map((room) => room.rect);
