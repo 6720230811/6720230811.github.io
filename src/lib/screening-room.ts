@@ -410,9 +410,9 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   const sofaMaterial = track(new THREE.MeshStandardMaterial({ color: '#81766b', roughness: 1 }));
   const sofaBaseMaterial = track(new THREE.MeshStandardMaterial({ color: '#5f5148', roughness: 0.98 }));
   const cushionMaterial = track(new THREE.MeshStandardMaterial({ color: '#4f5848', roughness: 1 }));
-  const accentMaterial = track(new THREE.MeshStandardMaterial({ color: '#35372f', roughness: 0.98 }));
   const carpetTexture = track(makeCarpetTexture(renderer));
   const floorMaterial = track(new THREE.MeshStandardMaterial({ map: carpetTexture, color: '#504a45', roughness: 1 }));
+  const textureLoader = new THREE.TextureLoader();
 
   // Room shell: 9.6 × 8.5 × 3.8 m, with a floating acoustic ceiling.
   addBox([9.6, 0.12, 8.5], [0, -0.06, -0.75], floorMaterial);
@@ -426,8 +426,37 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   addBox([0.06, 0.08, 8.1], [-4.66, 0.08, -0.75], trimMaterial);
   addBox([0.06, 0.08, 8.1], [4.66, 0.08, -0.75], trimMaterial);
 
-  // Acoustic panels and partial walnut slats keep both side walls legible in low light.
-  for (const z of [-2.8, -1.15, 0.5, 2.15]) addBox([0.09, 1.55, 1.18], [-4.66, 1.92, z], accentMaterial);
+  // Framed gallery works on the left; partial walnut slats keep the opposite wall legible in low light.
+  const framePositions = [-2.8, -1.15, 0.5, 2.15];
+  framePositions.forEach((z, index) => {
+    addBox([0.11, 1.7, 1.34], [-4.66, 1.92, z], trimMaterial);
+    const pictureMaterial = track(new THREE.MeshStandardMaterial({ color: '#d8d0c5', roughness: 0.88 }));
+    const picture = new THREE.Mesh(track(new THREE.PlaneGeometry(1.18, 1.54)), pictureMaterial);
+    picture.position.set(-4.6, 1.92, z);
+    picture.rotation.y = Math.PI / 2;
+    scene.add(picture);
+
+    const item = galleryItems[index % galleryItems.length];
+    if (!item) return;
+    textureLoader.load(item.src, (texture) => {
+      const image = texture.image as { naturalWidth?: number; naturalHeight?: number; width?: number; height?: number } | undefined;
+      const width = image?.naturalWidth ?? image?.width ?? 1;
+      const height = image?.naturalHeight ?? image?.height ?? 1;
+      const imageAspect = width / height;
+      const frameAspect = 1.18 / 1.54;
+      if (imageAspect > frameAspect) {
+        texture.repeat.x = frameAspect / imageAspect;
+        texture.offset.x = (1 - texture.repeat.x) / 2;
+      } else {
+        texture.repeat.y = imageAspect / frameAspect;
+        texture.offset.y = (1 - texture.repeat.y) / 2;
+      }
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      pictureMaterial.map = track(texture);
+      pictureMaterial.needsUpdate = true;
+    });
+  });
   for (let z = 0.5; z <= 3; z += 0.22) addBox([0.09, 2.5, 0.08], [4.66, 1.75, z], woodMaterial);
 
   const screenStandby = makeStandbyTexture(locale === 'zh' ? '暮色放映室' : 'Twilight Screening Room');
@@ -575,7 +604,6 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   const pickables: THREE.Object3D[] = [projectorBody, lensBarrel, ...buttonHitAreas];
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  const textureLoader = new THREE.TextureLoader();
   const textureCache = new Map<string, THREE.Texture>();
   let machine: MachineState = 'off';
   let machineChangedAt = performance.now();
