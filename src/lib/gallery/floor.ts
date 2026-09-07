@@ -30,6 +30,7 @@ import {
   ceilingTexture,
   environmentTexture,
   floorModuleTexture,
+  microCementTexture,
   mineralTexture,
   placeholderFrameTexture,
   planPanelTexture,
@@ -448,10 +449,12 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     const cached = wallMats.get(key);
     if (cached) return cached;
     const color = tint ?? zoneSpec(zoneId).wall;
+    // 左墙（sideWalls.left）走微水泥：更细腻、roughness 0.87；其余是矿物灰泥
+    const cement = tint !== undefined && tint === zoneSpec(zoneId).sideWalls?.left;
     const material = track(
       new THREE.MeshStandardMaterial({
-        map: track(mineralTexture(color)),
-        roughness: 0.92,
+        map: track(cement ? microCementTexture(color) : mineralTexture(color)),
+        roughness: cement ? 0.87 : 0.92,
         metalness: 0,
         envMapIntensity: 0.45,
         side: THREE.DoubleSide,
@@ -1136,6 +1139,26 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     slots.instanceMatrix.needsUpdate = true;
     scene.add(slots);
     disposables.push(slots);
+  }
+
+  // ---- 端景墙顶部的隐藏式洗墙灯槽（城市、慢门） ----
+  //  贴着天花、离墙 0.95 m 的一条窄光带（规格：洗墙灯离墙 0.9–1.1 m），
+  //  光落在端景墙那件主作品上，槽本身藏在视线之上。
+  for (const index of accentSet) {
+    const wall = plan.walls[index];
+    if (wall.kind === 'partition' || !zoneSpec(wall.zone).wash) continue;
+    const inward = { x: -wall.normal.x, z: -wall.normal.z };
+    const dir = { x: (wall.b.x - wall.a.x) / wall.length, z: (wall.b.z - wall.a.z) / wall.length };
+    const mesh = new THREE.Mesh(slotGeo, slotMaterial(wall.zone));
+    mesh.position.set(
+      (wall.a.x + wall.b.x) / 2 + inward.x * LIGHT.washerDistance,
+      zoneSpec(wall.zone).ceiling - 0.06,
+      (wall.a.z + wall.b.z) / 2 + inward.z * LIGHT.washerDistance,
+    );
+    quat.setFromEuler(euler.set(0, Math.atan2(dir.x, dir.z), 0)).multiply(flatQuat);
+    mesh.quaternion.copy(quat);
+    mesh.scale.set(0.1, wall.length, 1);
+    scene.add(mesh);
   }
 
   // ---- 门洞：门楣（墙材质）+ 门套（深色）+ 中央/沉浸的浅拱券 ----

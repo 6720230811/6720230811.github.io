@@ -158,6 +158,7 @@ function polylineWalls(
   side: 1 | -1,
   info: { heightOf: (mid: Vec2) => number; kind: WallSegment['kind'] },
   zoneOf: (mid: Vec2) => ZoneId,
+  tintOf?: (mid: Vec2, side: 1 | -1) => string | undefined,
 ): WallSegment[] {
   const out: WallSegment[] = [];
   for (let i = 0; i + 1 < path.length; i += 1) {
@@ -176,6 +177,7 @@ function polylineWalls(
       height: info.heightOf({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }),
       zone: zoneOf({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }),
       kind: info.kind,
+      tint: tintOf?.({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, side),
     });
   }
   return out;
@@ -441,6 +443,12 @@ export function buildWalls(): BuildResult {
         // 墙高跟着章节净高走：自然 3.8、光影 4.0 —— 墙不跟到顶，墙顶与天花之间会漏光
         { heightOf: (mid) => zone(corridorZoneAt(nearestArc(mid.x, mid.z))).ceiling, kind: 'base' },
         (mid) => corridorZoneAt(nearestArc(mid.x, mid.z)),
+        // 左右墙可以各一色（城市长廊：左微水泥、右矿物灰泥）。
+        // side = +1 时墙芯在右手边，也就是人站在长廊里时的左墙。
+        (mid, wallSide) => {
+          const own = zone(corridorZoneAt(nearestArc(mid.x, mid.z))).sideWalls;
+          return own?.[wallSide === 1 ? 'left' : 'right'];
+        },
       ),
     );
   }

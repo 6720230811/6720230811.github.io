@@ -149,6 +149,14 @@ export interface Zone {
   /** 可移动展墙的正 / 反 / 主题三色（临展厅） */
   screen?: { front: string; back: string; theme: string };
   /**
+   * 长廊左右两面的墙色（按前进方向分左右）。
+   *  城市长廊：左墙暖混凝土灰 + 微水泥，右墙暖矿物灰泥且比左墙亮，
+   *  作品数量也左多右少 —— 规格要的就是这种不对称的节奏。
+   */
+  sideWalls?: { left?: string; right?: string };
+  /** 端景墙（转角正对那面）顶部藏一道洗墙灯槽 */
+  wash?: boolean;
+  /**
    * 墙脚 / 墙顶的内凹阴影缝（米）。
    *  规格不要凸出的粗踢脚线：墙脚一律 50 mm 内凹暗缝；
    *  只有深色天花那一圈再留 30 mm 顶缝（让天花显得悬浮）。
@@ -208,8 +216,13 @@ export const ZONES: Zone[] = [
     label: { zh: '城市长廊', en: 'City Corridor' },
     ceiling: 3.6,
     wall: '#E8E4DC',
-    accent: '#B8AEA1',
+    // 端景墙：烟熏蓝灰（规格：给有灯光、建筑、夜景元素的那件主作品当背景）
+    accent: '#364852',
     accentRatio: 0.26,
+    // 左墙暖混凝土灰（微水泥）、右墙暖矿物灰泥且比左墙亮
+    sideWalls: { left: '#AEA69B', right: '#D7D0C4' },
+    // 端景墙顶部藏一道洗墙灯槽
+    wash: true,
     // 8–10 m 一道 8 mm 青铜竖向分缝
     reveal: { color: '#896A47', width: 0.008, spacing: [8, 10] },
     // 两段错位线性光槽，3200 K，城市道路那种节奏（不要霓虹）
@@ -269,6 +282,8 @@ export const ZONES: Zone[] = [
     accentRatio: 0.24,
     // 较窄的中性光槽，3600–3800 K
     slot: { width: 0.18, kelvin: 3700 },
+    // 端景墙：隐藏式顶光（规格还有两盏窄角射灯，那是作品灯的活儿）
+    wash: true,
     // 暗顶：光槽亮度由入口向沉浸展厅逐渐降低
     ceilingColor: '#283338',
     trim: { top: 0.03 },

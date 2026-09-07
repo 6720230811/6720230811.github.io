@@ -746,6 +746,31 @@ export function mineralTexture(base = '#E8E4DC'): THREE.CanvasTexture {
   });
 }
 
+/**
+ * 微水泥：比矿物灰泥更细腻、带一点抹刀压出来的云斑。
+ *  规格给城市长廊左墙的是「细腻微水泥或矿物涂层」，颗粒要更细、不能有大抹痕 ——
+ *  墙上是连续的城市摄影，肌理越安静越好。
+ */
+export function microCementTexture(base = '#AEA69B'): THREE.CanvasTexture {
+  return paint(256, 256, (ctx, w, h) => {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    // 云斑：几团极淡的深浅，模拟抹刀收光留下的不均匀
+    for (let i = 0; i < 26; i += 1) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      const r = 24 + Math.random() * 60;
+      const light = Math.random() > 0.5;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, light ? 'rgba(255,255,255,0.030)' : 'rgba(0,0,0,0.026)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    grain(ctx, w, h, 0.022, 1);
+  });
+}
+
 /** 平整连续顶面：比墙亮一档、颗粒更细（长廊天花 #F1EEE7，roughness 0.95） */
 export function ceilingTexture(base = '#F1EEE7'): THREE.CanvasTexture {
   return paint(128, 128, (ctx, w, h) => {
