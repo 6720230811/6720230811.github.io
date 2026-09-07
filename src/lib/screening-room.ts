@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 type MachineState = 'off' | 'starting' | 'ready' | 'playing' | 'paused' | 'cooling';
 type ViewMode = 'seat' | 'projector';
@@ -358,8 +359,8 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#0e1214');
-  scene.fog = new THREE.FogExp2('#101619', 0.025);
+  scene.background = new THREE.Color('#100e0d');
+  scene.fog = new THREE.FogExp2('#171310', 0.024);
   const camera = new THREE.PerspectiveCamera(58, 1, 0.08, 40);
   const seatPose = makePose(new THREE.Vector3(0, 1.2, 1.72), new THREE.Vector3(0, 2.03, -4.86));
   const projectorPose = makePose(new THREE.Vector3(3.15, 2.24, 2.15), new THREE.Vector3(2.35, 1.42, 0.42));
@@ -384,17 +385,34 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     return mesh;
   };
 
-  const wallMaterial = track(new THREE.MeshStandardMaterial({ color: '#171c22', roughness: 0.94 }));
-  const warmWallMaterial = track(new THREE.MeshStandardMaterial({ color: '#24211f', roughness: 0.96 }));
-  const ceilingMaterial = track(new THREE.MeshStandardMaterial({ color: '#121619', roughness: 0.97 }));
-  const trimMaterial = track(new THREE.MeshStandardMaterial({ color: '#0b0d0e', roughness: 0.88 }));
-  const woodMaterial = track(new THREE.MeshStandardMaterial({ color: '#40352f', roughness: 0.72 }));
-  const metalMaterial = track(new THREE.MeshStandardMaterial({ color: '#303638', roughness: 0.48, metalness: 0.56 }));
-  const blackMetalMaterial = track(new THREE.MeshStandardMaterial({ color: '#121719', roughness: 0.38, metalness: 0.72 }));
-  const sofaMaterial = track(new THREE.MeshStandardMaterial({ color: '#56313c', roughness: 0.96 }));
-  const accentMaterial = track(new THREE.MeshStandardMaterial({ color: '#482b35', roughness: 0.98 }));
+  const addRoundedBox = (
+    size: [number, number, number],
+    position: [number, number, number],
+    material: THREE.Material,
+    parent: THREE.Object3D,
+    radius = 0.12,
+  ): THREE.Mesh => {
+    const mesh = new THREE.Mesh(track(new RoundedBoxGeometry(...size, 4, radius)), material);
+    mesh.position.set(...position);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+  };
+
+  const wallMaterial = track(new THREE.MeshStandardMaterial({ color: '#211f1d', roughness: 0.96 }));
+  const warmWallMaterial = track(new THREE.MeshStandardMaterial({ color: '#2b2520', roughness: 0.98 }));
+  const ceilingMaterial = track(new THREE.MeshStandardMaterial({ color: '#151412', roughness: 0.98 }));
+  const trimMaterial = track(new THREE.MeshStandardMaterial({ color: '#12100f', roughness: 0.9 }));
+  const woodMaterial = track(new THREE.MeshStandardMaterial({ color: '#4a3326', roughness: 0.76 }));
+  const metalMaterial = track(new THREE.MeshStandardMaterial({ color: '#34312f', roughness: 0.5, metalness: 0.52 }));
+  const blackMetalMaterial = track(new THREE.MeshStandardMaterial({ color: '#171615', roughness: 0.4, metalness: 0.68 }));
+  const sofaMaterial = track(new THREE.MeshStandardMaterial({ color: '#81766b', roughness: 1 }));
+  const sofaBaseMaterial = track(new THREE.MeshStandardMaterial({ color: '#5f5148', roughness: 0.98 }));
+  const cushionMaterial = track(new THREE.MeshStandardMaterial({ color: '#4f5848', roughness: 1 }));
+  const accentMaterial = track(new THREE.MeshStandardMaterial({ color: '#35372f', roughness: 0.98 }));
   const carpetTexture = track(makeCarpetTexture(renderer));
-  const floorMaterial = track(new THREE.MeshStandardMaterial({ map: carpetTexture, color: '#77706c', roughness: 1 }));
+  const floorMaterial = track(new THREE.MeshStandardMaterial({ map: carpetTexture, color: '#504a45', roughness: 1 }));
 
   // Room shell: 9.6 × 8.5 × 3.8 m, with a floating acoustic ceiling.
   addBox([9.6, 0.12, 8.5], [0, -0.06, -0.75], floorMaterial);
@@ -423,15 +441,33 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   addBox([0.12, 3.2, 0.12], [-2.69, 2.05, -4.88], trimMaterial);
   addBox([0.12, 3.2, 0.12], [2.69, 2.05, -4.88], trimMaterial);
 
-  // Low sofa; its arms remain just inside the seated field of view.
+  // Low, softly rounded lounge sofa; split cushions and a raked back keep it from reading as a rigid block.
   const sofa = new THREE.Group();
   sofa.position.set(-0.15, 0, 2.05);
   scene.add(sofa);
-  const seat = addBox([2.85, 0.34, 0.92], [0, 0.54, -0.12], sofaMaterial, sofa);
-  addBox([2.95, 0.86, 0.3], [0, 0.88, 0.42], sofaMaterial, sofa);
-  addBox([0.42, 0.72, 1.35], [-1.15, 0.65, -0.9], sofaMaterial, sofa);
-  addBox([0.42, 0.72, 1.35], [1.15, 0.65, -0.9], sofaMaterial, sofa);
-  seat.castShadow = true;
+  addRoundedBox([3.42, 0.3, 1.24], [0, 0.38, 0], sofaBaseMaterial, sofa, 0.14);
+  const sofaBack = addRoundedBox([3.28, 0.82, 0.38], [0, 0.93, 0.43], sofaBaseMaterial, sofa, 0.17);
+  sofaBack.rotation.x = -0.08;
+  addRoundedBox([0.5, 0.64, 1.18], [-1.47, 0.69, -0.02], sofaMaterial, sofa, 0.2);
+  addRoundedBox([0.5, 0.64, 1.18], [1.47, 0.69, -0.02], sofaMaterial, sofa, 0.2);
+
+  const seat = new THREE.Group();
+  sofa.add(seat);
+  addRoundedBox([1.42, 0.25, 1.02], [-0.75, 0.65, -0.1], sofaMaterial, seat, 0.11);
+  addRoundedBox([1.42, 0.25, 1.02], [0.75, 0.65, -0.1], sofaMaterial, seat, 0.11);
+  const leftBackCushion = addRoundedBox([1.4, 0.68, 0.3], [-0.73, 1.08, 0.2], sofaMaterial, sofa, 0.13);
+  const rightBackCushion = addRoundedBox([1.4, 0.68, 0.3], [0.73, 1.08, 0.2], sofaMaterial, sofa, 0.13);
+  leftBackCushion.rotation.x = -0.1;
+  rightBackCushion.rotation.x = -0.1;
+  const leftPillow = addRoundedBox([0.46, 0.48, 0.22], [-1.2, 1.02, -0.08], cushionMaterial, sofa, 0.1);
+  const rightPillow = addRoundedBox([0.46, 0.48, 0.22], [1.2, 1.02, -0.08], cushionMaterial, sofa, 0.1);
+  leftPillow.rotation.x = -0.14;
+  rightPillow.rotation.x = -0.14;
+  leftPillow.rotation.z = -0.18;
+  rightPillow.rotation.z = 0.18;
+  for (const x of [-1.28, 1.28]) {
+    for (const z of [-0.38, 0.38]) addBox([0.12, 0.18, 0.12], [x, 0.16, z], woodMaterial, sofa);
+  }
 
   // Projector pedestal and procedural device, separated into genuinely movable controls.
   addBox([1.22, 0.08, 0.92], [2.85, 1.05, 0.62], blackMetalMaterial);
@@ -519,19 +555,19 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   const dust = new THREE.Points(dustGeometry, dustMaterial);
   scene.add(dust);
 
-  const ambient = new THREE.AmbientLight(0xaeb7b8, 0.42);
+  const ambient = new THREE.AmbientLight(0xbdb7b0, 0.44);
   scene.add(ambient);
-  const hemisphere = new THREE.HemisphereLight(0xffd8b8, 0x252329, 0.92);
+  const hemisphere = new THREE.HemisphereLight(0xffe1c7, 0x211d1a, 0.86);
   scene.add(hemisphere);
-  const ceilingLight = new THREE.PointLight(0xd39b67, 95, 11, 2);
+  const ceilingLight = new THREE.PointLight(0xffd7b5, 76, 11, 2);
   ceilingLight.position.set(-1.6, 3.3, 0.2);
   ceilingLight.castShadow = !lowPower;
   ceilingLight.shadow.mapSize.set(512, 512);
   scene.add(ceilingLight);
-  const sideLight = new THREE.PointLight(0xcf8f5c, 44, 7, 2);
+  const sideLight = new THREE.PointLight(0xe1b18a, 30, 7, 2);
   sideLight.position.set(4.15, 1.4, 2.1);
   scene.add(sideLight);
-  const screenLight = new THREE.RectAreaLight('#dbe3df', 0, 5.2, 2.9);
+  const screenLight = new THREE.RectAreaLight('#e8e0d6', 0, 5.2, 2.9);
   screenLight.position.set(0, 2.05, -4.55);
   screenLight.lookAt(0, 1.6, 2);
   scene.add(screenLight);
