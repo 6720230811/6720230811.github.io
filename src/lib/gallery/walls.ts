@@ -48,6 +48,8 @@ export interface WallSegment {
   kind: 'base' | 'accent' | 'partition';
   /** 这一片的墙色（序厅四面各一色、可移动展墙有自己的色）；不给就用分区墙色 */
   tint?: string;
+  /** 房间点名的主视觉墙（RoomSpec.heroWall）：hang.ts 优先把 hero 挂这儿 */
+  hero?: boolean;
 }
 
 export interface DoorOpening {
@@ -61,6 +63,8 @@ export interface DoorOpening {
   depth: number;
   arch: boolean;
   zone: ZoneId;
+  /** 门楣跟着它所在那面墙走色（序厅与大型作品厅四面各一色） */
+  tint?: string;
 }
 
 export interface Obstacle {
@@ -237,6 +241,7 @@ function roomWalls(room: RoomSpec): WallSegment[] {
         zone: room.id,
         kind: 'base',
         tint: room.wallColors?.[key],
+        ...(room.heroWall === key ? { hero: true } : {}),
       });
     }
   }
@@ -477,6 +482,7 @@ function doorOpenings(room: RoomSpec): DoorOpening[] {
       depth: door.arch ? 0.25 : 0.22,
       arch: !!door.arch,
       zone: room.id,
+      ...(room.wallColors?.[door.wall] ? { tint: room.wallColors[door.wall] } : {}),
     };
   });
 }

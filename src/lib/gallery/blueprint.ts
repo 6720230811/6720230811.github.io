@@ -457,6 +457,12 @@ export interface RoomSpec {
    *  不给就统一用分区的 wall 色。
    */
   wallColors?: Partial<Record<WallKey, string>>;
+  /**
+   * 主视觉（hero）钉在哪一面墙上。
+   *  不写就按 hang.ts 的老规矩：长廊挑尽端墙、房间挑最长那面。
+   *  房间有一面明确的重点墙时写它 —— 最长那面不一定是该挂主视觉的那面。
+   */
+  heroWall?: WallKey;
 }
 
 /**
@@ -541,10 +547,14 @@ export const ROOMS: RoomSpec[] = [
       // 东：→ 总览区
       { wall: 'e', at: 4.5, width: 3, height: DOOR.height },
     ],
-    props: [{ kind: 'sculpture', x: 22, z: 3.2, r: 2 }],
+    // 装置占位往西偏、收小一点：主视觉在北墙 x 22–25，占位的体块要是杵在
+    //  房间正中（x 20.8–23.2），从厅里看主视觉的左边一截就被它挡了
+    props: [{ kind: 'sculpture', x: 20.5, z: 3.2, r: 1.5 }],
     // 四面各一色：北面是低饱和烟熏陶土的重点墙（20–27 那 7 m，给大型作品
     //  当背景），东西两面挂大型横幅，南面放创作过程、文字与小型作品
     wallColors: { n: '#765448', e: '#D2CCC1', w: '#D2CCC1', s: '#B6AEA3' },
+    // 主视觉挂在那面 7 m 烟熏陶土上（南墙更长，但它是「创作过程 / 文字」那一面）
+    heroWall: 'n',
   },
   {
     id: 'overview',

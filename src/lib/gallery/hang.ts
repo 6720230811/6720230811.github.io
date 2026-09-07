@@ -41,6 +41,8 @@ export interface ArtWall {
   reservedStart: number;
   reservedEnd: number;
   ceilingHeight: number;
+  /** 房间点名的主视觉墙（RoomSpec.heroWall） */
+  hero?: boolean;
 }
 
 /** 排展用的作品信息（plan.ts 从 payload 里取最小字段） */
@@ -151,6 +153,7 @@ function corridorDirection(arc: number): Vec2 {
 /**
  * 从墙里挑出作品墙，并给每个分区定一面 hero（主视觉）墙。
  *  hero 优先挑「与长廊垂直」的那面 —— 尽端、转角正对面；房间里挑最长那面。
+ *  房间要是用 RoomSpec.heroWall 点名了一面，就认那一面（规格的重点墙）。
  */
 export function deriveArtWalls(walls: WallSegment[]): ArtWall[] {
   const out: ArtWall[] = [];
@@ -178,6 +181,7 @@ export function deriveArtWalls(walls: WallSegment[]): ArtWall[] {
       reservedStart: reserve,
       reservedEnd: reserve,
       ceilingHeight: wall.height,
+      ...(wall.hero ? { hero: true } : {}),
     });
   });
 
@@ -196,8 +200,18 @@ export function deriveArtWalls(walls: WallSegment[]): ArtWall[] {
       // 长廊里「尽端墙」= 与走向垂直；房间里看长度
       return { endWall: info.kind === 'corridor' ? dot < 0.35 : true, length: wall.length };
     };
-    const fits = all.filter((wall) => wall.length - wall.reservedStart - wall.reservedEnd >= minUsable);
-    const pool = fits.length > 0 ? fits : all.slice().sort((a, b) => b.length - a.length).slice(0, 1);
+    const longEnough = (wall: ArtWall): boolean =>
+      wall.length - wall.reservedStart - wall.reservedEnd >= minUsable;
+    // 房间点名的那面优先（规格的重点墙就是要挂主视觉的），其次才是「放得下的」、
+    // 再其次退到最长那面
+    const marked = all.filter((wall) => wall.hero && longEnough(wall));
+    const fits = all.filter(longEnough);
+    const pool =
+      marked.length > 0
+        ? marked
+        : fits.length > 0
+          ? fits
+          : all.slice().sort((a, b) => b.length - a.length).slice(0, 1);
     const scored = pool
       .map((wall) => ({ wall, ...score(wall) }))
       .sort((a, b) => Number(b.endWall) - Number(a.endWall) || b.length - a.length);

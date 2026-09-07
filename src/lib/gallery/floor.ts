@@ -1179,7 +1179,6 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   const archCache = new Map<string, THREE.ExtrudeGeometry>();
 
   for (const door of plan.doors) {
-    const mats = zoneMats.get(door.zone) ?? fallback;
     const ceiling = zoneSpec(door.zone).ceiling;
     const horizontal = Math.abs(door.ry) < 1e-6;
     const yaw = door.ry;
@@ -1211,8 +1210,10 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     // 底面也要让开：序厅那道 3.4 m 的门正好等于它的净高，门楣底面会与天花共面
     const lintelBottom = Math.min(door.height, ceiling - 0.03);
     const lintelHeight = Math.max(0.1, ceiling + 0.05 - lintelBottom);
+    // 门楣颜色跟着它所在那面墙（序厅与大型作品厅四面各一色，门楣得是同一面墙
+    //  的延续 —— 不然深色重点墙旁边会竖一道浅色带）
     boxJobs.push({
-      material: mats.wall,
+      material: wallMaterial(door.zone, door.tint),
       x: door.x,
       y: lintelBottom + lintelHeight / 2,
       z: door.z,
