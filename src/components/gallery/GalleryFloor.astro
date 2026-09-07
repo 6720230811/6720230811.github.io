@@ -59,11 +59,31 @@ const payload = rooms.map((room) => ({
   data-rooms={JSON.stringify(payload)}
   data-label-loading={t('gallery.loading')}
   data-label-camera={t('gallery.meta.camera')}
+  data-label-hall={t('gallery.map.hall')}
 >
   <canvas class="gal__canvas" id="gal-canvas" tabindex="0" aria-label={t('gallery.title')}></canvas>
 
-  {/* 左上角小地图：整座展厅是连通的，得知道自己在哪一段、大厅在哪个方向 */}
-  <canvas class="gal__minimap" id="gal-minimap" role="img" aria-label={t('gallery.minimap')}></canvas>
+  {/* 左上角小地图：点开是大地图，在大地图上点一下直接传送过去 */}
+  <button
+    class="gal__minimap"
+    id="gal-minimap"
+    type="button"
+    aria-expanded="false"
+    aria-label={t('gallery.minimap')}
+  >
+    <canvas class="gal__minimap-canvas" id="gal-minimap-canvas"></canvas>
+  </button>
+
+  <div class="gal__map" id="gal-map" hidden>
+    <div class="gal__map-panel">
+      <div class="gal__map-head">
+        <h2 class="gal__map-title">{t('gallery.map.title')}</h2>
+        <button class="gal__btn" id="gal-map-close" type="button">{t('gallery.close')}</button>
+      </div>
+      <canvas class="gal__map-canvas" id="gal-map-canvas" role="img" aria-label={t('gallery.map.title')}></canvas>
+      <p class="gal__map-hint">{t('gallery.map.hint')}</p>
+    </div>
+  </div>
 
   <div class="gal__progress" id="gal-progress" hidden><span></span></div>
 

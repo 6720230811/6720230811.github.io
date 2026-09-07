@@ -334,6 +334,32 @@ export function containsPoint(plan: FloorPlan, x: number, z: number): boolean {
   return true;
 }
 
+/**
+ * 点地图上一点，落到能站的地方：落点本身站得住就直接用它，站不住（点在墙
+ * 里）就从它向外一圈圈找，直到撞上走廊。
+ *  一圈圈找而不是网格扫全图 —— 图上点一下要的是「最近的那块能站的地」，
+ *  从近到远第一个命中就是它。
+ */
+export function nearestWalkable(
+  plan: FloorPlan,
+  x: number,
+  z: number,
+  maxRadius = 4,
+): Waypoint | null {
+  if (containsPoint(plan, x, z)) return { x, z };
+  for (let radius = 0.4; radius <= maxRadius; radius += 0.4) {
+    // 半径越大，一圈上取的点越多：保证相邻两个采样点间隔 ≲ 0.5 m
+    const count = Math.max(8, Math.round(radius * 12));
+    for (let i = 0; i < count; i += 1) {
+      const angle = (i / count) * Math.PI * 2;
+      const cx = x + Math.cos(angle) * radius;
+      const cz = z + Math.sin(angle) * radius;
+      if (containsPoint(plan, cx, cz)) return { x: cx, z: cz };
+    }
+  }
+  return null;
+}
+
 export interface Waypoint {
   x: number;
   z: number;

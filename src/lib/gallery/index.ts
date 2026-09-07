@@ -16,11 +16,12 @@ import {
   routeTo,
   spaceAt,
   spawnOf,
+  nearestWalkable,
   type PlanRoomInput,
   type Waypoint,
   type WallKey,
 } from './plan';
-import { createMinimap, type MinimapHandle } from './minimap';
+import { createBigMap, createMinimap, type BigMapHandle, type MinimapHandle } from './minimap';
 import { isHallStyleId } from './styles';
 import type { FloorHandle, PickResult } from './floor';
 
@@ -97,7 +98,11 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const canvas: HTMLCanvasElement = canvasEl;
 
   const progress = root.querySelector<HTMLElement>('#gal-progress');
-  const minimapEl = root.querySelector<HTMLCanvasElement>('#gal-minimap');
+  const minimapButton = root.querySelector<HTMLButtonElement>('#gal-minimap');
+  const minimapEl = root.querySelector<HTMLCanvasElement>('#gal-minimap-canvas');
+  const mapPanel = root.querySelector<HTMLElement>('#gal-map');
+  const mapCanvasEl = root.querySelector<HTMLCanvasElement>('#gal-map-canvas');
+  const mapClose = root.querySelector<HTMLButtonElement>('#gal-map-close');
   const progressBar = progress?.querySelector<HTMLElement>('span') ?? null;
   const hint = root.querySelector<HTMLElement>('#gal-hint');
   const where = root.querySelector<HTMLElement>('#gal-where');
@@ -251,8 +256,72 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       degrade(page, root);
       return;
     }
-    // 小地图：底图懒加载（网格模式下画布量出来是 0），切到 3D 之后第一帧才画
+    // 小地图 / 大地图：底图懒加载（网格模式下画布量出来是 0），切到 3D 之后
+    // 第一帧才画。大地图点一下就传送，落点吸到能站的地方
     const minimap: MinimapHandle | null = minimapEl ? createMinimap(minimapEl, plan) : null;
+    const bigmap: BigMapHandle | null = mapCanvasEl
+      ? createBigMap(mapCanvasEl, plan, { hall: root.dataset.labelHall || '' })
+      : null;
+
+    function openMap(): void {
+      if (!bigmap || !mapPanel) return;
+      mapPanel.hidden = false;
+      minimapButton?.setAttribute('aria-expanded', 'true');
+      bigmap.show(pos.x, pos.z, yaw);
+      mapClose?.focus();
+    }
+
+    function closeMap(): void {
+      if (!bigmap?.isOpen() || !mapPanel) return;
+      bigmap.hide();
+      mapPanel.hidden = true;
+      minimapButton?.setAttribute('aria-expanded', 'false');
+      minimapButton?.focus();
+    }
+
+    /** 传送：不走路（routeTo 还是个 stub），直接站过去，别把人丢进墙里 */
+    function teleportTo(spot: Waypoint): void {
+      keys.clear();
+      path = [];
+      pendingFocus = null;
+      pendingYaw = null;
+      pos.x = spot.x;
+      pos.z = spot.z;
+      pitch = 0;
+      stuck = 0;
+      updateLocation();
+      applyCamera();
+      floor.render();
+    }
+
+    minimapButton?.addEventListener('click', () => {
+      if (bigmap?.isOpen()) closeMap();
+      else openMap();
+    });
+    mapClose?.addEventListener('click', closeMap);
+    // 点面板以外的暗底关掉（点画布本身交给画布自己的 click）
+    mapPanel?.addEventListener('click', (event) => {
+      if (event.target === mapPanel) closeMap();
+    });
+    mapCanvasEl?.addEventListener('click', (event) => {
+      const hit = bigmap?.locate(event.clientX, event.clientY);
+      if (!hit) return;
+      const spot = nearestWalkable(plan, hit.x, hit.z);
+      if (!spot) return;
+      closeMap();
+      teleportTo(spot);
+    });
+    mapCanvasEl?.addEventListener('pointermove', (event) => {
+      const hit = bigmap?.locate(event.clientX, event.clientY);
+      bigmap?.preview(hit ? nearestWalkable(plan, hit.x, hit.z) : null);
+    });
+    mapCanvasEl?.addEventListener('pointerleave', () => bigmap?.preview(null));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && bigmap?.isOpen()) {
+        event.preventDefault();
+        closeMap();
+      }
+    });
 
     const home = spawnOf(plan, startRoomId);
     const pos = { x: home.x, z: home.z };
@@ -279,6 +348,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       floor.camera.position.set(pos.x, EYE_HEIGHT, pos.z);
       floor.camera.rotation.set(pitch, yaw, 0, 'YXZ');
       minimap?.update(pos.x, pos.z, yaw);
+      bigmap?.update(pos.x, pos.z, yaw);
     }
 
     /** 走一步：先整体，撞墙了再只走一个轴，贴着墙滑过去 */
@@ -645,6 +715,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     function stop(): void {
       cancelAnimationFrame(frameHandle);
       observer.disconnect();
+      minimap?.dispose();
+      bigmap?.dispose();
       floor.dispose();
     }
   }

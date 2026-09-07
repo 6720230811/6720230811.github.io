@@ -155,8 +155,7 @@ button.gal-view[aria-pressed='true'] {
   outline-offset: -2px;
 }
 
-/* 左上角小地图：整层平面 + 人在哪儿朝哪儿。
-   pointer-events: none —— 地图压在画布上，但不该挡住拖拽看向 */
+/* 左上角小地图：整层平面 + 人在哪儿朝哪儿；点一下开大地图传送 */
 .gal__minimap {
   position: absolute;
   z-index: 2;
@@ -164,11 +163,90 @@ button.gal-view[aria-pressed='true'] {
   left: 0.75rem;
   width: 9.5rem;
   height: 9.5rem;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.26);
   border-radius: 10px;
   background: rgba(10, 12, 16, 0.5);
   backdrop-filter: blur(6px);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.gal__minimap:hover {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.gal__minimap:active {
+  transform: scale(0.98);
+}
+
+.gal__minimap:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+.gal__minimap-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* 点击归外层的 button，画布自己不接事件 */
   pointer-events: none;
+}
+
+/* ---------- 大地图：点一下就传送 ---------- */
+/* z-index 4：压在「走近看」浮层（3）之上 —— 开着大图传送时不该被挡 */
+.gal__map {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+}
+
+.gal__map[hidden] {
+  display: none;
+}
+
+.gal__map-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-width: 100%;
+}
+
+.gal__map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.gal__map-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.gal__map-canvas {
+  display: block;
+  width: min(84vw, 30rem);
+  height: min(84vw, 30rem);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(10, 12, 16, 0.6);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.gal__map-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  opacity: 0.78;
 }
 
 /* 加载进度：顶部一条细线（要压在暗角之上） */
