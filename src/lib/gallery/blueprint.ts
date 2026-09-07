@@ -156,6 +156,13 @@ export interface Zone {
   sideWalls?: { left?: string; right?: string };
   /** 端景墙（转角正对那面）顶部藏一道洗墙灯槽 */
   wash?: boolean;
+  /** 天花烘一层极轻微的静态波纹明暗（潮汐之间） */
+  ceilingRipple?: boolean;
+  /**
+   * 天花上规则但简洁的轨道灯（临展厅）：rows 条平行轨，灯具每 spacing 米一个。
+   *  规格：轨道与灯具颜色 #363938。
+   */
+  tracks?: { rows: number; spacing: number };
   /**
    * 墙脚 / 墙顶的内凹阴影缝（米）。
    *  规格不要凸出的粗踢脚线：墙脚一律 50 mm 内凹暗缝；
@@ -330,6 +337,8 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#627775',
     accentRatio: 0.22,
+    // 大面积漫射柔光 + 极轻微的静态波纹明暗（不许动态水纹投影）
+    ceilingRipple: true,
     ceilingColor: '#DCE0D9',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
@@ -344,6 +353,8 @@ export const ZONES: Zone[] = [
     accentRatio: 0.2,
     // 可移动展墙：正面 / 背面 / 本期主题色（主题色只有一种，由展览数据定）
     screen: { front: '#DCD8D0', back: '#B7B0A5', theme: '#30494B' },
+    // 规则但简洁的轨道灯：3 条平行轨，灯具每 2.6 m 一个（轨道与灯具 #363938）
+    tracks: { rows: 3, spacing: 2.6 },
     ceilingColor: '#E2DED6',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],

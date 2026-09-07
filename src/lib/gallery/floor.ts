@@ -420,7 +420,7 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       : wall;
     const ceiling = track(
       new THREE.MeshStandardMaterial({
-        map: track(ceilingTexture(item.ceilingColor)),
+        map: track(ceilingTexture(item.ceilingColor, item.ceilingRipple === true)),
         roughness: 0.95,
         metalness: 0,
         side: THREE.DoubleSide,
@@ -1266,6 +1266,55 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     }
   }
 
+  // ---- 临展厅的规则轨道灯：几条平行轨 + 间距均匀的灯具，颜色 #363938 ----
+  //  规格要「规则但简洁」—— 轨道贴在天花下，灯具是深色小方块，不发光
+  //  （照亮作品是作品灯的活儿）。
+  if (ROOMS.some((room) => zoneSpec(room.id).tracks)) {
+    const fixtureMat = track(
+      new THREE.MeshStandardMaterial({ color: '#363938', roughness: 0.7, metalness: 0 }),
+    );
+    for (const room of ROOMS) {
+      const spec = zoneSpec(room.id).tracks;
+      if (!spec) continue;
+      const { x1, z1, x2, z2 } = room.rect;
+      const ceiling = zoneSpec(room.id).ceiling;
+      const alongX = x2 - x1 >= z2 - z1;
+      const length = (alongX ? x2 - x1 : z2 - z1) - 1.2;
+      const begin = (alongX ? (x1 + x2) / 2 : (z1 + z2) / 2) - length / 2;
+      for (let row = 0; row < spec.rows; row += 1) {
+        // 轨道均分房间进深，两端各留出一截
+        const across =
+          (alongX ? z1 : x1) + ((alongX ? z2 - z1 : x2 - x1) * (row + 1)) / (spec.rows + 1);
+        const railX = alongX ? (x1 + x2) / 2 : across;
+        const railZ = alongX ? across : (z1 + z2) / 2;
+        boxJobs.push({
+          material: fixtureMat,
+          x: railX,
+          y: ceiling - 0.05,
+          z: railZ,
+          w: alongX ? length : 0.05,
+          h: 0.05,
+          d: alongX ? 0.05 : length,
+          yaw: 0,
+        });
+        const count = Math.max(2, Math.round(length / spec.spacing));
+        for (let i = 0; i < count; i += 1) {
+          const at = begin + (length * (i + 0.5)) / count;
+          boxJobs.push({
+            material: fixtureMat,
+            x: alongX ? at : railX,
+            y: ceiling - 0.12,
+            z: alongX ? railZ : at,
+            w: 0.18,
+            h: 0.12,
+            d: 0.18,
+            yaw: 0,
+          });
+        }
+      }
+    }
+  }
+
   const unitBox = track(new THREE.BoxGeometry(1, 1, 1));
   const boxesByMaterial = new Map<THREE.MeshStandardMaterial, BoxJob[]>();
   for (const job of boxJobs) {
@@ -1403,10 +1452,21 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     }
   }
 
-  // 沉浸展厅：不设大面积环境照明，只在墙脚留几点地脚灯（作品灯等 S4 有作品再补）
+  // 沉浸展厅：结构与灯具一律藏起来，只在地面边缘留几点低亮度安全引导光，
+  //  门内再压一条贴地的引导线（规格：仅在入口和地面边缘设低亮度引导光）
   const immersion = ROOMS.find((room) => room.id === 'immersion');
   if (immersion) {
     const { x1, z1, x2, z2 } = immersion.rect;
+    const guideMat = track(
+      new THREE.MeshStandardMaterial({
+        color: '#2A2E30',
+        emissive: new THREE.Color('#B98A57'),
+        emissiveIntensity: 0.85,
+        roughness: 1,
+        metalness: 0,
+        toneMapped: false,
+      }),
+    );
     const spots: { x: number; z: number }[] = [
       { x: x1 + 0.6, z: z1 + 1.4 },
       { x: x1 + 0.6, z: z2 - 1.4 },
@@ -1414,21 +1474,25 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       { x: (x1 + x2) / 2, z: z1 + 0.6 },
     ];
     for (const spot of spots) {
-      const lamp = new THREE.Mesh(
-        track(new THREE.BoxGeometry(0.16, 0.1, 0.16)),
-        track(
-          new THREE.MeshStandardMaterial({
-            color: '#3A3F42',
-            emissive: new THREE.Color('#F0C48A'),
-            emissiveIntensity: 2.2,
-            roughness: 1,
-            metalness: 0,
-            toneMapped: false,
-          }),
-        ),
-      );
+      const lamp = new THREE.Mesh(track(new THREE.BoxGeometry(0.16, 0.1, 0.16)), guideMat);
       lamp.position.set(spot.x, 0.05, spot.z);
       scene.add(lamp);
+    }
+
+    // 门内那条引导线：从门洞往房间里 0.5 m，宽度跟门洞走
+    const door = plan.doors.find((item) => item.zone === 'immersion');
+    if (door) {
+      const inward = {
+        x: Math.sign((x1 + x2) / 2 - door.x),
+        z: Math.sign((z1 + z2) / 2 - door.z),
+      };
+      const strip = new THREE.Mesh(wallGeo, guideMat);
+      strip.rotation.x = -Math.PI / 2;
+      strip.position.set(door.x + inward.x * 0.5, 0.02, door.z + inward.z * 0.5);
+      // 门洞沿 x 展开就横着铺，沿 z 展开就竖着铺
+      const alongX = Math.abs(door.ry) < 1e-6;
+      strip.scale.set(alongX ? door.width : 0.08, alongX ? 0.08 : door.width, 1);
+      scene.add(strip);
     }
   }
 

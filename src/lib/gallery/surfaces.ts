@@ -771,11 +771,28 @@ export function microCementTexture(base = '#AEA69B'): THREE.CanvasTexture {
   });
 }
 
-/** 平整连续顶面：比墙亮一档、颗粒更细（长廊天花 #F1EEE7，roughness 0.95） */
-export function ceilingTexture(base = '#F1EEE7'): THREE.CanvasTexture {
+/**
+ * 平整连续顶面：比墙亮一档、颗粒更细（长廊天花 #F1EEE7，roughness 0.95）。
+ *  ripple：潮汐之间要「极轻微的波纹状明暗变化」—— 是烘进贴图里的静态明暗，
+ *  不是投影也绝对不随时间动（规格明令不许出现动态水纹投影）。
+ */
+export function ceilingTexture(base = '#F1EEE7', ripple = false): THREE.CanvasTexture {
   return paint(128, 128, (ctx, w, h) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, w, h);
+    if (ripple) {
+      for (let i = 0; i < 7; i += 1) {
+        const y = (i / 7) * h + 6;
+        ctx.strokeStyle = i % 2 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.030)';
+        ctx.lineWidth = 3 + (i % 3) * 2;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        for (let x = 0; x <= w; x += 8) {
+          ctx.lineTo(x, y + Math.sin(x / 22 + i * 1.7) * 3.5 + Math.sin(x / 9 + i) * 1.2);
+        }
+        ctx.stroke();
+      }
+    }
     grain(ctx, w, h, 0.015, 1);
   });
 }
