@@ -155,6 +155,22 @@ button.gal-view[aria-pressed='true'] {
   outline-offset: -2px;
 }
 
+/* 左上角小地图：整层平面 + 人在哪儿朝哪儿。
+   pointer-events: none —— 地图压在画布上，但不该挡住拖拽看向 */
+.gal__minimap {
+  position: absolute;
+  z-index: 2;
+  top: 0.75rem;
+  left: 0.75rem;
+  width: 9.5rem;
+  height: 9.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 10px;
+  background: rgba(10, 12, 16, 0.5);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
 /* 加载进度：顶部一条细线（要压在暗角之上） */
 .gal__progress {
   position: absolute;

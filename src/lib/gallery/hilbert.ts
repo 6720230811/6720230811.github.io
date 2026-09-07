@@ -194,7 +194,11 @@ export function roomSpawns(count: number): { pt: Pt; yaw: number }[] {
     const next = curve[idx + 1];
     out.push({
       pt: { x: cur.x, z: cur.z },
-      yaw: Math.atan2(next.x - cur.x, next.z - cur.z),
+      // 朝向沿曲线前进方向。three 相机默认看 -Z，绕 Y 转 yaw 之后 forward =
+      // (-sin yaw, -cos yaw)，所以「朝 +z」要 yaw = π，于是 atan2 分量都取反
+      // —— 别照搬 plan.ts 里画框那套 atan2(nx, nz)，那套的「正」」是 +Z，
+      // 跟相机差一个 π。
+      yaw: Math.atan2(cur.x - next.x, cur.z - next.z),
     });
   }
   return out;

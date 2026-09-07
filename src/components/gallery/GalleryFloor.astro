@@ -62,6 +62,9 @@ const payload = rooms.map((room) => ({
 >
   <canvas class="gal__canvas" id="gal-canvas" tabindex="0" aria-label={t('gallery.title')}></canvas>
 
+  {/* 左上角小地图：整座展厅是连通的，得知道自己在哪一段、大厅在哪个方向 */}
+  <canvas class="gal__minimap" id="gal-minimap" role="img" aria-label={t('gallery.minimap')}></canvas>
+
   <div class="gal__progress" id="gal-progress" hidden><span></span></div>
 
   <div class="gal__hud">

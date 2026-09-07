@@ -20,6 +20,7 @@ import {
   type Waypoint,
   type WallKey,
 } from './plan';
+import { createMinimap, type MinimapHandle } from './minimap';
 import { isHallStyleId } from './styles';
 import type { FloorHandle, PickResult } from './floor';
 
@@ -96,6 +97,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const canvas: HTMLCanvasElement = canvasEl;
 
   const progress = root.querySelector<HTMLElement>('#gal-progress');
+  const minimapEl = root.querySelector<HTMLCanvasElement>('#gal-minimap');
   const progressBar = progress?.querySelector<HTMLElement>('span') ?? null;
   const hint = root.querySelector<HTMLElement>('#gal-hint');
   const where = root.querySelector<HTMLElement>('#gal-where');
@@ -249,6 +251,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       degrade(page, root);
       return;
     }
+    // 小地图：底图懒加载（网格模式下画布量出来是 0），切到 3D 之后第一帧才画
+    const minimap: MinimapHandle | null = minimapEl ? createMinimap(minimapEl, plan) : null;
 
     const home = spawnOf(plan, startRoomId);
     const pos = { x: home.x, z: home.z };
@@ -274,6 +278,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     function applyCamera(): void {
       floor.camera.position.set(pos.x, EYE_HEIGHT, pos.z);
       floor.camera.rotation.set(pitch, yaw, 0, 'YXZ');
+      minimap?.update(pos.x, pos.z, yaw);
     }
 
     /** 走一步：先整体，撞墙了再只走一个轴，贴着墙滑过去 */
@@ -495,6 +500,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
         yaw = view.yaw;
         pitch = 0;
         updateLocation();
+        // 直接站过去也要重画一帧：不然视角与小地图要等下次交互才跟上
+        requestRender();
         openFocus(id);
         return;
       }
