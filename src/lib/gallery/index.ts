@@ -344,10 +344,14 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       dirty = true;
     };
 
+    /** 走近了换高清纹理：start() 后半段才装好，先留空位 */
+    let refreshFullTextures: (() => void) | null = null;
+
     function applyCamera(): void {
       floor.camera.position.set(pos.x, EYE_HEIGHT, pos.z);
       floor.camera.rotation.set(pitch, yaw, 0, 'YXZ');
       floor.updateLighting(pos.x, pos.z);
+      refreshFullTextures?.();
       minimap?.update(pos.x, pos.z, yaw);
       bigmap?.update(pos.x, pos.z, yaw);
     }
@@ -648,8 +652,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     let loaded = 0;
     const bump = (): void => {
       loaded += 1;
-      if (progressBar) progressBar.style.width = `${Math.round((loaded / (items.length * 2)) * 100)}%`;
-      if (loaded >= items.length * 2 && progress) {
+      if (progressBar) progressBar.style.width = `${Math.round((loaded / items.length) * 100)}%`;
+      if (loaded >= items.length && progress) {
         progress.dataset.done = 'true';
         // 等淡出动画走完再摘掉，别闪
         window.setTimeout(() => {
@@ -657,6 +661,42 @@ export function mountGallery(rootEl: HTMLElement | null): void {
         }, 900);
       }
       requestRender();
+    };
+
+    /**
+     * 只挂缩略图；原图等走近了（FULL_DISTANCE 内）再换。
+     *  规格：只加载玩家附近展区的高清图片，远处用缩略图。
+     *  一张作品可能挂在多处（现在是每件只挂一次，但换图要按 id 换），
+     *  所以按「这件作品最近的那一处」算距离。
+     */
+    const FULL_DISTANCE = 14;
+    const fullAsked = new Set<string>();
+    const nearestSpotOf = (id: string): { x: number; z: number } | null => {
+      let best: { x: number; z: number } | null = null;
+      let bestDist = Infinity;
+      for (const placement of plan.placements) {
+        if (placement.id !== id) continue;
+        const d = (placement.x - pos.x) ** 2 + (placement.z - pos.z) ** 2;
+        if (d < bestDist) {
+          bestDist = d;
+          best = { x: placement.x, z: placement.z };
+        }
+      }
+      return best;
+    };
+    const refreshFullTexturesNow = (): void => {
+      for (const item of items) {
+        if (fullAsked.has(item.id)) continue;
+        const spot = nearestSpotOf(item.id);
+        if (!spot) continue;
+        if ((spot.x - pos.x) ** 2 + (spot.z - pos.z) ** 2 > FULL_DISTANCE * FULL_DISTANCE) continue;
+        fullAsked.add(item.id);
+        loadTexture(item.src)
+          .then(({ texture }) => floor.setPicture(item.id, texture))
+          .catch(() => {
+            // 原图挂不上就留着缩略图，不整块降级
+          });
+      }
     };
 
     let broken = 0;
@@ -669,19 +709,12 @@ export function mountGallery(rootEl: HTMLElement | null): void {
         } catch {
           broken += 1;
           bump();
-          bump();
-          return;
-        }
-        try {
-          const full = await loadTexture(item.src);
-          floor.setPicture(item.id, full.texture);
-          bump();
-        } catch {
-          bump();
         }
       }),
     );
     void broken;
+    refreshFullTextures = refreshFullTexturesNow;
+    refreshFullTextures();
 
     if (broken === items.length) {
       // 一张都没挂上，展厅是空的，不如直接给网格

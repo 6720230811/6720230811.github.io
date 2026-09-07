@@ -31,6 +31,7 @@ import {
   environmentTexture,
   floorModuleTexture,
   mineralTexture,
+  placeholderFrameTexture,
   thresholdTexture,
   wallLabelTexture,
 } from './surfaces';
@@ -147,7 +148,6 @@ function placeholderTexture(): THREE.DataTexture {
   texture.needsUpdate = true;
   return texture;
 }
-
 /** 一段矩形区域（地面 / 天花都按它铺） */
 interface Band {
   x1: number;
@@ -382,6 +382,8 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     new THREE.MeshStandardMaterial({ color: JAMB.color, roughness: 0.6, metalness: 0 }),
   );
   const placeholder = track(placeholderTexture());
+  // 数据暂缺时挂的统一中性画框（不是某张作品的复制品）
+  const placeholderFrame = track(placeholderFrameTexture());
 
   // ---- 墙：按 (分区, 类型) 分组，每组一个 InstancedMesh ----
   const accentSet = pickAccentWalls(plan.walls, plan.zones);
@@ -856,11 +858,11 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     halo.scale.set(art.w * 2.3, art.h * 2.3, 1);
     group.add(halo);
 
-    // 画布：白底（纹理到达后被替换）。占位画框用中性灰，不复制已有作品
+    // 画布：真作品等纹理来了替换；占位画框直接给中性框面（没有内容也像「留着
+    // 等作品」的一块空框，不是某张图的复制品）
     const pictureMaterial = track(
       new THREE.MeshBasicMaterial({
-        map: placeholder,
-        color: placement.kind === 'placeholder' ? 0xdcd8d0 : 0xffffff,
+        map: placement.kind === 'placeholder' ? placeholderFrame : placeholder,
         toneMapped: false,
       }),
     );
@@ -962,7 +964,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
         const previous = material.map;
         material.map = texture;
         material.needsUpdate = true;
-        if (previous && previous !== placeholder) previous.dispose();
+        if (previous && previous !== placeholder && previous !== placeholderFrame) {
+          previous.dispose();
+        }
       }
     },
 
@@ -1046,7 +1050,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       for (const list of pictures.values()) {
         for (const picture of list) {
           const map = (picture.material as THREE.MeshBasicMaterial).map;
-          if (map && map !== placeholder) map.dispose();
+          if (map && map !== placeholder && map !== placeholderFrame) map.dispose();
         }
       }
       environment.dispose();

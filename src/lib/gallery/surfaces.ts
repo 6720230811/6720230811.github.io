@@ -670,3 +670,23 @@ export function thresholdTexture(): THREE.CanvasTexture {
     ctx.fillRect(0, (h + band) / 2, w, 2);
   });
 }
+
+/**
+ * 中性占位画框：数据暂缺时挂的统一画框。
+ *  规格要求「不要复制已有作品」——作品不够的格子挂这个，看起来就是一块
+ *  留着等作品的空框，不是某张图的复制品。
+ */
+export function placeholderFrameTexture(): THREE.CanvasTexture {
+  return paint(192, 144, (ctx, w, h) => {
+    ctx.fillStyle = '#DCD8D0';
+    ctx.fillRect(0, 0, w, h);
+    grain(ctx, w, h, 0.02);
+    // 内框一圈浅线：远看也知道这是「空着的框」
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(12, 12, w - 24, h - 24);
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(15, 15, w - 30, h - 30);
+  });
+}
