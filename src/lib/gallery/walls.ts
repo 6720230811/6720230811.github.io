@@ -46,6 +46,8 @@ export interface WallSegment {
   height: number;
   zone: ZoneId;
   kind: 'base' | 'accent' | 'partition';
+  /** 这一片的墙色（序厅四面各一色、可移动展墙有自己的色）；不给就用分区墙色 */
+  tint?: string;
 }
 
 export interface DoorOpening {
@@ -232,6 +234,7 @@ function roomWalls(room: RoomSpec): WallSegment[] {
         height: info.ceiling,
         zone: room.id,
         kind: 'base',
+        tint: room.wallColors?.[key],
       });
     }
   }
@@ -253,6 +256,7 @@ function propWalls(room: RoomSpec): WallSegment[] {
       height: prop.h,
       zone: room.id,
       kind: 'partition',
+      tint: prop.tint,
     });
   }
   return out;

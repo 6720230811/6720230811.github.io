@@ -133,6 +133,13 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const introLabel = root.dataset.labelIntro ?? '';
   /** 触屏说触屏的话：没有 WASD，也没有 R 键 */
   const introTouchLabel = root.dataset.labelIntroTouch ?? introLabel;
+  /** 序厅墙上要写的字 */
+  const wallCopy = {
+    title: root.dataset.labelTitle ?? '',
+    curator: root.dataset.labelCurator ?? '',
+    hint: root.dataset.labelWallhint ?? '',
+    intro: root.dataset.labelWallintro ?? '',
+  };
   /** 分区名是 { zh, en } 两份，按页面的语言取 */
   const localeOf = (): 'zh' | 'en' => (root.dataset.locale === 'en' ? 'en' : 'zh');
 
@@ -267,7 +274,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
 
     let floor: FloorHandle;
     try {
-      floor = createFloor({ canvas, plan });
+      floor = createFloor({ canvas, plan, copy: wallCopy });
     } catch {
       degrade(page, root);
       return;

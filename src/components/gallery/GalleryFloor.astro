@@ -67,6 +67,10 @@ const payload = rooms.map((room) => ({
   data-label-chapter={t('gallery.chapter')}
   data-label-intro={t('gallery.intro')}
   data-label-intro-touch={t('gallery.hint.touch')}
+  data-label-title={t('gallery.wall.title')}
+  data-label-curator={t('gallery.wall.curator')}
+  data-label-wallhint={t('gallery.wall.hint')}
+  data-label-wallintro={rooms.find((room) => room.id === startRoomId)?.intro ?? ''}
 >
   <canvas class="gal__canvas" id="gal-canvas" tabindex="0" aria-label={t('gallery.title')}></canvas>
 

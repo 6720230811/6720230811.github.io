@@ -32,8 +32,10 @@ import {
   floorModuleTexture,
   mineralTexture,
   placeholderFrameTexture,
+  planPanelTexture,
   thresholdTexture,
   wallLabelTexture,
+  wallTextTexture,
 } from './surfaces';
 import type { FloorPlan, Placement, WallSegment } from './plan';
 
@@ -45,6 +47,8 @@ import type { FloorPlan, Placement, WallSegment } from './plan';
 const TRIM = { base: 0.05, gap: 0.012, color: '#232726' } as const;
 /** 门套：深 0.22 m（拱券 0.25）、宽 0.12 m、颜色 #3E4140 */
 const JAMB = { width: 0.12, color: '#3E4140' } as const;
+/** 做旧青铜：门洞压边、地面嵌条、序厅那张平面图都用这一支（禁止大面积金色） */
+const BRONZE = { color: '#896A47', edge: 0.008 } as const;
 /** 灯槽：宽 0.2 m，向主挂画墙偏 0.7 m，每 10 m 断 1.5 m（规格 8–12 m） */
 const LIGHT = {
   width: 0.2,
@@ -78,9 +82,22 @@ function isLowPower(): boolean {
   return coarse || (navigator.hardwareConcurrency ?? 8) <= 4;
 }
 
+/** 墙上要写的字（由页面按语言给，场景不认得 i18n） */
+export interface FloorCopy {
+  /** 序厅主视觉墙：展览标题 */
+  title?: string;
+  /** 西墙：展览介绍 / 策展文字 */
+  intro?: string;
+  /** 短隔墙：一句话 */
+  curator?: string;
+  /** 东墙平面图旁：操作说明 */
+  hint?: string;
+}
+
 export interface CreateFloorOptions {
   canvas: HTMLCanvasElement;
   plan: FloorPlan;
+  copy?: FloorCopy;
 }
 
 export type PickResult =
@@ -342,7 +359,7 @@ function archGeometry(halfSpan: number, rise: number, thickness: number, depth: 
   return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 24 });
 }
 
-export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
+export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): FloorHandle {
   planZones = plan.zones;
 
   const lowPower = isLowPower();
@@ -421,6 +438,29 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   }
   const fallback = zoneMats.get('night') ?? [...zoneMats.values()][0];
 
+  /**
+   * 墙色：每面墙可能是分区墙色，也可能自带一个色（序厅四面各一色、
+   * 可移动展墙有自己的色）。按「分区 + 色」缓存，同一色只画一张肌理。
+   */
+  const wallMats = new Map<string, THREE.MeshStandardMaterial>();
+  const wallMaterial = (zoneId: ZoneId, tint?: string): THREE.MeshStandardMaterial => {
+    const key = `${zoneId}|${tint ?? ''}`;
+    const cached = wallMats.get(key);
+    if (cached) return cached;
+    const color = tint ?? zoneSpec(zoneId).wall;
+    const material = track(
+      new THREE.MeshStandardMaterial({
+        map: track(mineralTexture(color)),
+        roughness: 0.92,
+        metalness: 0,
+        envMapIntensity: 0.45,
+        side: THREE.DoubleSide,
+      }),
+    );
+    wallMats.set(key, material);
+    return material;
+  };
+
   /** 阴影缝的暗色材质：按颜色共用一份（内凹的缝不反光，用 basic 材质） */
   const gapMats = new Map<string, THREE.MeshBasicMaterial>();
   const gapMaterial = (color: string): THREE.MeshBasicMaterial => {
@@ -432,6 +472,13 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   };
   const jambMat = track(
     new THREE.MeshStandardMaterial({ color: JAMB.color, roughness: 0.6, metalness: 0 }),
+  );
+  const bronzeMat = track(
+    new THREE.MeshStandardMaterial({
+      color: BRONZE.color,
+      roughness: 0.48,
+      metalness: 0.38,
+    }),
   );
   const placeholder = track(placeholderTexture());
   // 数据暂缺时挂的统一中性画框（不是某张作品的复制品）
@@ -448,8 +495,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     if (wall.kind === 'partition' && zoneSpec(wall.zone).screen) return;
     const mats = zoneMats.get(wall.zone) ?? fallback;
     const kind = wall.kind === 'partition' ? 'partition' : accentSet.has(index) ? 'accent' : 'base';
-    const material = kind === 'accent' ? mats.accent : kind === 'partition' ? mats.wall : mats.wall;
-    const key = `${wall.zone}|${kind}`;
+    const material =
+      kind === 'accent' ? mats.accent : wallMaterial(wall.zone, wall.tint);
+    const key = `${wall.zone}|${kind}|${wall.tint ?? ''}`;
     const group = groups.get(key);
     if (group) group.walls.push({ wall, index });
     else groups.set(key, { material, walls: [{ wall, index }] });
@@ -840,6 +888,145 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     }
   }
 
+  // ---- 入口序厅：主视觉墙标题 / 策展文字 / 嵌墙平面图 / 短隔墙上一句话 ----
+  //  规格四面墙各有各的性格：北墙深酒红 + 展览标题（只做柔和背光，不要强光立体字）、
+  //  西墙浅米 + 策展文字、东墙青灰 + 嵌墙式平面图（青铜线，不是电子屏）、
+  //  短隔墙朝入口那一面写一句。
+  const entry = ROOMS.find((room) => room.id === 'entry');
+  if (entry && (copy.title || copy.intro || copy.curator || copy.hint)) {
+    const { x1, z1, x2, z2 } = entry.rect;
+    const midX = (x1 + x2) / 2;
+    /** 贴墙挂一块：离墙 2 cm，朝房间内 */
+    const plate = (
+      texture: THREE.Texture,
+      x: number,
+      y: number,
+      z: number,
+      yaw: number,
+      w: number,
+      h: number,
+    ): void => {
+      const material = track(
+        new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }),
+      );
+      const mesh = new THREE.Mesh(wallGeo, material);
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = yaw;
+      mesh.scale.set(w, h, 1);
+      scene.add(mesh);
+    };
+
+    if (copy.title) {
+      // 标题背光：先铺一层很淡的暖光，字才不像贴纸
+      const glow = new THREE.Mesh(
+        wallGeo,
+        track(
+          new THREE.MeshBasicMaterial({
+            map: track(makeSoftGlow()),
+            transparent: true,
+            opacity: 0.22,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            toneMapped: false,
+            side: THREE.DoubleSide,
+          }),
+        ),
+      );
+      glow.position.set(midX, 2.05, z2 - 0.015);
+      glow.rotation.y = Math.PI;
+      glow.scale.set(5.2, 1.7, 1);
+      scene.add(glow);
+
+      plate(
+        track(
+          wallTextTexture(copy.title, {
+            color: '#E6E0D6',
+            size: 108,
+            weight: 600,
+            align: 'center',
+            lineHeight: 1.2,
+            maxLines: 2,
+          }),
+        ),
+        midX,
+        2.05,
+        z2 - 0.02,
+        Math.PI,
+        4.6,
+        1.15,
+      );
+    }
+
+    if (copy.intro) {
+      plate(
+        track(
+          wallTextTexture(copy.intro, {
+            color: '#343432',
+            size: 46,
+            width: 1024,
+            height: 512,
+            maxLines: 9,
+          }),
+        ),
+        x1 + 0.02,
+        1.75,
+        (z1 + z2) / 2,
+        Math.PI / 2,
+        4.2,
+        2.1,
+      );
+    }
+
+    // 东墙：平面图 + 下面一行操作说明。东墙被 4 m 的门洞切得只剩 z 0–3 那一截，
+    // 图就挂在那截上。
+    plate(
+      track(
+        planPanelTexture(
+          plan.walls,
+          plan.bounds,
+          ROOMS.map((room) => room.rect),
+        ),
+      ),
+      x2 - 0.02,
+      1.95,
+      1.5,
+      -Math.PI / 2,
+      2.6,
+      1.3,
+    );
+    if (copy.hint) {
+      plate(
+        track(wallTextTexture(copy.hint, { color: '#C7C2B6', size: 34, maxLines: 3 })),
+        x2 - 0.02,
+        0.78,
+        1.5,
+        -Math.PI / 2,
+        2.4,
+        0.5,
+      );
+    }
+
+    if (copy.curator) {
+      // 短隔墙朝入口那一面（西面）
+      plate(
+        track(
+          wallTextTexture(copy.curator, {
+            color: '#343432',
+            size: 42,
+            align: 'center',
+            maxLines: 4,
+          }),
+        ),
+        7.5 - 0.02,
+        1.85,
+        1.5,
+        -Math.PI / 2,
+        2.5,
+        0.9,
+      );
+    }
+  }
+
   // ---- 章节分界的铜灰嵌条：只放在分区交界那一线，不铺满地面 ----
   const thresholdGeo = track(new THREE.PlaneGeometry(1, 1));
   const thresholdMat = track(
@@ -982,6 +1169,22 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     //  顶端故意顶过天花 5 cm：墙材质是 DoubleSide，门楣顶面要是正好落在天花
     //  平面上，两个面共面会 z-fighting —— 天花色与墙色交替闪。顶过头的那截
     //  被天花挡在后面，看不见。
+    // 门洞内侧那道 8 mm 做旧青铜压边（规格：正面边缘加一道，不许发出金色强反光）
+    for (const side of [-1, 1]) {
+      const at = along(side * (door.width / 2 - BRONZE.edge / 2 - 0.001));
+      boxJobs.push({
+        material: bronzeMat,
+        x: at.x,
+        y: door.height / 2,
+        z: at.z,
+        w: BRONZE.edge,
+        // 上下各短 2 cm：不与门套的顶面、地面共面（又是会闪的那种）
+        h: door.height - 0.04,
+        d: Math.min(0.02, depth),
+        yaw,
+      });
+    }
+
     // 底面也要让开：序厅那道 3.4 m 的门正好等于它的净高，门楣底面会与天花共面
     const lintelBottom = Math.min(door.height, ceiling - 0.03);
     const lintelHeight = Math.max(0.1, ceiling + 0.05 - lintelBottom);

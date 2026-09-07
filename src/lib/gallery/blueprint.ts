@@ -414,7 +414,8 @@ export interface DoorSpec {
 export type PropSpec =
   | { kind: 'bench'; x: number; z: number; w: number; d: number; ry: number }
   | { kind: 'sculpture'; x: number; z: number; r: number }
-  | { kind: 'partition'; x1: number; z1: number; x2: number; z2: number; h: number };
+  /** tint：隔断自己的颜色（不写就跟房间墙一个色） */
+  | { kind: 'partition'; x1: number; z1: number; x2: number; z2: number; h: number; tint?: string };
 
 export interface RoomSpec {
   id: ZoneId;
@@ -423,6 +424,11 @@ export interface RoomSpec {
   corridorThrough: boolean;
   doors: DoorSpec[];
   props: PropSpec[];
+  /**
+   * 四面墙各自的墙色（只有序厅用：入口那四面的性格完全不同）。
+   *  不给就统一用分区的 wall 色。
+   */
+  wallColors?: Partial<Record<WallKey, string>>;
 }
 
 /**
@@ -444,8 +450,10 @@ export const ROOMS: RoomSpec[] = [
     ],
     props: [
       // 3 m 短隔墙：挡住从入口直接看到东侧出口，形成进入仪式感
-      { kind: 'partition', x1: 7.5, z1: 0, x2: 7.5, z2: 3, h: 3 },
+      { kind: 'partition', x1: 7.5, z1: 0, x2: 7.5, z2: 3, h: 3.1, tint: '#D7D0C4' },
     ],
+    // 序厅四面：南（入口）深石墨、北（主视觉）深酒红、西（策展文字）浅米、东（平面图）青灰
+    wallColors: { s: '#232726', n: '#4A202A', w: '#C7BFB3', e: '#3D4443' },
   },
   {
     id: 'atrium',
