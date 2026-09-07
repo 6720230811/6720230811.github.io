@@ -167,6 +167,8 @@ interface Band {
   zone: ZoneId;
   /** 铺装方向：模块长边顺着它 */
   along: 'x' | 'z';
+  /** 天花高度：转角那一块要压低（见 corridorBands），不写就按分区净高 */
+  ceiling?: number;
 }
 
 function rectOf(a: Vec2, b: Vec2): Rect {
@@ -188,13 +190,21 @@ function rectOf(a: Vec2, b: Vec2): Rect {
  *  转角方块用「进来那一段」的颜色：章节在转角之后才换，拐弯时颜色是渐的，
  *  不会在转身的地方突然跳一下。
  */
-function corridorBands(): Band[] {
+function corridorBands(cornerCeiling: (arc: number) => number): Band[] {
   const half = CORRIDOR.width / 2;
   const out: Band[] = [];
   const corners: Rect[] = [];
   for (let i = 1; i + 1 < CORRIDOR_PATH.length; i += 1) {
     const p = CORRIDOR_PATH[i];
     corners.push({ x1: p.x - half, z1: p.z - half, x2: p.x + half, z2: p.z + half });
+  }
+
+  /** 每个折点处的累计弧长 */
+  const arcAt: number[] = [0];
+  for (let i = 0; i + 1 < CORRIDOR_PATH.length; i += 1) {
+    const a = CORRIDOR_PATH[i];
+    const b = CORRIDOR_PATH[i + 1];
+    arcAt.push(arcAt[i] + Math.hypot(b.x - a.x, b.z - a.z));
   }
 
   for (let i = 0; i + 1 < CORRIDOR_PATH.length; i += 1) {
@@ -230,6 +240,9 @@ function corridorBands(): Band[] {
       z2: p.z + half,
       zone: corridorZone(nearestArc((p.x + prev.x) / 2, (p.z + prev.z) / 2)),
       along: Math.abs(p.x - prev.x) < 1e-6 ? 'z' : 'x',
+      // 转角横跨前后各 2 m，压到两边较低的那一档：墙是一段一个高度，
+      // 天花不能高过它，否则墙顶与天花之间会露出一条缝
+      ceiling: cornerCeiling(arcAt[i]),
     });
   }
   return out;
@@ -645,7 +658,32 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 
   // ---- 地面与天花：长廊按「段 + 转角」铺，房间各铺一块 ----
   const roomHoles = ROOMS.map((room) => room.rect);
-  const corridor = corridorBands();
+  /**
+   * 长廊沿折线的天花高度：章节各有一档（自然 3.8、光影 4.0），
+   *  转角那块 4×4 横跨前后各 2 m，压到两边较低的那一档 ——
+   *  墙是一段一个高度，天花高过它就漏光。
+   */
+  const cornerCeilings = new Map<number, number>();
+  {
+    let travelled = 0;
+    for (let i = 1; i + 1 < CORRIDOR_PATH.length; i += 1) {
+      const a = CORRIDOR_PATH[i - 1];
+      const b = CORRIDOR_PATH[i];
+      const c = CORRIDOR_PATH[i + 1];
+      travelled += Math.hypot(b.x - a.x, b.z - a.z);
+      const incoming = zoneSpec(corridorZone(nearestArc((a.x + b.x) / 2, (a.z + b.z) / 2))).ceiling;
+      const outgoing = zoneSpec(corridorZone(nearestArc((b.x + c.x) / 2, (b.z + c.z) / 2))).ceiling;
+      cornerCeilings.set(travelled, Math.min(incoming, outgoing));
+    }
+  }
+  const ceilingAtArc = (arc: number): number => {
+    let height = zoneSpec(corridorZone(arc)).ceiling;
+    for (const [corner, value] of cornerCeilings) {
+      if (Math.abs(arc - corner) <= CORRIDOR.width / 2) height = Math.min(height, value);
+    }
+    return height;
+  };
+  const corridor = corridorBands(ceilingAtArc);
   const branchBands: Band[] = BRANCHES.map((branch) => {
     const half = branch.width / 2;
     const rect = rectOf(branch.from, branch.to);
@@ -727,11 +765,15 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   }
 
   /** 铺一块天花：长廊的要先挖掉房间（房间的顶比长廊高）和支廊（支廊顶与长廊
-   *  同高 3.6 m，两片共面照样会闪，长廊把那块让给支廊） */
+   *  同高，两片共面照样会闪，长廊把那块让给支廊） */
   const ceilingHoles: Rect[] = [
     ...roomHoles,
     ...branchBands.map((band) => ({ x1: band.x1, z1: band.z1, x2: band.x2, z2: band.z2 })),
   ];
+  /** 天花高度跟分区走（自然 3.8、光影 4.0）；支廊不是章节，仍按长廊标准高 */
+  const ceilingY = (band: Band): number =>
+    band.ceiling ??
+    (zoneSpec(band.zone).kind === 'corridor' ? zoneSpec(band.zone).ceiling : CORRIDOR.height);
   const addCeiling = (band: Band): void => {
     const mats = zoneMats.get(band.zone) ?? fallback;
     let pieces: Rect[] = [{ x1: band.x1, z1: band.z1, x2: band.x2, z2: band.z2 }];
@@ -742,12 +784,42 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       const mesh = new THREE.Mesh(unitPlane, mats.ceiling);
       mesh.rotation.x = Math.PI / 2; // 朝下
       mesh.scale.set(piece.x2 - piece.x1, piece.z2 - piece.z1, 1);
-      mesh.position.set((piece.x1 + piece.x2) / 2, CORRIDOR.height, (piece.z1 + piece.z2) / 2);
+      mesh.position.set((piece.x1 + piece.x2) / 2, ceilingY(band), (piece.z1 + piece.z2) / 2);
       scene.add(mesh);
     }
   };
   for (const band of corridor) addCeiling(band);
   for (const band of branchBands) addCeiling(band);
+
+  /**
+   * 天花高度变化的收口：转角那块 4×4 压低之后，前后各留一道竖向的面。
+   *  章节的分界正好都落在折点上（span 是按折点切的），所以收口就在
+   *  转角前后 2 m、垂直于长廊方向 —— 不补的话两段顶之间会露出一条通到外面的缝。
+   */
+  for (const [arc, corner] of cornerCeilings) {
+    const at = pointAtArc(arc);
+    if (!at) continue;
+    const half = CORRIDOR.width / 2;
+    const incoming = ceilingAtArc(arc - half - 0.5);
+    const outgoing = ceilingAtArc(arc + half + 0.5);
+    const mats = zoneMats.get(corridorZone(arc - 0.5)) ?? fallback;
+    for (const [distance, from, to] of [
+      [-half, incoming, corner],
+      [half, corner, outgoing],
+    ] as [number, number, number][]) {
+      if (Math.abs(to - from) < 0.01) continue;
+      const mesh = new THREE.Mesh(unitPlane, mats.wall);
+      mesh.position.set(
+        at.point.x + at.dir.x * distance,
+        (from + to) / 2,
+        at.point.z + at.dir.z * distance,
+      );
+      // 面朝来向：从矮的一侧走过来，先看见这道收口
+      mesh.rotation.y = Math.atan2(-at.dir.x, -at.dir.z);
+      mesh.scale.set(CORRIDOR.width, Math.abs(to - from), 1);
+      scene.add(mesh);
+    }
+  }
   // 房间：各按自己的净高铺一块（比长廊高，是空间层次的主要来源）
   const ceilingPieces: Rect[] = [];
   for (const room of ROOMS) {
@@ -824,6 +896,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     length: number;
     width: number;
     zone: ZoneId;
+    y: number;
   }
   const slotRuns: SlotRun[] = [];
   let travelled = 0;
@@ -840,7 +913,8 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     for (let start = 0; start < length; start += LIGHT.run + LIGHT.gap) {
       const end = Math.min(start + LIGHT.run, length);
       if (end - start < 1) continue;
-      const zoneId = corridorZone(travelled + (start + end) / 2);
+      const arc = travelled + (start + end) / 2;
+      const zoneId = corridorZone(arc);
       const own = zoneSpec(zoneId).slot;
       // 城市长廊那种「两段错位」：相邻两段左右换边，走起来有节奏
       const offset = own?.stagger && runIndex % 2 === 1 ? -LIGHT.offset : LIGHT.offset;
@@ -852,6 +926,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
         length: end - start,
         width: own?.width ?? LIGHT.width,
         zone: zoneId,
+        y: ceilingAtArc(arc),
       });
     }
     travelled += length;
@@ -867,7 +942,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   for (const [zoneId, runs] of runsByZone) {
     const slots = new THREE.InstancedMesh(slotGeo, slotMaterial(zoneId), runs.length);
     runs.forEach((run, i) => {
-      pos.set(run.x, CORRIDOR.height - 0.03, run.z);
+      pos.set(run.x, run.y - 0.03, run.z);
       quat.setFromEuler(euler.set(0, run.yaw, 0)).multiply(flatQuat);
       slots.setMatrixAt(i, matrix.compose(pos, quat, scale.set(run.width, run.length, 1)));
     });

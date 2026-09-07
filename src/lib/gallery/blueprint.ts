@@ -195,7 +195,8 @@ export const ZONES: Zone[] = [
     reveal: { color: '#232726', width: 0.02, spacing: [3, 5], side: 'right' },
     // 3000 K，天花边缘还有极弱的暗藏暖光
     slot: { width: 0.2, kelvin: 3000 },
-    ceilingColor: '#F1EEE7',
+    // 3000 K 那档的顶色
+    ceilingColor: '#D8D0C5',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'corridor',
@@ -213,7 +214,7 @@ export const ZONES: Zone[] = [
     reveal: { color: '#896A47', width: 0.008, spacing: [8, 10] },
     // 两段错位线性光槽，3200 K，城市道路那种节奏（不要霓虹）
     slot: { width: 0.22, kelvin: 3200, stagger: true },
-    ceilingColor: '#F1EEE7',
+    ceilingColor: '#DDD8CF',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'corridor',
@@ -223,7 +224,7 @@ export const ZONES: Zone[] = [
     id: 'nature',
     chapter: 3,
     label: { zh: '自然长廊', en: 'Nature Corridor' },
-    ceiling: 3.6,
+    ceiling: 3.8,
     wall: '#E8E4DC',
     accent: '#627775',
     accentRatio: 0.26,
@@ -231,7 +232,7 @@ export const ZONES: Zone[] = [
     reveal: { color: '#232726', width: 0.012 },
     // 柔和洗墙光，3500 K
     slot: { width: 0.24, kelvin: 3500 },
-    ceilingColor: '#F1EEE7',
+    ceilingColor: '#D5D9D2',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'corridor',
@@ -241,7 +242,8 @@ export const ZONES: Zone[] = [
     id: 'light',
     chapter: 4,
     label: { zh: '光影长廊', en: 'Light Corridor' },
-    ceiling: 3.6,
+    // 规格 3.8–4 m：暗顶，顶面亮度明显低于作品墙
+    ceiling: 4,
     wall: '#E8E4DC',
     accent: '#8E8B84',
     accentRatio: 0.24,
@@ -249,7 +251,9 @@ export const ZONES: Zone[] = [
     reveal: { color: '#896A47', width: 0.008, spacing: [7, 9] },
     // 暗顶 + 局部发光带，暖琥珀白
     slot: { width: 0.18, kelvin: 2900, color: '#F5D4A2' },
-    ceilingColor: '#F1EEE7',
+    // 暗顶
+    ceilingColor: '#403A37',
+    trim: { top: 0.03 },
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'corridor',
@@ -265,7 +269,9 @@ export const ZONES: Zone[] = [
     accentRatio: 0.24,
     // 较窄的中性光槽，3600–3800 K
     slot: { width: 0.18, kelvin: 3700 },
-    ceilingColor: '#F1EEE7',
+    // 暗顶：光槽亮度由入口向沉浸展厅逐渐降低
+    ceilingColor: '#283338',
+    trim: { top: 0.03 },
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'corridor',
@@ -281,7 +287,8 @@ export const ZONES: Zone[] = [
     accentRatio: 0.24,
     // 收束：光槽比别处暗一档
     slot: { width: 0.2, kelvin: 3000, intensity: 1.3 },
-    ceilingColor: '#F1EEE7',
+    // 规格没给终章顶色：比别处压一档，配合收束感
+    ceilingColor: '#CFC9BE',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'corridor',
@@ -296,7 +303,7 @@ export const ZONES: Zone[] = [
     accentRatio: 0.22,
     // 顶棚周围那两条隐藏轨道灯槽：3900 K
     slot: { width: 0.2, kelvin: 3900 },
-    ceilingColor: '#EFEAE0',
+    ceilingColor: '#E3DDD2',
     floorColor: '#625E57',
     floorModule: [2, 2],
     kind: 'room',
@@ -308,7 +315,7 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#627775',
     accentRatio: 0.22,
-    ceilingColor: '#F1EEE7',
+    ceilingColor: '#DCE0D9',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'room',
@@ -322,7 +329,7 @@ export const ZONES: Zone[] = [
     accentRatio: 0.2,
     // 可移动展墙：正面 / 背面 / 本期主题色（主题色只有一种，由展览数据定）
     screen: { front: '#DCD8D0', back: '#B7B0A5', theme: '#30494B' },
-    ceilingColor: '#F1EEE7',
+    ceilingColor: '#E2DED6',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'room',
@@ -334,7 +341,7 @@ export const ZONES: Zone[] = [
     wall: '#202325',
     accent: '#2C3033',
     accentRatio: 0.2,
-    ceilingColor: '#181B1D',
+    ceilingColor: '#0F1213',
     floorColor: '#292C2D',
     floorModule: [2.4, 2.4],
     kind: 'room',
@@ -352,7 +359,7 @@ export const ZONES: Zone[] = [
     slot: { width: 0.16, kelvin: 4000 },
     // 墙与深色天花之间那道 30 mm 缝：天花看着像浮着
     trim: { base: 0.05, top: 0.03 },
-    ceilingColor: '#363837',
+    ceilingColor: '#2C2E2D',
     floorColor: '#5B574F',
     floorModule: [2, 2],
     kind: 'room',
@@ -364,7 +371,8 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#8E8B84',
     accentRatio: 0.2,
-    ceilingColor: '#F1EEE7',
+    // 出口区：整体比终章亮一档
+    ceilingColor: '#E6E0D6',
     floorColor: '#57534D',
     floorModule: [1.2, 1.2],
     kind: 'room',

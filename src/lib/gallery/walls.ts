@@ -154,7 +154,7 @@ function offsetPath(points: Vec2[], distance: number, side: 1 | -1, chamfer: num
 function polylineWalls(
   path: Vec2[],
   side: 1 | -1,
-  info: { height: number; kind: WallSegment['kind'] },
+  info: { heightOf: (mid: Vec2) => number; kind: WallSegment['kind'] },
   zoneOf: (mid: Vec2) => ZoneId,
 ): WallSegment[] {
   const out: WallSegment[] = [];
@@ -171,7 +171,7 @@ function polylineWalls(
       b,
       normal: { x: -d.z * side, z: d.x * side },
       length,
-      height: info.height,
+      height: info.heightOf({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }),
       zone: zoneOf({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }),
       kind: info.kind,
     });
@@ -260,9 +260,9 @@ function propWalls(room: RoomSpec): WallSegment[] {
 
 /** 支廊：中心线两侧各一道墙，两端敞口 */
 function branchWalls(branch: BranchSpec): WallSegment[] {
-  const info = zone(branch.zone);
   const path = [branch.from, branch.to];
-  const meta = { height: info.ceiling, kind: 'base' as const };
+  // 支廊的顶还是长廊标准高（3.6），墙跟它齐，别顶到所属房间那么高
+  const meta = { heightOf: () => CORRIDOR.height, kind: 'base' as const };
   return [
     ...polylineWalls(offsetPath(path, branch.width / 2, 1, 0), 1, meta, () => branch.zone),
     ...polylineWalls(offsetPath(path, branch.width / 2, -1, 0), -1, meta, () => branch.zone),
@@ -434,7 +434,8 @@ export function buildWalls(): BuildResult {
       ...polylineWalls(
         path,
         side,
-        { height: CORRIDOR.height, kind: 'base' },
+        // 墙高跟着章节净高走：自然 3.8、光影 4.0 —— 墙不跟到顶，墙顶与天花之间会漏光
+        { heightOf: (mid) => zone(corridorZoneAt(nearestArc(mid.x, mid.z))).ceiling, kind: 'base' },
         (mid) => corridorZoneAt(nearestArc(mid.x, mid.z)),
       ),
     );
