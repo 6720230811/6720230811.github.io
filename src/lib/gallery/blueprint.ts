@@ -379,8 +379,10 @@ export const ZONES: Zone[] = [
     label: { zh: '大型作品厅', en: 'Large Works' },
     ceiling: 5.5,
     wall: '#D8D5CE',
-    accent: '#B9B4AA',
-    accentRatio: 0.2,
+    // 不再额外挑 accent：北面那道重点墙由房间的 wallColors 给，
+    // 免得 accent 机制把重点墙盖掉
+    accent: null,
+    accentRatio: 0,
     // 两条平行黑色轨道灯槽：作品灯那一档 4000 K
     slot: { width: 0.16, kelvin: 4000 },
     // 墙与深色天花之间那道 30 mm 缝：天花看着像浮着
@@ -451,7 +453,7 @@ export interface RoomSpec {
   doors: DoorSpec[];
   props: PropSpec[];
   /**
-   * 四面墙各自的墙色（只有序厅用：入口那四面的性格完全不同）。
+   * 四面墙各自的墙色（序厅与大型作品厅用：这几间的四面性格完全不同）。
    *  不给就统一用分区的 wall 色。
    */
   wallColors?: Partial<Record<WallKey, string>>;
@@ -461,7 +463,7 @@ export interface RoomSpec {
  * 房间表。与规格的三处偏差（都在上面说明过）：
  *  - 临展厅 Z 25–30（规格 21–27，那块被长廊 z=23 那一段占着）
  *  - 沉浸展厅 Z 10–14（规格 10–15，北墙要让给慢门长廊的 z=14 墙）
- *  - 大型作品厅 X 17–25 / Z 0.5–6（规格 13–23 / 1–8，被夜行长廊的转角切到）
+ *  - 大型作品厅 X 17–27 / Z 0.5–6（规格 13–23 / 1–8，被夜行长廊的转角切到）
  */
 export const ROOMS: RoomSpec[] = [
   {
@@ -490,8 +492,8 @@ export const ROOMS: RoomSpec[] = [
       { wall: 'w', at: 16, width: DOOR.widthArch, height: DOOR.heightMajor, arch: true },
       // 北：长廊在大厅里转向北，从这里出去
       { wall: 'n', at: 17, width: DOOR.widthArch, height: DOOR.heightMajor, arch: true },
-      // 南：3 m 支线门洞 → 大型作品厅
-      { wall: 's', at: 19, width: 3, height: DOOR.height },
+      // 南：3 m 支线门洞 → 大型作品厅（支廊中心线 x=18.5，与北门 x=17 错开）
+      { wall: 's', at: 18.5, width: 3, height: DOOR.height },
     ],
     props: [
       { kind: 'sculpture', x: 17, z: 17, r: 1.15 },
@@ -529,15 +531,20 @@ export const ROOMS: RoomSpec[] = [
   },
   {
     id: 'large',
-    rect: { x1: 17, z1: 0.5, x2: 25, z2: 6 },
+    rect: { x1: 17, z1: 0.5, x2: 27, z2: 6 },
     corridorThrough: false,
     doors: [
-      // 北：中央大厅南支线
-      { wall: 'n', at: 19, width: 3, height: DOOR.heightMajor },
+      // 北：中央大厅南支线。门洞贴着西北角开（x 17–20），把整面北墙让给
+      //  重点墙 —— 规格要「北面 ≥7 m 的烟熏陶土墙」，墙只有 10 m 宽，
+      //  门洞只能靠一头放，剩下的 20–27 才是连续的一整片
+      { wall: 'n', at: 18.5, width: 3, height: DOOR.heightMajor },
       // 东：→ 总览区
       { wall: 'e', at: 4.5, width: 3, height: DOOR.height },
     ],
-    props: [{ kind: 'sculpture', x: 21, z: 3.2, r: 2 }],
+    props: [{ kind: 'sculpture', x: 22, z: 3.2, r: 2 }],
+    // 四面各一色：北面是低饱和烟熏陶土的重点墙（20–27 那 7 m，给大型作品
+    //  当背景），东西两面挂大型横幅，南面放创作过程、文字与小型作品
+    wallColors: { n: '#765448', e: '#D2CCC1', w: '#D2CCC1', s: '#B6AEA3' },
   },
   {
     id: 'overview',
@@ -570,9 +577,9 @@ export const BRANCHES: BranchSpec[] = [
   // 自然长廊（北墙 z=18）→ 潮汐之间南门（z=20）
   { id: 'branch-tide', from: { x: 8, z: 18 }, to: { x: 8, z: 20 }, width: 3, zone: 'tide' },
   // 中央大厅南门（z=12）→ 大型作品厅北门（z=6）
-  { id: 'branch-atrium-large', from: { x: 19, z: 12 }, to: { x: 19, z: 6 }, width: 3, zone: 'large' },
-  // 大型作品厅东门（x=25）→ 总览区西门（x=30）
-  { id: 'branch-large-overview', from: { x: 25, z: 4.5 }, to: { x: 30, z: 4.5 }, width: 3, zone: 'overview' },
+  { id: 'branch-atrium-large', from: { x: 18.5, z: 12 }, to: { x: 18.5, z: 6 }, width: 3, zone: 'large' },
+  // 大型作品厅东门（x=27）→ 总览区西门（x=30）
+  { id: 'branch-large-overview', from: { x: 27, z: 4.5 }, to: { x: 30, z: 4.5 }, width: 3, zone: 'overview' },
 ];
 
 /**

@@ -360,10 +360,50 @@ function axisOf(wall: WallSegment): Axis {
   return 'd';
 }
 
+/** 墙在它那条轴上的区间（不分 a→b 的方向） */
+function spanOf(wall: WallSegment): [number, number] {
+  const horizontal = axisOf(wall) === 'h';
+  const lo = horizontal ? Math.min(wall.a.x, wall.b.x) : Math.min(wall.a.z, wall.b.z);
+  const hi = horizontal ? Math.max(wall.a.x, wall.b.x) : Math.max(wall.a.z, wall.b.z);
+  return [lo, hi];
+}
+
+/** 从 [s,e] 里挖掉 [lo,hi]：剩下的碎块短于 0.25 m 就不要 */
+function subtractSpan(
+  s: number,
+  e: number,
+  lo: number,
+  hi: number,
+  min = 0.25,
+): [number, number][] {
+  if (Math.min(e, hi) - Math.max(s, lo) <= 0) return [[s, e]];
+  const out: [number, number][] = [];
+  if (Math.min(lo, e) - s >= min) out.push([s, Math.min(lo, e)]);
+  if (e - Math.max(hi, s) >= min) out.push([Math.max(hi, s), e]);
+  return out;
+}
+
+/** 按区间切一段墙：端点顺着 a→b 的方向插值 */
+function sliceWall(wall: WallSegment, lo: number, hi: number): WallSegment | null {
+  if (hi - lo < 0.2) return null;
+  const horizontal = axisOf(wall) === 'h';
+  const from = horizontal ? Math.min(wall.a.x, wall.b.x) : Math.min(wall.a.z, wall.b.z);
+  const stepX = horizontal ? Math.sign(wall.b.x - wall.a.x) : 0;
+  const stepZ = horizontal ? 0 : Math.sign(wall.b.z - wall.a.z);
+  const at = (value: number): Vec2 => ({
+    x: wall.a.x + stepX * (value - from),
+    z: wall.a.z + stepZ * (value - from),
+  });
+  return { ...wall, a: at(lo), b: at(hi), length: hi - lo };
+}
+
 /**
- * 去掉重合的墙：房间墙与长廊墙、支廊墙与长廊墙常共用一条线（比如大型作品厅
- * 的北墙就是终章长廊的南墙），两段共面墙叠在一起会 z-fighting，只留先来的
- * 那段（长廊优先，所以传进来的顺序有意义）。
+ * 去掉共面的重叠墙：房间墙与长廊墙、支廊墙与长廊墙常共用一条线（大型作品厅
+ * 的北墙就压在终章长廊的南墙上），两段共面的墙叠在一起会 z-fighting。
+ *
+ *  不是「谁先来留谁」—— 那样会出洞：长廊那面墙只有 3.6 m，房间那面 5.5 m，
+ *  留矮的那面就等于在房间墙上开了一条通到外面的缝。这里按区间算：
+ *  重叠处**留高的**，矮的只保留没被压住的那截（必要时一拆二）。
  */
 function dropDuplicates(walls: WallSegment[]): WallSegment[] {
   const out: WallSegment[] = [];
@@ -375,18 +415,37 @@ function dropDuplicates(walls: WallSegment[]): WallSegment[] {
     }
     const horizontal = axis === 'h';
     const fixed = horizontal ? wall.a.z : wall.a.x;
-    const lo = horizontal ? Math.min(wall.a.x, wall.b.x) : Math.min(wall.a.z, wall.b.z);
-    const hi = horizontal ? Math.max(wall.a.x, wall.b.x) : Math.max(wall.a.z, wall.b.z);
-    const clash = out.some((other) => {
-      if (axisOf(other) !== axis) return false;
-      const otherFixed = horizontal ? other.a.z : other.a.x;
-      if (Math.abs(otherFixed - fixed) > 0.05) return false;
-      const oLo = horizontal ? Math.min(other.a.x, other.b.x) : Math.min(other.a.z, other.b.z);
-      const oHi = horizontal ? Math.max(other.a.x, other.b.x) : Math.max(other.a.z, other.b.z);
-      // 重叠超过 0.5 m 才算重复：门洞两侧那几截短墙要留下
-      return Math.min(hi, oHi) - Math.max(lo, oLo) > 0.5;
-    });
-    if (!clash) out.push(wall);
+    const [lo, hi] = spanOf(wall);
+    const sameLine = (other: WallSegment): boolean =>
+      axisOf(other) === axis &&
+      Math.abs((horizontal ? other.a.z : other.a.x) - fixed) <= 0.05;
+
+    // 先让开「不矮于它」的旧墙占住的那截
+    let spans: [number, number][] = [[lo, hi]];
+    for (const other of out) {
+      if (!sameLine(other) || other.height < wall.height) continue;
+      const [oLo, oHi] = spanOf(other);
+      spans = spans.flatMap(([s, e]) => subtractSpan(s, e, oLo, oHi));
+    }
+
+    // 再把比它矮的旧墙压住的那截收回来（旧墙可能一拆二）
+    for (let i = out.length - 1; i >= 0; i -= 1) {
+      const other = out[i];
+      if (!sameLine(other) || other.height >= wall.height) continue;
+      const [oLo, oHi] = spanOf(other);
+      const rest = subtractSpan(oLo, oHi, lo, hi);
+      if (rest.length === 1 && rest[0][0] === oLo && rest[0][1] === oHi) continue;
+      out.splice(i, 1);
+      for (const [s, e] of rest) {
+        const piece = sliceWall(other, s, e);
+        if (piece) out.push(piece);
+      }
+    }
+
+    for (const [s, e] of spans) {
+      const piece = sliceWall(wall, s, e);
+      if (piece) out.push(piece);
+    }
   }
   return out;
 }
