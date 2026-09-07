@@ -1,0 +1,141 @@
+---
+import { gallery, mediaUrl } from '../../data/gallery';
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+interface Props {
+  locale: Locale;
+  backUrl: string;
+}
+
+const { locale, backUrl } = Astro.props;
+const t = useTranslations(locale);
+const items = gallery.items
+  .filter((item) => item.type === 'image')
+  .map((item) => ({
+    id: item.id,
+    src: mediaUrl(item.src),
+    title: item.title[locale],
+  }));
+---
+
+<div
+  class="screening"
+  id="screening-room"
+  data-ready="false"
+  data-locale={locale}
+  data-items={JSON.stringify(items)}
+  data-label-standby={t('screening.standby')}
+  data-label-starting={t('screening.starting')}
+  data-label-ready={t('screening.ready')}
+  data-label-playing={t('screening.playing')}
+  data-label-paused={t('screening.paused')}
+  data-label-cooling={t('screening.cooling')}
+  data-label-play={t('screening.play')}
+  data-label-pause={t('screening.pause')}
+  data-label-selected={t('screening.selected')}
+  data-label-no-source={t('screening.noSource')}
+  data-label-upload-failed={t('screening.uploadFailed')}
+  data-label-hint={t('screening.hint')}
+  data-label-power={t('screening.power')}
+  data-label-source={t('screening.source')}
+  data-label-focus={t('screening.focus')}
+  data-label-seat={t('screening.seat')}
+  data-label-projector={t('screening.projector')}
+  data-label-immersive={t('screening.immersive')}
+  data-label-exit={t('gallery.exit')}
+  data-label-prev={t('gallery.prev')}
+  data-label-next={t('gallery.next')}
+>
+  <canvas
+    class="screening__canvas"
+    id="screening-canvas"
+    tabindex="0"
+    role="application"
+    aria-label={t('screening.canvas')}
+  ></canvas>
+
+  <div class="screening__topbar">
+    <span class="screening__eyebrow">PRIVATE SCREENING ROOM</span>
+    <span class="screening__state" id="screening-state" aria-live="polite">{t('screening.standby')}</span>
+  </div>
+
+  <div class="screening__tooltip" id="screening-tooltip" hidden></div>
+
+  <div class="screening__focus" id="screening-focus" hidden>
+    <label for="screening-focus-range">{t('screening.focus')}</label>
+    <input id="screening-focus-range" type="range" min="0" max="1" step="0.01" value="0.82" />
+  </div>
+
+  <div class="screening__hud">
+    <p class="screening__hint" id="screening-hint">{t('screening.hint')}</p>
+    <div class="screening__actions">
+      <button class="screening__button" id="screening-view" type="button" data-view="seat">
+        {t('screening.projector')}
+      </button>
+      <button class="screening__button" id="screening-source" type="button">{t('screening.source')}</button>
+      <button class="screening__button screening__button--primary" id="screening-play" type="button">
+        {t('screening.play')}
+      </button>
+      <button class="screening__button" id="screening-immersive" type="button" aria-pressed="false">
+        {t('screening.immersive')}
+      </button>
+      <a class="screening__button" href={backUrl}>{t('gallery.leave')}</a>
+    </div>
+  </div>
+
+  <dialog class="screening-source" id="screening-source-dialog" aria-labelledby="screening-source-title">
+    <form method="dialog" class="screening-source__panel">
+      <div class="screening-source__head">
+        <div>
+          <span class="screening-source__eyebrow">SOURCE</span>
+          <h2 id="screening-source-title">{t('screening.chooseTitle')}</h2>
+        </div>
+        <button class="screening-source__close" value="cancel" aria-label={t('gallery.close')}>×</button>
+      </div>
+
+      <button class="screening-source__choice" id="screening-gallery-series" type="button">
+        <span>
+          <strong>{t('screening.gallerySeries')}</strong>
+          <small>{t('screening.gallerySeriesDesc')}</small>
+        </span>
+        <span aria-hidden="true">→</span>
+      </button>
+
+      <div class="screening-source__uploads">
+        <label class="screening-source__choice">
+          <span>
+            <strong>{t('screening.localImages')}</strong>
+            <small>JPG · PNG · WEBP · GIF</small>
+          </span>
+          <span aria-hidden="true">＋</span>
+          <input id="screening-image-input" type="file" accept="image/*" multiple />
+        </label>
+        <label class="screening-source__choice">
+          <span>
+            <strong>{t('screening.localVideo')}</strong>
+            <small>MP4 · WEBM · MOV</small>
+          </span>
+          <span aria-hidden="true">＋</span>
+          <input id="screening-video-input" type="file" accept="video/*" />
+        </label>
+      </div>
+
+      <label class="screening-source__interval" for="screening-interval">
+        <span>{t('screening.interval')}</span>
+        <select id="screening-interval">
+          <option value="3">3s</option>
+          <option value="5" selected>5s</option>
+          <option value="8">8s</option>
+          <option value="12">12s</option>
+        </select>
+      </label>
+    </form>
+  </dialog>
+
+  <p class="screening__fallback" id="screening-fallback" hidden>{t('screening.fallback')}</p>
+</div>
+
+<script>
+  import { mountScreeningRoom } from '../../lib/screening-room';
+  mountScreeningRoom(document.getElementById('screening-room'));
+</script>

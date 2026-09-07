@@ -28,6 +28,8 @@ const views: { key: GalleryView; href: string }[] = [
 
 /** 采光验证那间单摆线拱的入口（/gallery/kimbell/） */
 const lightUrl = `${base}kimbell/`;
+/** 独立的私人放映室（图片系列 / 本地视频） */
+const screeningUrl = `${base}screening-room/`;
 ---
 
 <p class="list-summary">{t('gallery.desc')}</p>
@@ -43,6 +45,7 @@ const lightUrl = `${base}kimbell/`;
     }
   </div>
   <a class="gal-view gal-view--accent" href={lightUrl}>☀ {t('gallery.light.entry')}</a>
+  <a class="gal-view gal-view--accent" href={screeningUrl}>▣ {t('screening.entry')}</a>
 </nav>
 
 {

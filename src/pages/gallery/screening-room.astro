@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Section from '../../components/Section.astro';
+import ScreeningRoom from '../../components/gallery/ScreeningRoom.astro';
+import '../../styles/screening-room.css';
+import { profile } from '../../data/profile';
+import { toLocale, useTranslations } from '../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+const backUrl = getRelativeLocaleUrl(locale, 'gallery');
+---
+
+<BaseLayout profile={p} locale={locale} title={`${t('screening.title')} · ${t('gallery.title')}`} description={t('screening.desc')}>
+  <Section title={t('screening.title')} icon="▣">
+    <p class="list-summary">{t('screening.desc')}</p>
+    <ScreeningRoom locale={locale} backUrl={backUrl} />
+  </Section>
+</BaseLayout>
+
