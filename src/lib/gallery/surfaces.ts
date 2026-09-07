@@ -597,3 +597,76 @@ export function ellipsize(
   while (out.length > 1 && ctx.measureText(`${out}…`).width > maxWidth) out = out.slice(0, -1);
   return `${out}…`;
 }
+
+/**
+ * 大尺寸地面模块：底色 + 四边一道极淡的缝。
+ *  规格要求「拼缝颜色与地面明度差不得超过 8%」，所以缝只比底色暗一点点，
+ *  再配一条更淡的高光边 —— 只在掠射角上看得出分格，不像小方格地砖那样跳。
+ *  这张是一个模块，repeat 由调用方按铺装尺寸设。
+ */
+export function floorModuleTexture(base = '#57534D', seam = 'rgba(0,0,0,0.07)'): THREE.CanvasTexture {
+  return paint(256, 256, (ctx, w, h) => {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    grain(ctx, w, h, 0.02);
+    ctx.strokeStyle = seam;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 1);
+    ctx.lineTo(w, 1);
+    ctx.moveTo(1, 0);
+    ctx.lineTo(1, h);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 3);
+    ctx.lineTo(w, 3);
+    ctx.moveTo(3, 0);
+    ctx.lineTo(3, h);
+    ctx.stroke();
+  });
+}
+
+/**
+ * 墙面：哑光矿物涂料 / 细颗粒灰泥。
+ *  只有极细的颗粒与抹刀痕，没有花纹 —— 墙是画的背景，肌理越安静越好。
+ */
+export function mineralTexture(base = '#E8E4DC'): THREE.CanvasTexture {
+  return paint(256, 256, (ctx, w, h) => {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    grain(ctx, w, h, 0.035, 1);
+    for (let i = 0; i < 14; i += 1) {
+      const y = Math.random() * h;
+      ctx.strokeStyle = `rgba(255,255,255,${0.012 + Math.random() * 0.02})`;
+      ctx.lineWidth = 2 + Math.random() * 10;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      for (let x = 0; x <= w; x += 24) ctx.lineTo(x, y + Math.sin(x / 40 + i) * 3);
+      ctx.stroke();
+    }
+  });
+}
+
+/** 平整连续顶面：比墙亮一档、颗粒更细（长廊天花 #F1EEE7，roughness 0.95） */
+export function ceilingTexture(base = '#F1EEE7'): THREE.CanvasTexture {
+  return paint(128, 128, (ctx, w, h) => {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    grain(ctx, w, h, 0.015, 1);
+  });
+}
+
+/** 铜灰色嵌条（章节分界用）：一条铜灰，两侧压深 */
+export function thresholdTexture(): THREE.CanvasTexture {
+  return paint(64, 64, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    const band = h * 0.34;
+    ctx.fillStyle = '#8C7F6E';
+    ctx.fillRect(0, (h - band) / 2, w, band);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, (h - band) / 2 - 2, w, 2);
+    ctx.fillRect(0, (h + band) / 2, w, 2);
+  });
+}
