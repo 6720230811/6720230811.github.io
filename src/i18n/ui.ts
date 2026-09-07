@@ -89,6 +89,10 @@ const zh = {
   'gallery.next': '下一件',
   'gallery.meta.camera': '器材',
   'gallery.empty': '还没有作品，去 /admin 的「画廊」里加几件。',
+  // 序厅墙上的字（画进 3D 场景里）
+  'gallery.wall.title': '夜行折廊',
+  'gallery.wall.curator': '一条折廊，把夜色分成六段。',
+  'gallery.wall.hint': '点地面走过去 · 点作品走近 · R 回正视角',
 
   // 私人放映室（/gallery/screening-room/）
   'screening.title': '暮色放映室',
@@ -275,6 +279,10 @@ const en: Record<keyof typeof zh, string> = {
   'gallery.next': 'Next',
   'gallery.meta.camera': 'Camera',
   'gallery.empty': 'No works yet — add some under “Gallery” in /admin.',
+  // Writing on the entrance walls (drawn into the 3D scene)
+  'gallery.wall.title': 'Twilight Corridor',
+  'gallery.wall.curator': 'One folded corridor, six chapters of the night.',
+  'gallery.wall.hint': 'Click the floor to walk · click a work to approach · R to reset',
 
   // Private screening room (/en/gallery/screening-room/)
   'screening.title': 'Twilight Screening Room',

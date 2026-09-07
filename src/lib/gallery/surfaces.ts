@@ -556,6 +556,103 @@ export function wallLabelTexture(title: string, meta: string): THREE.CanvasTextu
   });
 }
 
+/**
+ * 墙上的一段文字：透明底，直接把字画在墙面上（规格：文字区背后不设复杂纹理）。
+ *  字太多会自动折行、并缩字号；放不下就截断，不溢出到墙角。
+ */
+export function wallTextTexture(
+  lines: string,
+  opts: {
+    color?: string;
+    size?: number;
+    weight?: number;
+    align?: 'left' | 'center';
+    lineHeight?: number;
+    width?: number;
+    height?: number;
+    maxLines?: number;
+  } = {},
+): THREE.CanvasTexture {
+  const width = opts.width ?? 1024;
+  const height = opts.height ?? 512;
+  const align = opts.align ?? 'left';
+  const lineHeight = opts.lineHeight ?? 1.45;
+  const maxLines = opts.maxLines ?? 8;
+  return paint(width, height, (ctx, w, h) => {
+    let size = opts.size ?? 54;
+    const fontOf = (px: number): string =>
+      `${opts.weight ?? 400} ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    let wrapped = wrap(ctx, lines, fontOf(size), w - 64);
+    while (wrapped.length > maxLines && size > 24) {
+      size -= 4;
+      wrapped = wrap(ctx, lines, fontOf(size), w - 64);
+    }
+    wrapped = wrapped.slice(0, maxLines);
+
+    ctx.font = fontOf(size);
+    ctx.fillStyle = opts.color ?? '#343432';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = align;
+    const x = align === 'center' ? w / 2 : 32;
+    const top = h / 2 - ((wrapped.length - 1) * size * lineHeight) / 2;
+    wrapped.forEach((line, i) => {
+      ctx.fillText(line, x, top + i * size * lineHeight);
+    });
+  });
+}
+
+/**
+ * 东墙那张「嵌墙式发光图」：把展馆平面用低亮度青铜线画在深色底上。
+ *  不是电子屏幕 —— 是刻在墙里的一张图：底比墙色更暗一档，线是 #896A47，
+ *  房间块用极淡的青铜填满，边界再压一道暗石墨。
+ */
+export function planPanelTexture(
+  walls: readonly { a: { x: number; z: number }; b: { x: number; z: number } }[],
+  bounds: { x1: number; z1: number; x2: number; z2: number },
+  rooms: readonly { x1: number; z1: number; x2: number; z2: number }[] = [],
+): THREE.CanvasTexture {
+  return paint(1024, 512, (ctx, w, h) => {
+    ctx.fillStyle = '#23262A';
+    ctx.fillRect(0, 0, w, h);
+
+    const spanX = bounds.x2 - bounds.x1;
+    const spanZ = bounds.z2 - bounds.z1;
+    const pad = 26;
+    const scale = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanZ);
+    const offX = (w - spanX * scale) / 2;
+    const offZ = (h - spanZ * scale) / 2;
+    const px = (x: number): number => offX + (x - bounds.x1) * scale;
+    const pz = (z: number): number => offZ + (z - bounds.z1) * scale;
+
+    // 房间：极淡的一块，让平面读得出「长廊 + 几间厅」
+    ctx.fillStyle = 'rgba(137,106,71,0.14)';
+    for (const room of rooms) {
+      ctx.fillRect(px(room.x1), pz(room.z1), (room.x2 - room.x1) * scale, (room.z2 - room.z1) * scale);
+    }
+
+    ctx.lineCap = 'round';
+    // 先描一道暗石墨，再压青铜线 —— 线就不会像贴纸那样发飘
+    for (const [color, width] of [
+      ['rgba(15,17,19,0.9)', 7],
+      ['#896A47', 3],
+    ] as [string, number][]) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (const wall of walls) {
+        ctx.moveTo(px(wall.a.x), pz(wall.a.z));
+        ctx.lineTo(px(wall.b.x), pz(wall.b.z));
+      }
+      ctx.stroke();
+    }
+
+    // 四周一圈更暗的边：像嵌进墙里的一块板
+    ctx.strokeStyle = 'rgba(15,17,19,0.85)';
+    ctx.lineWidth = 14;
+    ctx.strokeRect(7, 7, w - 14, h - 14);
+  });
+}
+
 /** 一个汉字 / 一串西文单词 / 一段空白：中文按字断行，西文不从单词中间断开 */
 const CJK_WORD = /[\u4e00-\u9fff\u3000-\u303f]|[^\s\u4e00-\u9fff\u3000-\u303f]+|\s+/g;
 
@@ -649,11 +746,53 @@ export function mineralTexture(base = '#E8E4DC'): THREE.CanvasTexture {
   });
 }
 
-/** 平整连续顶面：比墙亮一档、颗粒更细（长廊天花 #F1EEE7，roughness 0.95） */
-export function ceilingTexture(base = '#F1EEE7'): THREE.CanvasTexture {
+/**
+ * 微水泥：比矿物灰泥更细腻、带一点抹刀压出来的云斑。
+ *  规格给城市长廊左墙的是「细腻微水泥或矿物涂层」，颗粒要更细、不能有大抹痕 ——
+ *  墙上是连续的城市摄影，肌理越安静越好。
+ */
+export function microCementTexture(base = '#AEA69B'): THREE.CanvasTexture {
+  return paint(256, 256, (ctx, w, h) => {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+    // 云斑：几团极淡的深浅，模拟抹刀收光留下的不均匀
+    for (let i = 0; i < 26; i += 1) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      const r = 24 + Math.random() * 60;
+      const light = Math.random() > 0.5;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, light ? 'rgba(255,255,255,0.030)' : 'rgba(0,0,0,0.026)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    grain(ctx, w, h, 0.022, 1);
+  });
+}
+
+/**
+ * 平整连续顶面：比墙亮一档、颗粒更细（长廊天花 #F1EEE7，roughness 0.95）。
+ *  ripple：潮汐之间要「极轻微的波纹状明暗变化」—— 是烘进贴图里的静态明暗，
+ *  不是投影也绝对不随时间动（规格明令不许出现动态水纹投影）。
+ */
+export function ceilingTexture(base = '#F1EEE7', ripple = false): THREE.CanvasTexture {
   return paint(128, 128, (ctx, w, h) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, w, h);
+    if (ripple) {
+      for (let i = 0; i < 7; i += 1) {
+        const y = (i / 7) * h + 6;
+        ctx.strokeStyle = i % 2 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.030)';
+        ctx.lineWidth = 3 + (i % 3) * 2;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        for (let x = 0; x <= w; x += 8) {
+          ctx.lineTo(x, y + Math.sin(x / 22 + i * 1.7) * 3.5 + Math.sin(x / 9 + i) * 1.2);
+        }
+        ctx.stroke();
+      }
+    }
     grain(ctx, w, h, 0.015, 1);
   });
 }

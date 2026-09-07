@@ -47,6 +47,8 @@ export interface ZoneSpec {
   wall: string;
   accent: string | null;
   ceilingColor: string;
+  /** 天花烘一层极轻微的静态波纹明暗 */
+  ceilingRipple?: boolean;
   floorColor: string;
   floorModule: [number, number];
   kind: 'corridor' | 'room';
@@ -97,6 +99,7 @@ function skeleton(): Skeleton {
       wall: item.wall,
       accent: item.accent,
       ceilingColor: item.ceilingColor,
+      ...(item.ceilingRipple ? { ceilingRipple: true } : {}),
       floorColor: item.floorColor,
       floorModule: item.floorModule,
       kind: item.kind,
