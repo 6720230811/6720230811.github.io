@@ -7,9 +7,10 @@
  * 同的出生点（不是换空间）。这样每个 /gallery/[room]/ 看到的都是同一座建筑，
  * 只是进去的地方不同。
  *
- *  walls 是 Hilbert 走过的每一段，按米坐标（× CELL）。obstacles 取每段墙的
- *  AABB 略微膨胀（wallT/2 + 人身余量）—— 用来做行走碰撞。placements
- *  是 N 个挂画点（循环取 gallery.items），分布在走廊一侧的墙上，间距 ≥ 1.6 m。
+ *  walls 是 Hilbert 走过、没被大厅吃掉的那一段一段墙（按米坐标 × CELL），
+ *  外加大厅自己的四壁与两道隔断。obstacles 取每段墙的 AABB 略微膨胀
+ *  （wallT/2 + 人身余量）—— 用来做行走碰撞。placements 是挂画点：长廊
+ *  一段墙一件，大厅按三排的网格挂满（见 hangHall）。
  *
  *  这一层刻意不 import three —— 纯数字进纯数字出，场景（floor.ts）只负责
  *  把下面的规格摆出来。
@@ -23,6 +24,7 @@ import {
   type WallSegment,
   generateWalls,
 } from './hilbert';
+import { buildHall, isCarved, type HallSpec } from './hall';
 import type { HallStyleId } from './styles';
 
 export type WallKey = 'n' | 'e' | 's' | 'w';
@@ -88,16 +90,18 @@ export interface SpaceSpec {
 }
 
 export interface FloorPlan {
-  /** 所有 Hilbert 墙段（场景用来建几何，碰撞用 obstacle） */
+  /** 所有墙段（迷宫剩下的 + 大厅的），场景用来建几何，碰撞用 obstacle */
   walls: WallSegment[];
   /** 墙的 AABB 障碍物（碰撞用） */
   obstacles: Obstacle[];
   /** N 个房间（按策展切），每个对应一段出生点 */
   spaces: SpaceSpec[];
-  /** 全部挂画位（沿 Hilbert 一侧墙排布） */
+  /** 全部挂画位（长廊一件一段墙 + 大厅满墙网格） */
   placements: Placement[];
   /** 建筑包围盒 */
   bounds: Rect;
+  /** 大厅（大房间）；没挖就是 null —— 场景拿它摆顶灯 */
+  hall: HallSpec | null;
 }
 
 /** 眼睛高度：相机初始高度 */
@@ -114,6 +118,22 @@ const ART_INSET = 0.06;
 const ART_LONG = 1.6;
 const MAX_SIZE = 1.6;
 const DEFAULT_ASPECT = 3 / 2;
+
+/**
+ * 大厅那面墙的挂法：三排、列距 1.15 m、长边 0.85 m。
+ *  排距 1 m 是按「竖构图最高 0.85 m」定的 —— 再密上下两排会叠在一起。
+ *  长边比走廊那套小一半：房间宽，站在哪儿都能凑近看，画小一点才挂得满。
+ */
+const HALL_ART = 0.85;
+const HALL_COL_STEP = 1.15;
+const HALL_ROW_Y = [0.95, 1.95, 2.95];
+/** 墙片两端留白：画不顶到墙角 */
+const HALL_MARGIN = 0.6;
+/**
+ * 取展品的步长：跟展品数互质时最均匀（6 件取 5 —— 下一件跳到另一头），
+ * 再按排错开一位，于是左右相邻、上下相邻都不会是同一张。
+ */
+const ITEM_STRIDE = 5;
 
 function aspectOf(item: PlanItem): number {
   return item.w && item.h ? item.w / item.h : DEFAULT_ASPECT;
@@ -138,10 +158,14 @@ function wallObstacle(wall: WallSegment, thickness: number): Obstacle {
 }
 
 /**
- * 生成 Hilbert 画廊布局：256 段墙 + N 个房间出生点 + 挂画位。
+ * 生成画廊布局：Hilbert 长廊（挖掉大厅那一块）+ 一间大厅 + N 个房间出生点
+ *  + 挂画位。
  */
 export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
-  const walls = generateWalls();
+  // 大厅：在迷宫中间挖出来的大房间，四壁 + 两道隔断
+  const hall = buildHall();
+  const maze = generateWalls().filter((wall) => !isCarved(wall));
+  const walls: WallSegment[] = [...maze, ...hall.walls];
   const obstacles = walls.map((wall) => wallObstacle(wall, WALL_T));
 
   // 每个房间的出生点：落在 Hilbert 曲线（走廊正中）上，按房间数均匀切 N 份
@@ -161,20 +185,19 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
       spawn: { x: entry.pt.x, z: entry.pt.z, yaw: entry.yaw },
     };
   });
-  void walls;
-
-  // 挂画：沿 Hilbert 一侧均匀分布，间隔 ≥ 1.6 m，按 rooms 的展品循环
+  // 挂画：长廊沿一侧墙均匀排（间隔 ≥ 1.6 m），大厅满墙网格 —— 都循环取
+  // rooms 的展品。挂不满是真的挂不满（展品就这几件），所以同一件会重复出现。
   const placements: Placement[] = [];
   const items = rooms.flatMap((room) => room.items);
   if (items.length === 0) {
-    return { walls, obstacles, spaces, placements, bounds: boundsOf(FLO_INFO.min, FLO_INFO.max) };
+    return { walls, obstacles, spaces, placements, bounds: boundsOf(FLO_INFO.min, FLO_INFO.max), hall };
   }
   // 在每一段墙上挂 0 或 1 件画（挂画中心在墙中点），相邻两段之间的最小距离
   // ≥ 1.6 m（不挨着）。沿 Hilbert 顺序均匀排
   const placementStep = 1; // 每段墙挂一件（有些墙被跳过）
   const usedWalls: WallSegment[] = [];
-  for (let i = 0; i < walls.length; i += placementStep) {
-    const wall = walls[i];
+  for (let i = 0; i < maze.length; i += placementStep) {
+    const wall = maze[i];
     if (wall.length < 1.0) continue; // 太短的墙不挂画
     // 跟上一件画的距离：墙段的中点 + 内法线 - 上件画位置
     if (placements.length > 0) {
@@ -214,34 +237,91 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
     });
   });
 
+  // 大厅：四壁 + 隔断两面，按网格挂满（三排 × 若干列）
+  placements.push(
+    ...hangHall(
+      hall,
+      items,
+      nearestSpace(spaces, (hall.rect.x1 + hall.rect.x2) / 2, (hall.rect.z1 + hall.rect.z2) / 2)?.id ?? '',
+    ),
+  );
+
   return {
     walls,
     obstacles,
     spaces,
     placements,
     bounds: boundsOf(FLO_INFO.min, FLO_INFO.max),
+    hall,
   };
+}
+
+/**
+ * 把大厅的墙挂满：每段墙排三排、每排若干列，左右上下都不是同一件。
+ * 隔断两面各挂各的 —— 走到隔断侧面看到的是另一批画。
+ */
+function hangHall(hall: HallSpec, items: readonly PlanItem[], spaceId: string): Placement[] {
+  const out: Placement[] = [];
+  let seq = 0;
+
+  for (const wall of hall.walls) {
+    if (wall.length < 0.9) continue;
+    const ux = (wall.b.x - wall.a.x) / wall.length;
+    const uz = (wall.b.z - wall.a.z) / wall.length;
+    const cx = (wall.a.x + wall.b.x) / 2;
+    const cz = (wall.a.z + wall.b.z) / 2;
+    // 画挂在 -normal 那一面（朝房间内侧）
+    const nx = -wall.normal.x;
+    const nz = -wall.normal.z;
+    const ry = Math.atan2(nx, nz);
+    const cols = Math.max(1, Math.floor((wall.length - HALL_MARGIN * 2) / HALL_COL_STEP) + 1);
+
+    for (let row = 0; row < HALL_ROW_Y.length; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const item = items[(seq * ITEM_STRIDE + row) % items.length];
+        seq += 1;
+        const { fw, fh } = boxOf(HALL_ART, aspectOf(item));
+        const along = (col - (cols - 1) / 2) * HALL_COL_STEP;
+        out.push({
+          id: item.id,
+          spaceId,
+          x: cx + ux * along + nx * ART_INSET,
+          y: HALL_ROW_Y[row],
+          z: cz + uz * along + nz * ART_INSET,
+          ry,
+          fw,
+          fh,
+          title: item.title ?? '',
+          author: item.author ?? '',
+        });
+      }
+    }
+  }
+  return out;
 }
 
 function boundsOf(min: number, max: number): Rect {
   return { x1: min, z1: min, x2: max, z2: max };
 }
 
-/** 离 (x, z) 最近出生点对应的房间 —— 在连续画廊里走到哪儿，「当前房间」就是
- *  离你最近的出生点（每个出生点代表一种策展在 Hilbert 上的一段）。 */
-export function spaceAt(plan: FloorPlan, x: number, z: number): SpaceSpec | null {
-  if (plan.spaces.length === 0) return null;
-  let best = plan.spaces[0];
-  let bestDist = (x - best.spawn.x) ** 2 + (z - best.spawn.z) ** 2;
-  for (let i = 1; i < plan.spaces.length; i += 1) {
-    const d =
-      (x - plan.spaces[i].spawn.x) ** 2 + (z - plan.spaces[i].spawn.z) ** 2;
+/** 离 (x, z) 最近的房间（按出生点算） */
+function nearestSpace(spaces: readonly SpaceSpec[], x: number, z: number): SpaceSpec | null {
+  let best: SpaceSpec | null = null;
+  let bestDist = Infinity;
+  for (const space of spaces) {
+    const d = (x - space.spawn.x) ** 2 + (z - space.spawn.z) ** 2;
     if (d < bestDist) {
-      best = plan.spaces[i];
       bestDist = d;
+      best = space;
     }
   }
   return best;
+}
+
+/** 离 (x, z) 最近出生点对应的房间 —— 在连续画廊里走到哪儿，「当前房间」就是
+ *  离你最近的出生点（每个出生点代表一种策展在 Hilbert 上的一段）。 */
+export function spaceAt(plan: FloorPlan, x: number, z: number): SpaceSpec | null {
+  return nearestSpace(plan.spaces, x, z);
 }
 
 /** 能不能站在这儿：不撞墙（在迷宫里走） */

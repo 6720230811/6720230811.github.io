@@ -40,8 +40,16 @@ export interface CreateFloorOptions {
 }
 
 export type PickResult =
-  | { kind: 'art'; id: string }
+  | { kind: 'art'; id: string; slot: number }
   | { kind: 'floor'; x: number; z: number };
+
+/** 一个挂画位：画布（可点）、它背后的光晕、以及画布自己的材质 */
+interface Slot {
+  picture: THREE.Mesh;
+  halo: THREE.Mesh;
+  haloMaterial: THREE.MeshBasicMaterial;
+  pictureMaterial: THREE.MeshBasicMaterial;
+}
 
 export interface FloorHandle {
   scene: THREE.Scene;
@@ -49,11 +57,13 @@ export interface FloorHandle {
   renderer: THREE.WebGLRenderer;
   pickables: THREE.Object3D[];
   blockers: THREE.Object3D[];
-  pictures: Map<string, THREE.Mesh>;
+  /** 展品 id → 它的全部挂画位（同一件会挂很多次，纹理要挨个换） */
+  pictures: Map<string, THREE.Mesh[]>;
   setPicture(id: string, texture: THREE.Texture): void;
   pick(clientX: number, clientY: number): PickResult | null;
   viewpoint(id: string): { x: number; z: number; yaw: number } | null;
-  setHover(id: string | null): void;
+  /** slot 是 pick 回来的挂画位下标；null 取消高亮 */
+  setHover(slot: number | null): void;
   setSize(width: number, height: number): void;
   render(): void;
   dispose(): void;
@@ -388,6 +398,18 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       length: length * 0.72,
     });
   }
+  // 大厅：顶上没有曲线可跟，按 12 m 的房间均匀拉三条（沿 z 通长）
+  if (plan.hall) {
+    const { x1, z1, x2, z2 } = plan.hall.rect;
+    for (let i = 0; i < 3; i += 1) {
+      trofferSpots.push({
+        x: x1 + ((i + 0.5) / 3) * (x2 - x1),
+        z: (z1 + z2) / 2,
+        yaw: 0,
+        length: z2 - z1 - 2,
+      });
+    }
+  }
   if (trofferSpots.length > 0) {
     const trofferMat = track(
       new THREE.MeshBasicMaterial({
@@ -429,9 +451,14 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   pmrem.dispose();
 
   // ---- 挂画：细黑框 + 浅米卡纸 + 画心 + 墙签 ----
-  const pictures = new Map<string, THREE.Mesh>();
+  // 同一件作品会挂很多处（长廊一段一件、大厅满墙），所以按 id 收成数组：
+  // 纹理到了要挨个换，只换最后一个的话其余全是白板。
+  // halo 也做成每处一份材质 —— 悬停时只亮指着的那一张。
+  const pictures = new Map<string, THREE.Mesh[]>();
+  const slots: Slot[] = [];
   const pickables: THREE.Object3D[] = [];
-  const parts = new Map<string, FrameParts>();
+  /** 展签纹理按「标题 + 作者」缓存：同一件作品挂几十处，只画一张 */
+  const labelCache = new Map<string, THREE.CanvasTexture>();
 
   for (const placement of plan.placements) {
     const group = new THREE.Group();
@@ -442,7 +469,8 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const art = fitArt(placement.fw, placement.fh, aspect);
 
     // 层间距别太小：0.004 m 在几米外深度精度不够，会跟墙 z-fighting
-    const halo = new THREE.Mesh(haloGeo, haloMat);
+    const haloMaterial = track(haloMat.clone());
+    const halo = new THREE.Mesh(haloGeo, haloMaterial);
     halo.position.z = 0.02;
     halo.scale.set(art.w * 2.3, art.h * 2.3, 1);
     group.add(halo);
@@ -454,14 +482,22 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     //    不带 fog:false —— 远处也要跟着雾淡下去
     const picture = new THREE.Mesh(
       canvasGeo,
-      new THREE.MeshBasicMaterial({ map: placeholder, toneMapped: false }),
+      track(
+        new THREE.MeshBasicMaterial({ map: placeholder, toneMapped: false }),
+      ) as THREE.MeshBasicMaterial,
     );
     picture.userData.id = placement.id;
     picture.position.z = 0.05;
     group.add(picture);
 
-    // 3) 标签（标题 + 作者）—— 画在纹理上、贴在画下面
-    const labelMap = track(wallLabelTexture(placement.title, placement.author));
+    // 3) 标签（标题 + 作者）—— 画在纹理上、贴在画下面。
+    //    一件作品的展签是同一张，按 id 缓存：满墙的画不该生成几百张一样的纹理
+    const labelKey = `${placement.title}\u0000${placement.author}`;
+    let labelMap = labelCache.get(labelKey);
+    if (!labelMap) {
+      labelMap = track(wallLabelTexture(placement.title, placement.author));
+      labelCache.set(labelKey, labelMap);
+    }
     const labelMaterialForArt = track(
       new THREE.MeshBasicMaterial({ map: labelMap, transparent: true, toneMapped: false }),
     );
@@ -471,9 +507,18 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     label.scale.set(0.34, 0.06, 1);
     group.add(label);
 
-    pictures.set(placement.id, picture);
+    const slotIndex = slots.length;
+    picture.userData.slot = slotIndex;
+    slots.push({
+      picture,
+      halo,
+      haloMaterial,
+      pictureMaterial: picture.material as THREE.MeshBasicMaterial,
+    });
+    const list = pictures.get(placement.id);
+    if (list) list.push(picture);
+    else pictures.set(placement.id, [picture]);
     pickables.push(picture);
-    disposables.push(picture.material as THREE.Material);
     scene.add(group);
   }
 
@@ -483,8 +528,10 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const scratch = new THREE.Vector3();
   const worldPosition = new THREE.Vector3();
 
-  /** hover 时把对应画的光晕亮一档 —— 没有外框可高亮，就亮光晕 */
-  const originalHaloOpacity = haloMat.opacity;
+  /** 悬停：只把指着的那一张的光晕亮一档（同一件作品挂了很多处，别一起亮） */
+  const HALO_BASE = haloMat.opacity;
+  const HALO_HOVER = 0.62;
+  let hoveredSlot = -1;
 
   return {
     scene,
@@ -495,13 +542,15 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     pictures,
 
     setPicture(id, texture) {
-      const picture = pictures.get(id);
-      if (!picture) return;
-      const material = picture.material as THREE.MeshBasicMaterial;
-      const previous = material.map;
-      material.map = texture;
-      material.needsUpdate = true;
-      if (previous && previous !== placeholder) previous.dispose();
+      const list = pictures.get(id);
+      if (!list) return;
+      for (const picture of list) {
+        const material = picture.material as THREE.MeshBasicMaterial;
+        const previous = material.map;
+        material.map = texture;
+        material.needsUpdate = true;
+        if (previous && previous !== placeholder) previous.dispose();
+      }
     },
 
     pick(clientX, clientY) {
@@ -514,15 +563,33 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       raycaster.setFromCamera(pointer, camera);
 
       const artHit = raycaster.intersectObjects(pickables, false)[0];
-      if (artHit) return { kind: 'art', id: String(artHit.object.userData.id) };
+      if (artHit) {
+        return {
+          kind: 'art',
+          id: String(artHit.object.userData.id),
+          slot: Number(artHit.object.userData.slot ?? -1),
+        };
+      }
       const floorHit = raycaster.intersectObject(floor, false)[0];
       if (floorHit) return { kind: 'floor', x: floorHit.point.x, z: floorHit.point.z };
       return null;
     },
 
     viewpoint(id) {
-      const mesh = pickables.find((m) => m.userData.id === id);
-      if (!mesh) return null;
+      const list = pictures.get(id);
+      if (!list?.length) return null;
+      // 同一件挂了很多处：站到离人最近的那一张前面，别横穿整座建筑
+      let mesh = list[0];
+      let bestDist = Infinity;
+      for (const candidate of list) {
+        candidate.getWorldPosition(worldPosition);
+        const d =
+          (worldPosition.x - camera.position.x) ** 2 + (worldPosition.z - camera.position.z) ** 2;
+        if (d < bestDist) {
+          bestDist = d;
+          mesh = candidate;
+        }
+      }
       mesh.getWorldQuaternion(quaternion);
       const normal = scratch.set(0, 0, 1).applyQuaternion(quaternion);
       mesh.getWorldPosition(worldPosition);
@@ -533,8 +600,12 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       };
     },
 
-    setHover(id) {
-      haloMat.opacity = id ? 0.32 : originalHaloOpacity;
+    setHover(slot) {
+      const next = slot ?? -1;
+      if (next === hoveredSlot) return;
+      if (slots[hoveredSlot]) slots[hoveredSlot].haloMaterial.opacity = HALO_BASE;
+      hoveredSlot = next;
+      if (slots[hoveredSlot]) slots[hoveredSlot].haloMaterial.opacity = HALO_HOVER;
     },
 
     setSize(width, height) {
@@ -550,9 +621,11 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 
     dispose() {
       for (const item of disposables) item.dispose();
-      for (const picture of pictures.values()) {
-        const map = (picture.material as THREE.MeshBasicMaterial).map;
-        if (map && map !== placeholder) map.dispose();
+      for (const list of pictures.values()) {
+        for (const picture of list) {
+          const map = (picture.material as THREE.MeshBasicMaterial).map;
+          if (map && map !== placeholder) map.dispose();
+        }
       }
       environment.dispose();
       renderer.dispose();
@@ -640,14 +713,6 @@ function makeSoftGlow(): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
-
-interface FrameParts {
-  frame: THREE.Mesh;
-  frameMaterial: THREE.MeshStandardMaterial;
-  mat: THREE.Mesh;
-  picture: THREE.Mesh;
-  label: THREE.Mesh;
 }
 
 /**

@@ -409,18 +409,19 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       lastX = event.clientX;
       lastY = event.clientY;
       // 一按下就开始转视角，先收掉悬停高亮
-      setHovered('');
+      setHovered(-1);
       canvas.setPointerCapture(event.pointerId);
     });
 
     // ---- 悬停：只在真鼠标上做，触屏没有「悬停」这回事 ----
-    let hovered = '';
+    /** 高亮的是「哪一处挂画」而不是哪件作品：同一件挂了很多处，别一起亮 */
+    let hovered = -1;
 
-    function setHovered(id: string): void {
-      if (id === hovered) return;
-      hovered = id;
-      floor.setHover(id || null);
-      canvas.style.cursor = id ? 'pointer' : '';
+    function setHovered(slot: number): void {
+      if (slot === hovered) return;
+      hovered = slot;
+      floor.setHover(slot >= 0 ? slot : null);
+      canvas.style.cursor = slot >= 0 ? 'pointer' : '';
       requestRender();
     }
 
@@ -428,7 +429,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       if (!dragging) {
         if (event.pointerType === 'mouse') {
           const hit = floor.pick(event.clientX, event.clientY);
-          setHovered(hit?.kind === 'art' ? hit.id : '');
+          setHovered(hit?.kind === 'art' ? hit.slot : -1);
         }
         return;
       }
@@ -460,7 +461,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       walkTo(hit.id);
     });
 
-    canvas.addEventListener('pointerleave', () => setHovered(''));
+    canvas.addEventListener('pointerleave', () => setHovered(-1));
 
     canvas.addEventListener('pointercancel', () => {
       dragging = false;
