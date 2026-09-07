@@ -122,6 +122,32 @@ export interface Zone {
   accent: string | null;
   /** 主题墙占本区墙面的比例 0.2–0.3 */
   accentRatio: number;
+  /**
+   * 墙面竖向阴影缝（内凹的细缝，不是画上去的线）。
+   *  给了 spacing 就沿墙按不规则间距排；不给就只画在主题墙两端
+   *  （自然长廊：蓝绿主题墙与中性墙之间那道 12 mm 缝）。
+   *  side 用来只做单侧墙 —— 规格要求夜行长廊只做右墙，不做对称装饰。
+   */
+  reveal?: {
+    color: string;
+    width: number;
+    spacing?: [number, number];
+    side?: 'left' | 'right';
+  };
+  /**
+   * 天花光槽：宽度与色温随章节变（规格 0.18–0.24 m / 3000–3800 K）。
+   *  color 直接给发光面颜色（光影长廊要暖琥珀白），intensity 调亮度
+   *  （终章要暗一档），stagger 是城市长廊那种「两段错位」的线性光槽。
+   */
+  slot?: {
+    width: number;
+    kelvin: number;
+    color?: string;
+    intensity?: number;
+    stagger?: boolean;
+  };
+  /** 可移动展墙的正 / 反 / 主题三色（临展厅） */
+  screen?: { front: string; back: string; theme: string };
   ceilingColor: string;
   floorColor: string;
   /** 地面大模块尺寸（米） */
@@ -158,6 +184,10 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#542B33',
     accentRatio: 0.28,
+    // 右墙：20 mm 暗石墨竖向缝，3–5 m 一道（间距不规则，不做对称装饰）
+    reveal: { color: '#232726', width: 0.02, spacing: [3, 5], side: 'right' },
+    // 3000 K，天花边缘还有极弱的暗藏暖光
+    slot: { width: 0.2, kelvin: 3000 },
     ceilingColor: '#F1EEE7',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
@@ -172,6 +202,10 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#B8AEA1',
     accentRatio: 0.26,
+    // 8–10 m 一道 8 mm 青铜竖向分缝
+    reveal: { color: '#896A47', width: 0.008, spacing: [8, 10] },
+    // 两段错位线性光槽，3200 K，城市道路那种节奏（不要霓虹）
+    slot: { width: 0.22, kelvin: 3200, stagger: true },
     ceilingColor: '#F1EEE7',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
@@ -186,6 +220,10 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#627775',
     accentRatio: 0.26,
+    // 只画在蓝绿主题墙两端：主题墙与中性墙之间的 12 mm 内凹缝
+    reveal: { color: '#232726', width: 0.012 },
+    // 柔和洗墙光，3500 K
+    slot: { width: 0.24, kelvin: 3500 },
     ceilingColor: '#F1EEE7',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
@@ -200,6 +238,10 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#8E8B84',
     accentRatio: 0.24,
+    // 局部 8 mm 青铜收边（近处才看得见，禁止大面积金色）
+    reveal: { color: '#896A47', width: 0.008, spacing: [7, 9] },
+    // 暗顶 + 局部发光带，暖琥珀白
+    slot: { width: 0.18, kelvin: 2900, color: '#F5D4A2' },
     ceilingColor: '#F1EEE7',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
@@ -214,6 +256,8 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#5A5348',
     accentRatio: 0.24,
+    // 较窄的中性光槽，3600–3800 K
+    slot: { width: 0.18, kelvin: 3700 },
     ceilingColor: '#F1EEE7',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
@@ -228,6 +272,8 @@ export const ZONES: Zone[] = [
     wall: '#E8E4DC',
     accent: '#3F4A4E',
     accentRatio: 0.24,
+    // 收束：光槽比别处暗一档
+    slot: { width: 0.2, kelvin: 3000, intensity: 1.3 },
     ceilingColor: '#F1EEE7',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
@@ -241,6 +287,8 @@ export const ZONES: Zone[] = [
     wall: '#DED7CC',
     accent: '#C9BFAF',
     accentRatio: 0.22,
+    // 顶棚周围那两条隐藏轨道灯槽：3900 K
+    slot: { width: 0.2, kelvin: 3900 },
     ceilingColor: '#EFEAE0',
     floorColor: '#625E57',
     floorModule: [2, 2],
@@ -265,6 +313,8 @@ export const ZONES: Zone[] = [
     wall: '#E5E1D9',
     accent: '#CFC7B8',
     accentRatio: 0.2,
+    // 可移动展墙：正面 / 背面 / 本期主题色（主题色只有一种，由展览数据定）
+    screen: { front: '#DCD8D0', back: '#B7B0A5', theme: '#30494B' },
     ceilingColor: '#F1EEE7',
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
@@ -289,6 +339,8 @@ export const ZONES: Zone[] = [
     wall: '#D8D5CE',
     accent: '#B9B4AA',
     accentRatio: 0.2,
+    // 两条平行黑色轨道灯槽：作品灯那一档 4000 K
+    slot: { width: 0.16, kelvin: 4000 },
     ceilingColor: '#363837',
     floorColor: '#5B574F',
     floorModule: [2, 2],
@@ -309,6 +361,16 @@ export const ZONES: Zone[] = [
 ];
 
 const ZONE_MAP = new Map(ZONES.map((zone) => [zone.id, zone]));
+
+/**
+ * 展览数据里的 theme → 可移动展墙的主题色。
+ *  规格：一面展墙可以换成主题色，但同一时期只能出现一种 ——
+ *  所以取本期作品里最多的那个 theme，全馆只用这一个颜色。
+ */
+export const THEME_COLOR: Record<string, string> = {
+  city: '#364852', // 烟熏蓝灰
+  sea: '#30494B', // 暮色蓝绿
+};
 
 export function zone(id: ZoneId): Zone {
   const found = ZONE_MAP.get(id);

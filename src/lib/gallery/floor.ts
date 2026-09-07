@@ -421,6 +421,8 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     { material: THREE.MeshStandardMaterial; walls: { wall: WallSegment; index: number }[] }
   >();
   plan.walls.forEach((wall, index) => {
+    // 可移动展墙（临展厅）有自己正 / 反 / 主题三色，不走这里
+    if (wall.kind === 'partition' && zoneSpec(wall.zone).screen) return;
     const mats = zoneMats.get(wall.zone) ?? fallback;
     const kind = wall.kind === 'partition' ? 'partition' : accentSet.has(index) ? 'accent' : 'base';
     const material = kind === 'accent' ? mats.accent : kind === 'partition' ? mats.wall : mats.wall;
@@ -452,6 +454,143 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     scene.add(mesh);
     disposables.push(mesh);
     blockers.push(mesh);
+  }
+
+  // ---- 墙面竖向阴影缝 ----
+  //  一片细长的暗色面片。往人这一侧推开 12 mm —— 贴在墙面上会与墙共面闪色，
+  //  上下也各留一截，让开踢脚与天花。
+  interface Reveal {
+    x: number;
+    z: number;
+    yaw: number;
+    width: number;
+    height: number;
+    color: string;
+  }
+  const REVEAL_GAP = 0.012;
+  const REVEAL_BOTTOM = 0.13;
+  const REVEAL_TOP = 0.09;
+  /** 固定但看着没规律的抖动：同一面墙每次来都一样，左右墙也不会对齐 */
+  const jitter = (seed: number): number => {
+    const value = Math.sin(seed * 12.9898) * 43758.5453;
+    return value - Math.floor(value);
+  };
+  const reveals: Reveal[] = [];
+
+  plan.walls.forEach((wall, index) => {
+    if (wall.kind === 'partition') return;
+    const spec = zoneSpec(wall.zone).reveal;
+    if (!spec) return;
+    const dir = { x: (wall.b.x - wall.a.x) / wall.length, z: (wall.b.z - wall.a.z) / wall.length };
+    /** 朝人这一侧（作品挂的那一面） */
+    const inward = { x: -wall.normal.x, z: -wall.normal.z };
+    const height = Math.max(0.4, wall.height - REVEAL_BOTTOM - REVEAL_TOP);
+    const at = (t: number): void => {
+      reveals.push({
+        x: wall.a.x + dir.x * t + inward.x * REVEAL_GAP,
+        z: wall.a.z + dir.z * t + inward.z * REVEAL_GAP,
+        yaw: Math.atan2(inward.x, inward.z),
+        width: spec.width,
+        height,
+        color: spec.color,
+      });
+    };
+
+    if (!spec.spacing) {
+      // 没给间距 → 只画在主题墙两端（自然长廊：蓝绿与中性墙之间那道缝）
+      if (!accentSet.has(index)) return;
+      at(REVEAL_GAP);
+      at(wall.length - REVEAL_GAP);
+      return;
+    }
+
+    if (spec.side) {
+      // 只做单侧墙：右墙朝内的那一面，正对着行走方向的左手边
+      const mid = { x: (wall.a.x + wall.b.x) / 2, z: (wall.a.z + wall.b.z) / 2 };
+      const forward = corridorDirection(nearestArc(mid.x, mid.z));
+      const dot = inward.x * -forward.z + inward.z * forward.x;
+      if (spec.side === 'right' ? dot < 0.5 : dot > -0.5) return;
+    }
+
+    let seed = index + 1;
+    let t = spec.spacing[0] * (0.5 + jitter(seed));
+    while (t < wall.length - 0.6) {
+      at(t);
+      seed += 1;
+      t += spec.spacing[0] + jitter(seed) * (spec.spacing[1] - spec.spacing[0]);
+    }
+  });
+
+  const revealGeo = track(new THREE.PlaneGeometry(1, 1));
+  const revealByColor = new Map<string, Reveal[]>();
+  for (const job of reveals) {
+    const list = revealByColor.get(job.color);
+    if (list) list.push(job);
+    else revealByColor.set(job.color, [job]);
+  }
+  for (const [color, jobs] of revealByColor) {
+    // 内凹的缝自己不反光：用 basic 材质，颜色就是缝的暗色
+    const material = track(new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+    const mesh = new THREE.InstancedMesh(revealGeo, material, jobs.length);
+    jobs.forEach((job, i) => {
+      pos.set(job.x, REVEAL_BOTTOM + job.height / 2, job.z);
+      quat.setFromEuler(euler.set(0, job.yaw, 0));
+      mesh.setMatrixAt(i, matrix.compose(pos, quat, scale.set(job.width, job.height, 1)));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+    disposables.push(mesh);
+  }
+
+  // ---- 可移动展墙：正面 / 背面 / 本期主题色（临展厅） ----
+  //  两面各自一块（正反颜色不同），其中一面换成本期主题色 ——
+  //  规格：同一时期只能出现一种主题色。
+  const screenMats = new Map<
+    ZoneId,
+    { front: THREE.MeshStandardMaterial; back: THREE.MeshStandardMaterial; theme: THREE.MeshStandardMaterial }
+  >();
+  const themedZones = new Set<ZoneId>();
+  for (const wall of plan.walls) {
+    if (wall.kind !== 'partition') continue;
+    const palette = zoneSpec(wall.zone).screen;
+    if (!palette) continue;
+
+    let mats = screenMats.get(wall.zone);
+    if (!mats) {
+      const make = (color: string): THREE.MeshStandardMaterial =>
+        track(
+          new THREE.MeshStandardMaterial({
+            map: track(mineralTexture(color)),
+            roughness: 0.92,
+            metalness: 0,
+            envMapIntensity: 0.45,
+            side: THREE.DoubleSide,
+          }),
+        );
+      mats = {
+        front: make(palette.front),
+        back: make(palette.back),
+        theme: make(plan.screenTheme ?? palette.theme),
+      };
+      screenMats.set(wall.zone, mats);
+    }
+
+    const half = 0.03;
+    const mid = { x: (wall.a.x + wall.b.x) / 2, z: (wall.a.z + wall.b.z) / 2 };
+    for (const sign of [1, -1]) {
+      const material = sign === 1 && !themedZones.has(wall.zone) ? mats.theme : sign === 1 ? mats.front : mats.back;
+      const mesh = new THREE.Mesh(wallGeo, material);
+      mesh.position.set(
+        mid.x - wall.normal.x * half * sign,
+        wall.height / 2,
+        mid.z - wall.normal.z * half * sign,
+      );
+      mesh.rotation.y = Math.atan2(-wall.normal.x * sign, -wall.normal.z * sign);
+      mesh.scale.set(wall.length, wall.height, 1);
+      scene.add(mesh);
+      blockers.push(mesh);
+    }
+    themedZones.add(wall.zone);
   }
 
   // ---- 踢脚线：骑在墙面上，两侧都看得见 ----
@@ -620,20 +759,40 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   }
 
   // ---- 灯槽：emissive 材质表达，不占真实光源 ----
-  const slotMat = track(
-    new THREE.MeshStandardMaterial({
-      color: '#FFF8EC',
-      emissive: new THREE.Color('#FFE7C2'),
-      emissiveIntensity: 1.8,
-      roughness: 1,
-      metalness: 0,
-      side: THREE.DoubleSide,
-      toneMapped: false,
-    }),
-  );
+  //  宽度与色温跟章节走：夜行 3000 K、城市 3200 K 两段错位、自然 3500 K、
+  //  光影暖琥珀白、慢门 3700 K 且更窄、终章再暗一档。
   const slotGeo = track(new THREE.PlaneGeometry(1, 1));
-  const slotSpots: { x: number; z: number; yaw: number; length: number }[] = [];
+  const slotMats = new Map<ZoneId, THREE.MeshStandardMaterial>();
+  const slotMaterial = (zoneId: ZoneId): THREE.MeshStandardMaterial => {
+    const cached = slotMats.get(zoneId);
+    if (cached) return cached;
+    const own = zoneSpec(zoneId).slot;
+    const material = track(
+      new THREE.MeshStandardMaterial({
+        color: '#FFF8EC',
+        emissive: own?.color ? new THREE.Color(own.color) : kelvinColor(own?.kelvin ?? 3200),
+        emissiveIntensity: own?.intensity ?? 1.8,
+        roughness: 1,
+        metalness: 0,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      }),
+    );
+    slotMats.set(zoneId, material);
+    return material;
+  };
+
+  interface SlotRun {
+    x: number;
+    z: number;
+    yaw: number;
+    length: number;
+    width: number;
+    zone: ZoneId;
+  }
+  const slotRuns: SlotRun[] = [];
   let travelled = 0;
+  let runIndex = 0;
   for (let i = 0; i + 1 < CORRIDOR_PATH.length; i += 1) {
     const a = CORRIDOR_PATH[i];
     const b = CORRIDOR_PATH[i + 1];
@@ -646,23 +805,36 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     for (let start = 0; start < length; start += LIGHT.run + LIGHT.gap) {
       const end = Math.min(start + LIGHT.run, length);
       if (end - start < 1) continue;
-      slotSpots.push({
-        x: a.x + dir.x * (start + end) / 2 + nx * LIGHT.offset,
-        z: a.z + dir.z * (start + end) / 2 + nz * LIGHT.offset,
+      const zoneId = corridorZone(travelled + (start + end) / 2);
+      const own = zoneSpec(zoneId).slot;
+      // 城市长廊那种「两段错位」：相邻两段左右换边，走起来有节奏
+      const offset = own?.stagger && runIndex % 2 === 1 ? -LIGHT.offset : LIGHT.offset;
+      runIndex += 1;
+      slotRuns.push({
+        x: a.x + dir.x * (start + end) / 2 + nx * offset,
+        z: a.z + dir.z * (start + end) / 2 + nz * offset,
         yaw: Math.atan2(dir.x, dir.z),
         length: end - start,
+        width: own?.width ?? LIGHT.width,
+        zone: zoneId,
       });
     }
     travelled += length;
   }
-  void travelled;
-  if (slotSpots.length > 0) {
-    const slots = new THREE.InstancedMesh(slotGeo, slotMat, slotSpots.length);
-    const flatQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
-    slotSpots.forEach((spot, i) => {
-      pos.set(spot.x, CORRIDOR.height - 0.03, spot.z);
-      quat.setFromEuler(euler.set(0, spot.yaw, 0)).multiply(flatQuat);
-      slots.setMatrixAt(i, matrix.compose(pos, quat, scale.set(LIGHT.width, spot.length, 1)));
+
+  const runsByZone = new Map<ZoneId, SlotRun[]>();
+  for (const run of slotRuns) {
+    const list = runsByZone.get(run.zone);
+    if (list) list.push(run);
+    else runsByZone.set(run.zone, [run]);
+  }
+  const flatQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
+  for (const [zoneId, runs] of runsByZone) {
+    const slots = new THREE.InstancedMesh(slotGeo, slotMaterial(zoneId), runs.length);
+    runs.forEach((run, i) => {
+      pos.set(run.x, CORRIDOR.height - 0.03, run.z);
+      quat.setFromEuler(euler.set(0, run.yaw, 0)).multiply(flatQuat);
+      slots.setMatrixAt(i, matrix.compose(pos, quat, scale.set(run.width, run.length, 1)));
     });
     slots.instanceMatrix.needsUpdate = true;
     scene.add(slots);
@@ -867,7 +1039,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     for (const side of [-1, 1]) {
       const track1 = new THREE.Mesh(
         track(new THREE.PlaneGeometry(0.12, 8)),
-        slotMat,
+        slotMaterial('atrium'),
       );
       track1.rotation.x = Math.PI / 2;
       track1.position.set(cx + side * 2.2, ceiling - 0.03, cz);
@@ -885,7 +1057,10 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const ceiling = zoneSpec('large').ceiling;
     const cz = (large.rect.z1 + large.rect.z2) / 2;
     for (const dx of [-1.6, 1.6]) {
-      const track1 = new THREE.Mesh(track(new THREE.PlaneGeometry(0.1, large.rect.z2 - large.rect.z1 - 1.4)), slotMat);
+      const track1 = new THREE.Mesh(
+        track(new THREE.PlaneGeometry(0.1, large.rect.z2 - large.rect.z1 - 1.4)),
+        slotMaterial('large'),
+      );
       track1.rotation.x = Math.PI / 2;
       track1.position.set((large.rect.x1 + large.rect.x2) / 2 + dx, ceiling - 0.03, cz);
       scene.add(track1);
@@ -1168,6 +1343,30 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       renderer.dispose();
     },
   };
+}
+
+/**
+ * 色温 → 颜色（黑体辐射的近似，量程只覆盖灯具那一段）。
+ *  规格给的是 K 值（长廊 3000–3300 K、作品灯 3900–4200 K），
+ *  灯槽的发光面要按它上色，不能一律暖黄。
+ */
+function kelvinColor(kelvin: number): THREE.Color {
+  const t = Math.min(40000, Math.max(1000, kelvin)) / 100;
+  let r: number;
+  let g: number;
+  let b: number;
+  if (t <= 66) {
+    r = 255;
+    g = 99.47 * Math.log(t) - 161.12;
+  } else {
+    r = 329.7 * (t - 60) ** -0.1332;
+    g = 288.12 * (t - 60) ** -0.0755;
+  }
+  if (t >= 66) b = 255;
+  else if (t <= 19) b = 0;
+  else b = 138.52 * Math.log(t - 10) - 305.04;
+  const clamp = (value: number): number => Math.min(255, Math.max(0, value)) / 255;
+  return new THREE.Color().setRGB(clamp(r), clamp(g), clamp(b), THREE.SRGBColorSpace);
 }
 
 /** 折线上弧长 s 处的点与走向 */

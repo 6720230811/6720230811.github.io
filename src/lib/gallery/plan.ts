@@ -9,7 +9,15 @@
  *
  *  刻意不 import three —— 纯数字进纯数字出，场景（floor.ts）只负责摆出来。
  */
-import { BUILDING, EYE_HEIGHT, SPAWN, ZONES, type Rect, type ZoneId } from './blueprint';
+import {
+  BUILDING,
+  EYE_HEIGHT,
+  SPAWN,
+  THEME_COLOR,
+  ZONES,
+  type Rect,
+  type ZoneId,
+} from './blueprint';
 import { buildWalls, type DoorOpening, type Obstacle, type WallSegment } from './walls';
 import { deriveArtWalls, hang, type ArtWall, type HangItem, type Placement } from './hang';
 import type { Locale } from '../../i18n/ui';
@@ -58,14 +66,23 @@ export interface FloorPlan {
   zones: ZoneSpec[];
   artWalls: ArtWall[];
   placements: Placement[];
+  /**
+   * 本期主题色：临展厅可移动展墙换色用。
+   *  取作品里最多的那个 theme（没有认得的 theme 就是 null，展墙走默认配色）。
+   */
+  screenTheme: string | null;
   bounds: Rect;
   spawn: { x: number; z: number; yaw: number };
 }
 
-/** 建筑是固定的，与展品无关的部分算一次就够 */
-let cached: Omit<FloorPlan, 'placements' | 'artWalls'> | null = null;
+/**
+ * 建筑是固定的，与展品无关的部分算一次就够。
+ *  screenTheme 跟着展品走，不在缓存里。
+ */
+type Skeleton = Omit<FloorPlan, 'placements' | 'artWalls' | 'screenTheme'>;
+let cached: Skeleton | null = null;
 
-function skeleton(): Omit<FloorPlan, 'placements' | 'artWalls'> {
+function skeleton(): Skeleton {
   if (cached) return cached;
   const built = buildWalls();
   cached = {
@@ -108,7 +125,22 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
       theme: item.theme,
     })),
   );
-  return { ...base, artWalls, placements: hang(artWalls, items) };
+  return { ...base, artWalls, placements: hang(artWalls, items), screenTheme: themeColor(items) };
+}
+
+/** 本期主题色：作品里出现最多、且认得的那一个 theme */
+function themeColor(items: readonly HangItem[]): string | null {
+  const count = new Map<string, number>();
+  for (const item of items) count.set(item.theme, (count.get(item.theme) ?? 0) + 1);
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [theme, total] of count) {
+    if (total > bestCount && THEME_COLOR[theme]) {
+      best = theme;
+      bestCount = total;
+    }
+  }
+  return best ? THEME_COLOR[best] : null;
 }
 
 /**
