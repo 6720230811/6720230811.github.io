@@ -40,8 +40,30 @@ import type { FloorPlan, Placement, WallSegment } from './plan';
 const TRIM = { height: 0.075, thickness: 0.025, color: '#3F413E' } as const;
 /** 门套：深 0.22 m（拱券 0.25）、宽 0.12 m、颜色 #3E4140 */
 const JAMB = { width: 0.12, color: '#3E4140' } as const;
-/** 灯槽：宽 0.2 m，向主挂画墙偏 0.7 m，每 10 m 断 1.5 m */
-const LIGHT = { width: 0.2, offset: 0.7, run: 10, gap: 1.5 } as const;
+/** 灯槽：宽 0.2 m，向主挂画墙偏 0.7 m，每 10 m 断 1.5 m（规格 8–12 m） */
+const LIGHT = {
+  width: 0.2,
+  offset: 0.7,
+  run: 10,
+  gap: 1.5,
+  /** 洗墙灯离作品墙的距离（规格 0.8–1.1） */
+  washerDistance: 0.95,
+} as const;
+/**
+ * 灯光：3500 K 的环境、3800–4200 K 的作品灯。
+ *  环境压得比上一版暗（0.42 / 0.55），好让作品灯的 1.8–2.5 倍对比读得出来 ——
+ *  「夜间叙事感」靠明暗对比，不靠把整间厅调暗。
+ */
+const LIGHTING = {
+  /** 半球光：天光暖白（3500 K 那一档），地面反弹取深暖灰 */
+  sky: 0xffd9b0,
+  ground: 0x3a3733,
+  ambient: 0.42,
+  /** 环境贴图强度 */
+  env: 0.55,
+  /** 作品灯：只有相机附近这几盏是真的 SpotLight，全都不投影 */
+  spots: 6,
+} as const;
 /** 主题墙占比（规格 20–30%） */
 const ACCENT_RATIO = 0.26;
 
@@ -75,6 +97,8 @@ export interface FloorHandle {
   viewpoint(id: string): { x: number; z: number; yaw: number } | null;
   /** slot 是 pick 回来的挂画位下标；null 取消高亮 */
   setHover(slot: number | null): void;
+  /** 人在 (x, z)：把那几盏作品灯挪到附近的画上（内部按位移节流） */
+  updateLighting(x: number, z: number): void;
   setSize(width: number, height: number): void;
   render(): void;
   dispose(): void;
@@ -526,9 +550,17 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     scene.add(mesh);
   }
 
-  // ---- 灯槽：沿长廊中心线的连续光带，向主挂画墙偏 0.7 m，每 10 m 断一次 ----
+  // ---- 灯槽：emissive 材质表达，不占真实光源 ----
   const slotMat = track(
-    new THREE.MeshBasicMaterial({ color: '#FFF6E4', side: THREE.DoubleSide, toneMapped: false }),
+    new THREE.MeshStandardMaterial({
+      color: '#FFF8EC',
+      emissive: new THREE.Color('#FFE7C2'),
+      emissiveIntensity: 1.8,
+      roughness: 1,
+      metalness: 0,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    }),
   );
   const slotGeo = track(new THREE.PlaneGeometry(1, 1));
   const slotSpots: { x: number; z: number; yaw: number; length: number }[] = [];
@@ -675,15 +707,113 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     }
   }
 
-  // ---- 灯光：环境 3500K 的柔光（S3 会补上作品灯与近处 SpotLight）----
-  const hemi = new THREE.HemisphereLight(0xf7f4ec, 0x6e6a63, 0.8);
+  // ---- 灯光：3500 K 环境 + 作品的 3800–4200 K 洗墙灯 ----
+  // 环境压暗（对比上一版 0.8 / 0.85）：作品灯的 1.8–2.5 倍对比要读得出来，
+  // 「夜间叙事感」是明暗对比造出来的，不是把整间厅调暗。
+  const hemi = new THREE.HemisphereLight(LIGHTING.sky, LIGHTING.ground, LIGHTING.ambient);
   scene.add(hemi);
   const pmrem = new THREE.PMREMGenerator(renderer);
   const equirect = track(environmentTexture('#f6f3ec', '#8b877f'));
   const environment = pmrem.fromEquirectangular(equirect).texture;
   scene.environment = environment;
-  scene.environmentIntensity = 0.85;
+  scene.environmentIntensity = LIGHTING.env;
   pmrem.dispose();
+
+  // 作品灯：一小池 SpotLight，永远只照相机附近那几张画。
+  // 全都不投影 —— 规格允许 2–3 盏，但动态阴影在这个尺度上收益很小、代价很大，
+  // 空间层次靠天花高度和墙色做，不靠阴影。
+  const spotPool: THREE.SpotLight[] = [];
+  for (let i = 0; i < LIGHTING.spots; i += 1) {
+    const spot = new THREE.SpotLight(0xfff1de, 0, 7.5, 0.58, 0.55, 1.3);
+    spot.castShadow = false;
+    spot.visible = false;
+    scene.add(spot);
+    scene.add(spot.target);
+    spotPool.push(spot);
+  }
+
+  // 中央大厅：3×3 m 的柔光顶棚（模拟天窗）+ 周边两条隐藏轨道灯槽。
+  // 顶棚本身是 emissive 面片，不点真实光源；厅里补一盏很弱的顶光让它不闷。
+  const atrium = ROOMS.find((room) => room.id === 'atrium');
+  if (atrium) {
+    const ceiling = zoneSpec('atrium').ceiling;
+    const cx = (atrium.rect.x1 + atrium.rect.x2) / 2;
+    const cz = (atrium.rect.z1 + atrium.rect.z2) / 2;
+    const panel = new THREE.Mesh(
+      track(new THREE.PlaneGeometry(3, 3)),
+      track(
+        new THREE.MeshStandardMaterial({
+          color: '#FFFCF4',
+          emissive: new THREE.Color('#FFF3DC'),
+          emissiveIntensity: 1.5,
+          roughness: 1,
+          metalness: 0,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+        }),
+      ),
+    );
+    panel.rotation.x = Math.PI / 2;
+    panel.position.set(cx, ceiling - 0.03, cz);
+    scene.add(panel);
+
+    // 两侧隐藏轨道灯槽：顶棚边上一线，暗示光从这儿来
+    for (const side of [-1, 1]) {
+      const track1 = new THREE.Mesh(
+        track(new THREE.PlaneGeometry(0.12, 8)),
+        slotMat,
+      );
+      track1.rotation.x = Math.PI / 2;
+      track1.position.set(cx + side * 2.2, ceiling - 0.03, cz);
+      scene.add(track1);
+    }
+
+    const fill = new THREE.PointLight(0xfff1de, 6, 14, 1.4);
+    fill.position.set(cx, ceiling - 0.6, cz);
+    scene.add(fill);
+  }
+
+  // 大型作品厅：净高 5.5 m，顶上两条平行轨道灯（规格：保留悬挂大型装置的视觉高度）
+  const large = ROOMS.find((room) => room.id === 'large');
+  if (large) {
+    const ceiling = zoneSpec('large').ceiling;
+    const cz = (large.rect.z1 + large.rect.z2) / 2;
+    for (const dx of [-1.6, 1.6]) {
+      const track1 = new THREE.Mesh(track(new THREE.PlaneGeometry(0.1, large.rect.z2 - large.rect.z1 - 1.4)), slotMat);
+      track1.rotation.x = Math.PI / 2;
+      track1.position.set((large.rect.x1 + large.rect.x2) / 2 + dx, ceiling - 0.03, cz);
+      scene.add(track1);
+    }
+  }
+
+  // 沉浸展厅：不设大面积环境照明，只在墙脚留几点地脚灯（作品灯等 S4 有作品再补）
+  const immersion = ROOMS.find((room) => room.id === 'immersion');
+  if (immersion) {
+    const { x1, z1, x2, z2 } = immersion.rect;
+    const spots: { x: number; z: number }[] = [
+      { x: x1 + 0.6, z: z1 + 1.4 },
+      { x: x1 + 0.6, z: z2 - 1.4 },
+      { x: x2 - 0.6, z: (z1 + z2) / 2 },
+      { x: (x1 + x2) / 2, z: z1 + 0.6 },
+    ];
+    for (const spot of spots) {
+      const lamp = new THREE.Mesh(
+        track(new THREE.BoxGeometry(0.16, 0.1, 0.16)),
+        track(
+          new THREE.MeshStandardMaterial({
+            color: '#3A3F42',
+            emissive: new THREE.Color('#F0C48A'),
+            emissiveIntensity: 2.2,
+            roughness: 1,
+            metalness: 0,
+            toneMapped: false,
+          }),
+        ),
+      );
+      lamp.position.set(spot.x, 0.05, spot.z);
+      scene.add(lamp);
+    }
+  }
 
   // ---- 挂画：光晕 + 画布 + 墙签 ----
   // 同一件作品会挂很多处（数据不够时是占位画框），所以按 id 收成数组：
@@ -779,6 +909,43 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const HALO_HOVER = 0.62;
   let hoveredSlot = -1;
 
+  /**
+   * 作品灯重新指派：相机走一段（>1.5 m）才重算一次。
+   *  规格要求「只照亮相机附近那几盏是真的灯，远处的靠模拟光晕」——
+   *  70 多个挂画位不可能各配一盏 SpotLight。
+   */
+  let aimedAt = { x: -999, z: -999 };
+  const aimSpots = (cx: number, cz: number): void => {
+    const near: { placement: Placement; dist: number }[] = [];
+    for (const placement of plan.placements) {
+      const dist = (placement.x - cx) ** 2 + (placement.z - cz) ** 2;
+      if (dist < 18 * 18) near.push({ placement, dist });
+    }
+    near.sort((a, b) => a.dist - b.dist);
+    spotPool.forEach((spot, index) => {
+      const hit = near[index];
+      if (!hit) {
+        spot.visible = false;
+        return;
+      }
+      const item = hit.placement;
+      // 墙面法线：画朝 -normal，所以灯的偏移方向就是 (sin ry, cos ry)
+      const nx = Math.sin(item.ry);
+      const nz = Math.cos(item.ry);
+      const ceiling = zoneSpec(item.zone).ceiling;
+      const hero = item.kind === 'hero';
+      spot.position.set(
+        item.x + nx * LIGHT.washerDistance,
+        Math.min(3.05, ceiling - 0.4),
+        item.z + nz * LIGHT.washerDistance,
+      );
+      spot.target.position.set(item.x, item.y, item.z);
+      spot.angle = hero ? 0.42 : 0.58; // 重点 24°，普通 ~33°
+      spot.intensity = hero ? 26 : 18;
+      spot.visible = true;
+    });
+  };
+
   return {
     scene,
     camera,
@@ -854,6 +1021,13 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       if (slots[hoveredSlot]) slots[hoveredSlot].haloMaterial.opacity = HALO_BASE;
       hoveredSlot = next;
       if (slots[hoveredSlot]) slots[hoveredSlot].haloMaterial.opacity = HALO_HOVER;
+    },
+
+    updateLighting(x, z) {
+      // 走够 1.5 m 才重排一次灯，别每帧都算
+      if ((x - aimedAt.x) ** 2 + (z - aimedAt.z) ** 2 < 1.5 * 1.5) return;
+      aimedAt = { x, z };
+      aimSpots(x, z);
     },
 
     setSize(width, height) {

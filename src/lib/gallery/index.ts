@@ -347,6 +347,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     function applyCamera(): void {
       floor.camera.position.set(pos.x, EYE_HEIGHT, pos.z);
       floor.camera.rotation.set(pitch, yaw, 0, 'YXZ');
+      floor.updateLighting(pos.x, pos.z);
       minimap?.update(pos.x, pos.z, yaw);
       bigmap?.update(pos.x, pos.z, yaw);
     }
