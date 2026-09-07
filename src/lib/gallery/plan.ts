@@ -112,11 +112,145 @@ export function layoutFloor(rooms: readonly PlanRoomInput[]): FloorPlan {
 }
 
 /**
- * 走过去：S1 先走直线（跟原来的 stub 一样），S5 会换成沿折线的真实路径
- * （把当前位置投影到折线上，顺着顶点走到目标附近再下来）。
+ * 走过去的路线：先试直线，走不通就在「能走的格子」上搜一条最短路，
+ *  再用视线检查把中间点抹掉（只留拐弯处）。
+ *
+ *  格子是 0.5 m 一张、静态缓存的（建筑不变，算一次就够）。搜一次约几千格，
+ *  点一下地面才跑一次，不进每帧。
  */
-export function routeTo(_plan: FloorPlan, _from: Waypoint, to: Waypoint): Waypoint[] {
-  return [to];
+const GRID_STEP = 0.5;
+
+interface WalkGrid {
+  step: number;
+  nx: number;
+  nz: number;
+  walk: Uint8Array;
+}
+
+let cachedGrid: WalkGrid | null = null;
+
+function walkGrid(plan: FloorPlan): WalkGrid {
+  if (cachedGrid) return cachedGrid;
+  const step = GRID_STEP;
+  const nx = Math.ceil((plan.bounds.x2 - plan.bounds.x1) / step) + 1;
+  const nz = Math.ceil((plan.bounds.z2 - plan.bounds.z1) / step) + 1;
+  const walk = new Uint8Array(nx * nz);
+  for (let i = 0; i < nx; i += 1) {
+    for (let j = 0; j < nz; j += 1) {
+      const x = plan.bounds.x1 + i * step;
+      const z = plan.bounds.z1 + j * step;
+      walk[i * nz + j] = containsPoint(plan, x, z) ? 1 : 0;
+    }
+  }
+  cachedGrid = { step, nx, nz, walk };
+  return cachedGrid;
+}
+
+/** 两点之间走得通吗（每 0.35 m 取一个样） */
+function clearLine(plan: FloorPlan, from: Waypoint, to: Waypoint): boolean {
+  const distance = Math.hypot(to.x - from.x, to.z - from.z);
+  const samples = Math.max(2, Math.ceil(distance / 0.35));
+  for (let i = 1; i <= samples; i += 1) {
+    const t = i / samples;
+    if (!containsPoint(plan, from.x + (to.x - from.x) * t, from.z + (to.z - from.z) * t)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** 找到离 (x, z) 最近的可走格子 */
+function nearestCell(grid: WalkGrid, plan: FloorPlan, x: number, z: number): number {
+  const start = {
+    i: Math.round((x - plan.bounds.x1) / grid.step),
+    j: Math.round((z - plan.bounds.z1) / grid.step),
+  };
+  const key = (i: number, j: number): number => i * grid.nz + j;
+  const inside = (i: number, j: number): boolean =>
+    i >= 0 && j >= 0 && i < grid.nx && j < grid.nz;
+  if (inside(start.i, start.j) && grid.walk[key(start.i, start.j)]) return key(start.i, start.j);
+  for (let radius = 1; radius <= 12; radius += 1) {
+    for (let di = -radius; di <= radius; di += 1) {
+      for (let dj = -radius; dj <= radius; dj += 1) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== radius) continue;
+        const i = start.i + di;
+        const j = start.j + dj;
+        if (inside(i, j) && grid.walk[key(i, j)]) return key(i, j);
+      }
+    }
+  }
+  return -1;
+}
+
+export function routeTo(plan: FloorPlan, from: Waypoint, to: Waypoint): Waypoint[] {
+  // 同一间房 / 同一段走廊里点来点去：直走就行
+  if (clearLine(plan, from, to)) return [to];
+
+  const grid = walkGrid(plan);
+  const startCell = nearestCell(grid, plan, from.x, from.z);
+  const endCell = nearestCell(grid, plan, to.x, to.z);
+  if (startCell < 0 || endCell < 0) return [to];
+
+  // 广度优先：格子少（几千），最短路就够了
+  const cameFrom = new Int32Array(grid.nx * grid.nz).fill(-1);
+  const seen = new Uint8Array(grid.nx * grid.nz);
+  const queue: number[] = [startCell];
+  seen[startCell] = 1;
+  let found = startCell === endCell;
+  while (queue.length > 0 && !found) {
+    const current = queue.shift() as number;
+    const ci = Math.floor(current / grid.nz);
+    const cj = current % grid.nz;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const i = ci + di;
+      const j = cj + dj;
+      if (i < 0 || j < 0 || i >= grid.nx || j >= grid.nz) continue;
+      const next = i * grid.nz + j;
+      if (seen[next] || !grid.walk[next]) continue;
+      seen[next] = 1;
+      cameFrom[next] = current;
+      if (next === endCell) {
+        found = true;
+        break;
+      }
+      queue.push(next);
+    }
+  }
+  if (!found) return [to];
+
+  // 回溯成一条折线
+  const raw: Waypoint[] = [];
+  for (let cell = endCell; cell >= 0; cell = cameFrom[cell]) {
+    const i = Math.floor(cell / grid.nz);
+    const j = cell % grid.nz;
+    raw.push({
+      x: plan.bounds.x1 + i * grid.step,
+      z: plan.bounds.z1 + j * grid.step,
+    });
+    if (cell === startCell) break;
+  }
+  raw.reverse();
+
+  // 视线简化：能直连就跳过中间那些格子，只留拐弯处
+  const out: Waypoint[] = [];
+  let anchor = from;
+  let index = 0;
+  while (index < raw.length) {
+    let furthest = index;
+    for (let probe = raw.length - 1; probe > index; probe -= 1) {
+      if (clearLine(plan, anchor, raw[probe])) {
+        furthest = probe;
+        break;
+      }
+    }
+    out.push(raw[furthest]);
+    anchor = raw[furthest];
+    index = furthest + 1;
+  }
+  if (out.length === 0) return [to];
+  // 最后一点换成真正的目标（格子中心可能落在墙边）
+  out[out.length - 1] = to;
+  return out;
 }
 
 /** 能不能站在这儿：不撞墙 */

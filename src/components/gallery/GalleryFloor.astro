@@ -19,9 +19,11 @@ interface Props {
   /** 从哪间房出生（就是当前这个页面的房间） */
   startRoomId: string;
   locale: Locale;
+  /** 「离开展厅」回到哪个地址 */
+  exitUrl: string;
 }
 
-const { rooms, startRoomId, locale } = Astro.props;
+const { rooms, startRoomId, locale, exitUrl } = Astro.props;
 const t = useTranslations(locale);
 
 /**
@@ -62,20 +64,62 @@ const payload = rooms.map((room) => ({
   data-label-loading={t('gallery.loading')}
   data-label-camera={t('gallery.meta.camera')}
   data-label-hall={t('gallery.map.hall')}
+  data-label-chapter={t('gallery.chapter')}
+  data-label-intro={t('gallery.intro')}
 >
   <canvas class="gal__canvas" id="gal-canvas" tabindex="0" aria-label={t('gallery.title')}></canvas>
 
-  {/* 左上角小地图：点开是大地图，在大地图上点一下直接传送过去 */}
-  <button
-    class="gal__minimap"
-    id="gal-minimap"
-    type="button"
-    aria-expanded="false"
-    aria-label={t('gallery.minimap')}
-  >
-    <canvas class="gal__minimap-canvas" id="gal-minimap-canvas"></canvas>
-  </button>
+  <div class="gal__progress" id="gal-progress" hidden><span></span></div>
 
+  {/* 左上：章节编号 + 展区名称 */}
+  <div class="gal__chapter" id="gal-chapter" hidden>
+    <span class="gal__chapter-no" id="gal-chapter-no"></span>
+    <span class="gal__chapter-name" id="gal-chapter-name"></span>
+  </div>
+
+  {/* 右上：可折叠小地图（点开是大地图，能传送） */}
+  <div class="gal__mapbox" id="gal-mapbox">
+    <button
+      class="gal__chip"
+      id="gal-map-toggle"
+      type="button"
+      aria-expanded="true"
+      aria-controls="gal-minimap">{t('gallery.map.collapse')}</button
+    >
+    <button
+      class="gal__minimap"
+      id="gal-minimap"
+      type="button"
+      aria-expanded="false"
+      aria-label={t('gallery.minimap')}
+    >
+      <canvas class="gal__minimap-canvas" id="gal-minimap-canvas"></canvas>
+    </button>
+  </div>
+
+  {/* 左下：靠近作品时浮出作品信息 */}
+  <figure class="gal__info" id="gal-info" aria-live="polite">
+    <figcaption>
+      <h3 class="gal__info-title" id="gal-info-title"></h3>
+      <p class="gal__info-desc" id="gal-info-desc"></p>
+      <small class="gal__info-meta" id="gal-info-meta"></small>
+    </figcaption>
+  </figure>
+
+  {/* 右下：回正、地图、网格、退出 */}
+  <div class="gal__tools">
+    <button class="gal__btn" id="gal-reset" type="button">{t('gallery.reset')}</button>
+    <button class="gal__btn" id="gal-grid" type="button" data-label-grid={t('gallery.gridMode')} data-label-room={t('gallery.roomMode')}>{t('gallery.gridMode')}</button>
+    <button class="gal__btn" id="gal-immersive" type="button" aria-pressed="false" data-label-immersive={t('gallery.immersive')} data-label-exit={t('gallery.exit')}>{t('gallery.immersive')}</button>
+    <a class="gal__btn gal__btn--link" id="gal-exit" href={exitUrl}>{t('gallery.leave')}</a>
+  </div>
+
+  {/* 首次进入的操作说明：5 秒后自己淡掉 */}
+  <p class="gal__intro" id="gal-intro" role="note">
+    <span id="gal-intro-text"></span>
+  </p>
+
+  {/* 大地图：点一下传送过去 */}
   <div class="gal__map" id="gal-map" hidden>
     <div class="gal__map-panel">
       <div class="gal__map-head">
@@ -84,39 +128,6 @@ const payload = rooms.map((room) => ({
       </div>
       <canvas class="gal__map-canvas" id="gal-map-canvas" role="img" aria-label={t('gallery.map.title')}></canvas>
       <p class="gal__map-hint">{t('gallery.map.hint')}</p>
-    </div>
-  </div>
-
-  <div class="gal__progress" id="gal-progress" hidden><span></span></div>
-
-  <div class="gal__hud">
-    <div class="gal__hint">
-      <span class="gal__where" id="gal-where" data-here={t('gallery.here')}></span>
-      <span
-        id="gal-hint"
-        data-desktop={`${t('gallery.hint.look')} · ${t('gallery.hint.move')}`}
-        data-touch={t('gallery.hint.touch')}
-        data-reset={t('gallery.hint.reset')}>{t('gallery.hint.look')}</span
-      >
-    </div>
-
-    <div class="gal__actions">
-      <button class="gal__btn" id="gal-reset" type="button">{t('gallery.reset')}</button>
-      <button
-        class="gal__btn"
-        id="gal-grid"
-        type="button"
-        data-label-grid={t('gallery.gridMode')}
-        data-label-room={t('gallery.roomMode')}>{t('gallery.gridMode')}</button
-      >
-      <button
-        class="gal__btn"
-        id="gal-immersive"
-        type="button"
-        aria-pressed="false"
-        data-label-immersive={t('gallery.immersive')}
-        data-label-exit={t('gallery.exit')}>{t('gallery.immersive')}</button
-      >
     </div>
   </div>
 

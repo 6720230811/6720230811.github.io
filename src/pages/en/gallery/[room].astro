@@ -81,7 +81,7 @@ const indexUrl: Record<typeof found.view, string> = {
 
       <p class="gal-fallback" id="gal-fallback" hidden>{t('gallery.fallback.notice')}</p>
 
-      <GalleryFloor rooms={floorRooms} startRoomId={found.id} locale={locale} />
+      <GalleryFloor rooms={floorRooms} startRoomId={found.id} locale={locale} exitUrl={indexUrl[found.view]} />
       <GalleryGrid groups={floorRooms} locale={locale} />
       <GalleryLightbox locale={locale} />
     </div>

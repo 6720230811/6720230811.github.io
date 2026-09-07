@@ -102,9 +102,21 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const mapPanel = root.querySelector<HTMLElement>('#gal-map');
   const mapCanvasEl = root.querySelector<HTMLCanvasElement>('#gal-map-canvas');
   const mapClose = root.querySelector<HTMLButtonElement>('#gal-map-close');
+  const mapToggle = root.querySelector<HTMLButtonElement>('#gal-map-toggle');
+  const mapBox = root.querySelector<HTMLElement>('#gal-mapbox');
   const progressBar = progress?.querySelector<HTMLElement>('span') ?? null;
-  const hint = root.querySelector<HTMLElement>('#gal-hint');
-  const where = root.querySelector<HTMLElement>('#gal-where');
+  /** 左上章节 HUD */
+  const chapterBox = root.querySelector<HTMLElement>('#gal-chapter');
+  const chapterNo = root.querySelector<HTMLElement>('#gal-chapter-no');
+  const chapterName = root.querySelector<HTMLElement>('#gal-chapter-name');
+  /** 左下作品信息 */
+  const infoBox = root.querySelector<HTMLElement>('#gal-info');
+  const infoTitle = root.querySelector<HTMLElement>('#gal-info-title');
+  const infoDesc = root.querySelector<HTMLElement>('#gal-info-desc');
+  const infoMeta = root.querySelector<HTMLElement>('#gal-info-meta');
+  /** 首次进入的操作说明 */
+  const introBox = root.querySelector<HTMLElement>('#gal-intro');
+  const introText = root.querySelector<HTMLElement>('#gal-intro-text');
   const gridButton = root.querySelector<HTMLButtonElement>('#gal-grid');
   const immersiveButton = root.querySelector<HTMLButtonElement>('#gal-immersive');
   const resetButton = root.querySelector<HTMLButtonElement>('#gal-reset');
@@ -116,7 +128,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const mode3d = document.getElementById('gal-mode-3d');
   const modeGrid = document.getElementById('gal-mode-grid');
   const cameraLabel = root.dataset.labelCamera ?? '';
-  const hereLabel = where?.dataset.here ?? '';
+  const chapterLabel = root.dataset.labelChapter ?? '';
+  const introLabel = root.dataset.labelIntro ?? '';
   /** 分区名是 { zh, en } 两份，按页面的语言取 */
   const localeOf = (): 'zh' | 'en' => (root.dataset.locale === 'en' ? 'en' : 'zh');
 
@@ -351,6 +364,9 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       floor.camera.position.set(pos.x, EYE_HEIGHT, pos.z);
       floor.camera.rotation.set(pitch, yaw, 0, 'YXZ');
       floor.updateLighting(pos.x, pos.z);
+      // 传送完也得重算靠近的作品（moved=true 才会触发 updateProximity）
+      updateLocation();
+      updateProximity();
       refreshFullTextures?.();
       minimap?.update(pos.x, pos.z, yaw);
       bigmap?.update(pos.x, pos.z, yaw);
@@ -434,8 +450,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       return true;
     }
 
-    /** 走到另一个分区时同步 HUD（新建筑只有一个入口，URL 不跟着变 ——
-     *  分区是章节，不是可寻址的页面，改 URL 会指向不存在的路由） */
+    /** 走到另一个分区时更新左上角的章节 HUD（新建筑只有一个入口，
+     *  URL 不跟着变 —— 分区是章节，不是可寻址的页面） */
     function updateLocation(): void {
       const id = zoneAt(pos.x, pos.z);
       if (id === hereId) return;
@@ -443,14 +459,61 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       const current = plan.zones.find((item) => item.id === id);
       if (!current) return;
       const name = current.label[localeOf()] ?? current.label.zh;
-      if (where) where.textContent = `${hereLabel}：${name}`;
+      if (chapterName) chapterName.textContent = name;
+      if (chapterNo) {
+        chapterNo.textContent = current.chapter
+          ? `${chapterLabel || ''} ${String(current.chapter).padStart(2, '0')}`.trim()
+          : '';
+      }
+      if (chapterBox) chapterBox.hidden = false;
+    }
+
+    /**
+     * 靠近作品时把左下角的信息浮出来，走开就淡掉。
+     *  只在「人在 3.5 m 内 + 作品在视线前方」时才算靠近 ——
+     *  背后的作品不该弹信息。
+     */
+    let nearId = '';
+    function updateProximity(): void {
+      let best: (typeof plan.placements)[number] | null = null;
+      let bestDist = 3.5 * 3.5;
+      const lookX = -Math.sin(yaw);
+      const lookZ = -Math.cos(yaw);
+      for (const placement of plan.placements) {
+        if (placement.kind === 'placeholder') continue;
+        const dx = placement.x - pos.x;
+        const dz = placement.z - pos.z;
+        const dist = dx * dx + dz * dz;
+        if (dist > bestDist) continue;
+        const length = Math.hypot(dx, dz) || 1;
+        if ((dx / length) * lookX + (dz / length) * lookZ < 0.35) continue;
+        bestDist = dist;
+        best = placement;
+      }
+      const id = best ? best.id : '';
+      if (id === nearId) return;
+      nearId = id;
+      const item = best ? items.find((entry) => entry.id === best!.id) : undefined;
+      if (!best || !item) {
+        if (infoBox) delete infoBox.dataset.open;
+        return;
+      }
+      if (infoTitle) infoTitle.textContent = item.title;
+      if (infoDesc) infoDesc.textContent = item.desc ?? '';
+      if (infoMeta) {
+        infoMeta.textContent = item.camera && cameraLabel ? `${cameraLabel}：${item.camera}` : '';
+      }
+      if (infoBox) infoBox.dataset.open = 'true';
     }
 
     function frame(now: number): void {
       const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0;
       lastTime = now;
       const moved = step(dt);
-      if (moved) updateLocation();
+      if (moved) {
+        updateLocation();
+        updateProximity();
+      }
       if (moved || dirty) {
         applyCamera();
         floor.render();
@@ -628,12 +691,25 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     });
     observer.observe(canvas);
 
-    if (hint) {
-      const touch = window.matchMedia('(pointer: coarse)').matches;
-      const base = hint.dataset[touch ? 'touch' : 'desktop'] ?? hint.textContent;
-      const reset = hint.dataset.reset;
-      hint.textContent = reset ? `${base} · ${reset}` : base;
+    // 首次进入的操作说明：5 秒后自己淡掉（规格：首次进入显示，5 秒后淡出）
+    if (introText) introText.textContent = introLabel;
+    if (introBox) {
+      window.setTimeout(() => {
+        introBox.dataset.faded = 'true';
+        window.setTimeout(() => {
+          introBox.hidden = true;
+        }, 900);
+      }, 5000);
     }
+
+    // 右上小地图折叠
+    mapToggle?.addEventListener('click', () => {
+      if (!mapBox) return;
+      const collapsed = mapBox.dataset.collapsed === 'true';
+      if (collapsed) delete mapBox.dataset.collapsed;
+      else mapBox.dataset.collapsed = 'true';
+      mapToggle.setAttribute('aria-expanded', String(collapsed));
+    });
 
     setMode('3d');
     floor.setSize(canvas.clientWidth, canvas.clientHeight);

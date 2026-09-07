@@ -155,12 +155,187 @@ button.gal-view[aria-pressed='true'] {
   outline-offset: -2px;
 }
 
-/* 左上角小地图：整层平面 + 人在哪儿朝哪儿；点一下开大地图传送 */
-.gal__minimap {
+/* ---------- 左上：当前章节 ---------- */
+.gal__chapter {
   position: absolute;
   z-index: 2;
-  top: 0.75rem;
-  left: 0.75rem;
+  top: 0.9rem;
+  left: 0.9rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.5);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  pointer-events: none;
+}
+
+.gal__chapter[hidden] {
+  display: none;
+}
+
+.gal__chapter-no {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.gal__chapter-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- 右上：可折叠小地图 ---------- */
+.gal__mapbox {
+  position: absolute;
+  z-index: 2;
+  top: 0.9rem;
+  right: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+/* 收起后只留「地图」胶囊 */
+.gal__mapbox[data-collapsed='true'] .gal__minimap {
+  display: none;
+}
+
+.gal__chip {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.42);
+  backdrop-filter: blur(6px);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+
+.gal__chip:hover {
+  background: rgba(10, 12, 16, 0.62);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.gal__chip:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- 左下：靠近作品时浮出作品信息 ---------- */
+.gal__info {
+  position: absolute;
+  z-index: 2;
+  left: 0.9rem;
+  bottom: 0.9rem;
+  margin: 0;
+  max-width: min(24rem, 60vw);
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 10px;
+  background: rgba(10, 12, 16, 0.55);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  /* 默认隐身：靠近作品时脚本加 data-open */
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+
+.gal__info[data-open] {
+  opacity: 1;
+  transform: none;
+}
+
+.gal__info-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.gal__info-desc {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  opacity: 0.86;
+}
+
+.gal__info-desc:empty {
+  display: none;
+}
+
+.gal__info-meta {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  opacity: 0.65;
+}
+
+.gal__info-meta:empty {
+  display: none;
+}
+
+/* ---------- 右下：回正 / 地图 / 网格 / 退出 ---------- */
+.gal__tools {
+  position: absolute;
+  z-index: 2;
+  right: 0.9rem;
+  bottom: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.gal__btn--link {
+  text-decoration: none;
+}
+
+/* ---------- 首次进入的操作说明，5 秒后自己淡掉 ---------- */
+.gal__intro {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 4.2rem;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.8s ease;
+}
+
+.gal__intro[data-faded] {
+  opacity: 0;
+}
+
+.gal__intro[hidden] {
+  display: none;
+}
+
+/* ---------- 大地图：点一下传送过去 ---------- */
+.gal__mapbox {
+  order: 2;
+}
+
+.gal__minimap {
+  position: static;
   width: 9.5rem;
   height: 9.5rem;
   padding: 0;
