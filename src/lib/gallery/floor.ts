@@ -60,13 +60,19 @@ const LIGHTING = {
   sky: 0xffd9b0,
   ground: 0x3a3733,
   ambient: 0.42,
-  /** 环境贴图强度 */
-  env: 0.55,
   /** 作品灯：只有相机附近这几盏是真的 SpotLight，全都不投影 */
-  spots: 6,
+  spots: { high: 6, low: 3 },
 } as const;
 /** 主题墙占比（规格 20–30%） */
 const ACCENT_RATIO = 0.26;
+/**
+ * 画质档：手机/平板（粗指针）或 CPU 核少的机器直接按低配起 ——
+ * 少一半真实光源、像素比封到 1.5。之后还有一档：跑不动了再降到 1.0。
+ */
+function isLowPower(): boolean {
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  return coarse || (navigator.hardwareConcurrency ?? 8) <= 4;
+}
 
 export interface CreateFloorOptions {
   canvas: HTMLCanvasElement;
@@ -77,12 +83,10 @@ export type PickResult =
   | { kind: 'art'; id: string; slot: number }
   | { kind: 'floor'; x: number; z: number };
 
-/** 一个挂画位：画布（可点）、它背后的光晕、以及画布自己的材质 */
+/** 一个挂画位：画布（可点）与它背后的光晕（悬停时整块换材质，不每处留一份） */
 interface Slot {
   picture: THREE.Mesh;
   halo: THREE.Mesh;
-  haloMaterial: THREE.MeshBasicMaterial;
-  pictureMaterial: THREE.MeshBasicMaterial;
 }
 
 export interface FloorHandle {
@@ -101,6 +105,8 @@ export interface FloorHandle {
   /** 人在 (x, z)：把那几盏作品灯挪到附近的画上（内部按位移节流） */
   updateLighting(x: number, z: number): void;
   setSize(width: number, height: number): void;
+  /** 跑不动了先降分辨率（1 = 一个 CSS 像素一个设备像素），比整块降级温和 */
+  setPixelRatio(ratio: number): void;
   render(): void;
   dispose(): void;
 }
@@ -301,19 +307,21 @@ function archGeometry(halfSpan: number, rise: number, thickness: number, depth: 
 export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   planZones = plan.zones;
 
+  const lowPower = isLowPower();
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.5 : 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.toneMappingExposure = 0.9;
 
   const spanX = plan.bounds.x2 - plan.bounds.x1;
   const spanZ = plan.bounds.z2 - plan.bounds.z1;
   const diagonal = Math.hypot(spanX, spanZ);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(new THREE.Color('#D8D4CC'), 0.012);
-  scene.background = new THREE.Color('#D8D4CC');
+  // 馆外是夜色：背景与雾都压到深灰蓝，入口那点暖光才有戏剧性
+  scene.fog = new THREE.FogExp2(new THREE.Color('#202528'), 0.008);
+  scene.background = new THREE.Color('#191D20');
   const camera = new THREE.PerspectiveCamera(70, 1, 0.25, diagonal * 2 + 60);
 
   const disposables: Disposable[] = [];
@@ -337,9 +345,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const wall = track(
       new THREE.MeshStandardMaterial({
         map: track(mineralTexture(item.wall)),
-        roughness: 0.9,
+        roughness: 0.92,
         metalness: 0,
-        envMapIntensity: 0.6,
+        envMapIntensity: 0.45,
         side: THREE.DoubleSide,
       }),
     );
@@ -349,7 +357,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
             map: track(mineralTexture(item.accent)),
             roughness: 0.9,
             metalness: 0,
-            envMapIntensity: 0.6,
+            envMapIntensity: 0.45,
             side: THREE.DoubleSide,
           }),
         )
@@ -366,9 +374,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const floor = track(
       new THREE.MeshStandardMaterial({
         map: floorMap,
-        roughness: 0.72,
+        roughness: 0.74,
         metalness: 0,
-        envMapIntensity: 0.4,
+        envMapIntensity: 0.45,
       }),
     );
     zoneMats.set(item.id, { wall, accent, ceiling, floor, floorMap });
@@ -456,21 +464,38 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     };
   });
 
-  /** 铺一块地面：按分区取材质，克隆一份贴图好单独设 repeat */
-  const addFloor = (band: Band, y: number): void => {
+  /**
+   * 地面材质按「分区 + 重复次数」缓存：长廊每一段的宽高都一样，
+   *  所以几十块地面最后只留下两三种材质、一张共用的一平米 plane。
+   *  （贴图 clone 出来的每一份都会单独占一份显存，能合并就合并）
+   */
+  const unitPlane = track(new THREE.PlaneGeometry(1, 1));
+  const floorMatCache = new Map<string, THREE.MeshStandardMaterial>();
+  const floorMaterial = (band: Band, width: number, depth: number): THREE.MeshStandardMaterial => {
+    const [mx, mz] = zoneSpec(band.zone).floorModule;
+    const rx = Math.max(1, Math.round((band.along === 'x' ? width : depth) / mx));
+    const rz = Math.max(1, Math.round((band.along === 'x' ? depth : width) / mz));
+    const key = `${band.zone}|${rx}|${rz}`;
+    const cached = floorMatCache.get(key);
+    if (cached) return cached;
     const mats = zoneMats.get(band.zone) ?? fallback;
+    const map = track(mats.floorMap.clone());
+    map.needsUpdate = true;
+    map.repeat.set(rx, rz);
+    const material = track(
+      new THREE.MeshStandardMaterial({ map, roughness: 0.74, metalness: 0, envMapIntensity: 0.45 }),
+    );
+    floorMatCache.set(key, material);
+    return material;
+  };
+
+  /** 铺一块地面：共用的 1×1 plane，靠 scale 撑到实际尺寸 */
+  const addFloor = (band: Band, y: number): void => {
     const width = band.x2 - band.x1;
     const depth = band.z2 - band.z1;
-    const [mx, mz] = zoneSpec(band.zone).floorModule;
-    const map = mats.floorMap.clone();
-    map.needsUpdate = true;
-    map.repeat.set(
-      Math.max(1, Math.round((band.along === 'x' ? width : depth) / mx)),
-      Math.max(1, Math.round((band.along === 'x' ? depth : width) / mz)),
-    );
-    const material = track(new THREE.MeshStandardMaterial({ map, roughness: 0.72, metalness: 0 }));
-    const mesh = new THREE.Mesh(track(new THREE.PlaneGeometry(width, depth)), material);
+    const mesh = new THREE.Mesh(unitPlane, floorMaterial(band, width, depth));
     mesh.rotation.x = -Math.PI / 2;
+    mesh.scale.set(width, depth, 1);
     mesh.position.set((band.x1 + band.x2) / 2, y, (band.z1 + band.z2) / 2);
     mesh.userData.isFloor = true;
     scene.add(mesh);
@@ -502,10 +527,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       pieces = pieces.flatMap((piece) => subtract(piece, hole));
     }
     for (const piece of pieces) {
-      const width = piece.x2 - piece.x1;
-      const depth = piece.z2 - piece.z1;
-      const mesh = new THREE.Mesh(track(new THREE.PlaneGeometry(width, depth)), mats.ceiling);
+      const mesh = new THREE.Mesh(unitPlane, mats.ceiling);
       mesh.rotation.x = Math.PI / 2; // 朝下
+      mesh.scale.set(piece.x2 - piece.x1, piece.z2 - piece.z1, 1);
       mesh.position.set((piece.x1 + piece.x2) / 2, CORRIDOR.height, (piece.z1 + piece.z2) / 2);
       scene.add(mesh);
     }
@@ -515,10 +539,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   // 房间：各按自己的净高铺一块（比长廊高，是空间层次的主要来源）
   for (const room of ROOMS) {
     const mats = zoneMats.get(room.id) ?? fallback;
-    const width = room.rect.x2 - room.rect.x1;
-    const depth = room.rect.z2 - room.rect.z1;
-    const mesh = new THREE.Mesh(track(new THREE.PlaneGeometry(width, depth)), mats.ceiling);
+    const mesh = new THREE.Mesh(unitPlane, mats.ceiling);
     mesh.rotation.x = Math.PI / 2;
+    mesh.scale.set(room.rect.x2 - room.rect.x1, room.rect.z2 - room.rect.z1, 1);
     mesh.position.set(
       (room.rect.x1 + room.rect.x2) / 2,
       zoneSpec(room.id).ceiling,
@@ -603,74 +626,105 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   }
 
   // ---- 门洞：门楣（墙材质）+ 门套（深色）+ 中央/沉浸的浅拱券 ----
+  // 十几道门、每道 4 个体块，逐个建 Mesh 就是几十个 draw call 和几十份
+  // BoxGeometry。这里只把变换记下来，最后按材质各合成一个 InstancedMesh。
+  interface BoxJob {
+    material: THREE.MeshStandardMaterial;
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+    h: number;
+    d: number;
+    yaw: number;
+  }
+  const boxJobs: BoxJob[] = [];
+  /** 拱券尺寸就那么两三种，按「跨度|矢高」共用一份几何 */
+  const archCache = new Map<string, THREE.ExtrudeGeometry>();
+
   for (const door of plan.doors) {
     const mats = zoneMats.get(door.zone) ?? fallback;
     const ceiling = zoneSpec(door.zone).ceiling;
     const horizontal = Math.abs(door.ry) < 1e-6;
     const yaw = door.ry;
     const depth = door.arch ? 0.25 : DOOR.depth;
+    /** 沿门洞宽度方向偏出去（horizontal 的门洞沿 x 展开，否则沿 z） */
+    const along = (at: number): { x: number; z: number } =>
+      horizontal ? { x: door.x + at, z: door.z } : { x: door.x, z: door.z + at };
 
     // 门楣：门洞是整层高的口子，门楣把门顶到天花之间那截补成墙
     const lintelHeight = Math.max(0.05, ceiling - door.height);
-    const lintel = new THREE.Mesh(
-      track(new THREE.BoxGeometry(door.width + 0.4, lintelHeight, CORRIDOR.wallT)),
-      mats.wall,
-    );
-    lintel.position.set(door.x, door.height + lintelHeight / 2, door.z);
-    lintel.rotation.y = yaw;
-    scene.add(lintel);
+    boxJobs.push({
+      material: mats.wall,
+      x: door.x,
+      y: door.height + lintelHeight / 2,
+      z: door.z,
+      w: door.width + 0.4,
+      h: lintelHeight,
+      d: CORRIDOR.wallT,
+      yaw,
+    });
 
-    // 门套：两侧立框 + 门头顶框
+    // 门套：两侧立框 + 门头顶框（拱券门的立框一路到拱脚上方，不留断口）
     for (const side of [-1, 1]) {
-      const jamb = new THREE.Mesh(
-        track(new THREE.BoxGeometry(JAMB.width, door.height, depth)),
-        jambMat,
-      );
-      const offset = (door.width / 2 + JAMB.width / 2) * (horizontal ? 1 : 1);
-      jamb.position.set(
-        door.x + (horizontal ? 0 : Math.cos(yaw) * 0) + (horizontal ? 0 : 0),
-        door.height / 2,
-        door.z,
-      );
-      // 沿门洞宽度方向偏移：horizontal 门洞沿 x 展开，否则沿 z
-      if (horizontal) jamb.position.x += side * offset;
-      else jamb.position.z += side * offset;
-      jamb.rotation.y = yaw;
-      scene.add(jamb);
+      const at = along(side * (door.width / 2 + JAMB.width / 2));
+      boxJobs.push({
+        material: jambMat,
+        x: at.x,
+        y: door.height / 2,
+        z: at.z,
+        w: JAMB.width,
+        h: door.height,
+        d: depth,
+        yaw,
+      });
     }
-    const head = new THREE.Mesh(
-      track(new THREE.BoxGeometry(door.width + JAMB.width * 2, JAMB.width, depth)),
-      jambMat,
-    );
-    head.position.set(door.x, door.height + JAMB.width / 2, door.z);
-    head.rotation.y = yaw;
-    scene.add(head);
+    boxJobs.push({
+      material: jambMat,
+      x: door.x,
+      y: door.height + JAMB.width / 2,
+      z: door.z,
+      w: door.width + JAMB.width * 2,
+      h: JAMB.width,
+      d: depth,
+      yaw,
+    });
 
     if (door.arch) {
       // 浅拱券：起拱 2.35、总高 3.4（矢高 = 3.4 − 2.35）
       const rise = door.height - DOOR.archSpring;
-      const arch = new THREE.Mesh(
-        track(archGeometry(door.width / 2, rise, JAMB.width, depth)),
-        jambMat,
-      );
+      const key = `${door.width}|${rise}`;
+      let geometry = archCache.get(key);
+      if (!geometry) {
+        geometry = track(archGeometry(door.width / 2, rise, JAMB.width, depth));
+        archCache.set(key, geometry);
+      }
+      const arch = new THREE.Mesh(geometry, jambMat);
       arch.position.set(door.x, DOOR.archSpring, door.z);
       arch.rotation.y = yaw;
       // 拱券是沿 +Z 挤出的，往回推一半让它骑在门洞中线上
       arch.translateZ(-depth / 2);
       scene.add(arch);
-      // 立框只到起拱线
-      for (const side of [-1, 1]) {
-        const jamb = new THREE.Mesh(
-          track(new THREE.BoxGeometry(JAMB.width, DOOR.archSpring, depth)),
-          jambMat,
-        );
-        jamb.position.set(door.x, DOOR.archSpring / 2, door.z);
-        if (horizontal) jamb.position.x += side * (door.width / 2 + JAMB.width / 2);
-        else jamb.position.z += side * (door.width / 2 + JAMB.width / 2);
-        jamb.rotation.y = yaw;
-        scene.add(jamb);
-      }
     }
+  }
+
+  const unitBox = track(new THREE.BoxGeometry(1, 1, 1));
+  const boxesByMaterial = new Map<THREE.MeshStandardMaterial, BoxJob[]>();
+  for (const job of boxJobs) {
+    const list = boxesByMaterial.get(job.material);
+    if (list) list.push(job);
+    else boxesByMaterial.set(job.material, [job]);
+  }
+  for (const [material, jobs] of boxesByMaterial) {
+    const mesh = new THREE.InstancedMesh(unitBox, material, jobs.length);
+    jobs.forEach((job, i) => {
+      pos.set(job.x, job.y, job.z);
+      quat.setFromEuler(euler.set(0, job.yaw, 0));
+      mesh.setMatrixAt(i, matrix.compose(pos, quat, scale.set(job.w, job.h, job.d)));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+    disposables.push(mesh);
   }
 
   // ---- 房间道具：凳子、装置占位 ----
@@ -718,14 +772,14 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const equirect = track(environmentTexture('#f6f3ec', '#8b877f'));
   const environment = pmrem.fromEquirectangular(equirect).texture;
   scene.environment = environment;
-  scene.environmentIntensity = LIGHTING.env;
   pmrem.dispose();
 
   // 作品灯：一小池 SpotLight，永远只照相机附近那几张画。
   // 全都不投影 —— 规格允许 2–3 盏，但动态阴影在这个尺度上收益很小、代价很大，
   // 空间层次靠天花高度和墙色做，不靠阴影。
   const spotPool: THREE.SpotLight[] = [];
-  for (let i = 0; i < LIGHTING.spots; i += 1) {
+  const spotCount = lowPower ? LIGHTING.spots.low : LIGHTING.spots.high;
+  for (let i = 0; i < spotCount; i += 1) {
     const spot = new THREE.SpotLight(0xfff1de, 0, 7.5, 0.58, 0.55, 1.3);
     spot.castShadow = false;
     spot.visible = false;
@@ -819,7 +873,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 
   // ---- 挂画：光晕 + 画布 + 墙签 ----
   // 同一件作品会挂很多处（数据不够时是占位画框），所以按 id 收成数组：
-  // 纹理到了要挨个换。halo 每处一份材质 —— 悬停时只亮指着的那一张。
+  // 纹理到了要挨个换。
   const pictures = new Map<string, THREE.Mesh[]>();
   const slots: Slot[] = [];
   const pickables: THREE.Object3D[] = [];
@@ -829,19 +883,26 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const canvasMat = track(
     new THREE.MeshStandardMaterial({ color: '#EDE9E1', roughness: 0.85, metalness: 0 }),
   );
-  const haloMat = track(
-    new THREE.MeshBasicMaterial({
-      map: track(makeSoftGlow()),
-      transparent: true,
-      opacity: 0.3,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      toneMapped: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  const haloGeo = track(new THREE.PlaneGeometry(1, 1));
-  const canvasGeo = track(new THREE.PlaneGeometry(1, 1));
+  /** 光晕只有「常态 / 指着」两种状态，两份材质共用，别给每处挂画各留一份 */
+  const HALO_BASE = 0.3;
+  const HALO_HOVER = 0.62;
+  /** 光晕 / 画布 / 展签都是同一张 1×1 的面片，靠 scale 撑开 */
+  const quadGeo = track(new THREE.PlaneGeometry(1, 1));
+  const haloGlow = track(makeSoftGlow());
+  const haloMaterial = (opacity: number): THREE.MeshBasicMaterial =>
+    track(
+      new THREE.MeshBasicMaterial({
+        map: haloGlow,
+        transparent: true,
+        opacity,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+  const haloBase = haloMaterial(HALO_BASE);
+  const haloHover = haloMaterial(HALO_HOVER);
 
   for (const placement of plan.placements) {
     const group = new THREE.Group();
@@ -852,8 +913,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     const art = fitArt(placement.fw, placement.fh, aspect);
 
     // 层间距别太小：0.004 m 在几米外深度精度不够，会跟墙 z-fighting
-    const haloMaterial = track(haloMat.clone());
-    const halo = new THREE.Mesh(haloGeo, haloMaterial);
+    const halo = new THREE.Mesh(quadGeo, haloBase);
     halo.position.z = 0.02;
     halo.scale.set(art.w * 2.3, art.h * 2.3, 1);
     group.add(halo);
@@ -866,21 +926,21 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
         toneMapped: false,
       }),
     );
-    const picture = new THREE.Mesh(canvasGeo, pictureMaterial);
+    const picture = new THREE.Mesh(quadGeo, pictureMaterial);
     picture.userData.id = placement.id;
     picture.position.z = 0.05;
     group.add(picture);
 
     // 展签（标题 + 作者）：占位画框不挂展签
     if (placement.kind !== 'placeholder' && (placement.title || placement.author)) {
-      const labelKey = `${placement.title} ${placement.author}`;
+      const labelKey = `${placement.title} ${placement.author}`;
       let labelMap = labelCache.get(labelKey);
       if (!labelMap) {
         labelMap = track(wallLabelTexture(placement.title, placement.author));
         labelCache.set(labelKey, labelMap);
       }
       const label = new THREE.Mesh(
-        track(new THREE.PlaneGeometry(1, 1)),
+        quadGeo,
         track(
           new THREE.MeshBasicMaterial({ map: labelMap, transparent: true, toneMapped: false }),
         ),
@@ -891,7 +951,7 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     }
 
     picture.userData.slot = slots.length;
-    slots.push({ picture, halo, haloMaterial, pictureMaterial });
+    slots.push({ picture, halo });
     const list = pictures.get(placement.id);
     if (list) list.push(picture);
     else pictures.set(placement.id, [picture]);
@@ -906,9 +966,6 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
   const scratch = new THREE.Vector3();
   const worldPosition = new THREE.Vector3();
 
-  /** 悬停：只把指着的那一张的光晕亮一档 */
-  const HALO_BASE = haloMat.opacity;
-  const HALO_HOVER = 0.62;
   let hoveredSlot = -1;
 
   /**
@@ -1022,9 +1079,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
     setHover(slot) {
       const next = slot ?? -1;
       if (next === hoveredSlot) return;
-      if (slots[hoveredSlot]) slots[hoveredSlot].haloMaterial.opacity = HALO_BASE;
+      if (slots[hoveredSlot]) slots[hoveredSlot].halo.material = haloBase;
       hoveredSlot = next;
-      if (slots[hoveredSlot]) slots[hoveredSlot].haloMaterial.opacity = HALO_HOVER;
+      if (slots[hoveredSlot]) slots[hoveredSlot].halo.material = haloHover;
     },
 
     updateLighting(x, z) {
@@ -1039,6 +1096,10 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+    },
+
+    setPixelRatio(ratio) {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, ratio));
     },
 
     render() {

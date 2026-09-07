@@ -52,8 +52,9 @@ type Mode = 'grid' | '3d';
 const WALK_SPEED = 2.4;
 const LOOK_SPEED = 0.0028;
 const PITCH_LIMIT = 0.9;
-/** 拖拽超过这个像素就不算「点击」，免得转视角时误开大图 */
+/** 拖拽超过这个像素就不算「点击」，免得转视角时误开大图（手指抖得多，放宽些） */
 const TAP_SLOP = 6;
+const TAP_SLOP_TOUCH = 14;
 /** 途经点的到达阈值；最后一个点才要求走到跟前 */
 const WAYPOINT_ARRIVE = 0.25;
 
@@ -130,6 +131,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const cameraLabel = root.dataset.labelCamera ?? '';
   const chapterLabel = root.dataset.labelChapter ?? '';
   const introLabel = root.dataset.labelIntro ?? '';
+  /** 触屏说触屏的话：没有 WASD，也没有 R 键 */
+  const introTouchLabel = root.dataset.labelIntroTouch ?? introLabel;
   /** 分区名是 { zh, en } 两份，按页面的语言取 */
   const localeOf = (): 'zh' | 'en' => (root.dataset.locale === 'en' ? 'en' : 'zh');
 
@@ -350,6 +353,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     let dirty = true;
     let lastTime = 0;
     let frameHandle = 0;
+    /** stop() 之后就别再排下一帧了 */
+    let stopped = false;
     /** 连续撞墙的帧数：贴着墙走不算，但走不通就得认，别一直顶着墙滑 */
     let stuck = 0;
 
@@ -506,9 +511,45 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       if (infoBox) infoBox.dataset.open = 'true';
     }
 
+    /**
+     * 看门狗：连续掉帧就先降分辨率，还掉就退回网格并说明原因。
+     *  只在纹理都挂完之后才开始看 —— 加载那几秒本来就会卡。
+     */
+    let perfReady = false;
+    let slowFrames = 0;
+    /** 0 = 满配，1 = 已降过分辨率，2 = 已经退到网格 */
+    let perfStage = 0;
+    /** 低于这个帧率算慢（26 fps：肉眼已经能觉出顿） */
+    const SLOW_MS = 1000 / 26;
+    function watchPerformance(raw: number): void {
+      if (!perfReady || perfStage >= 2 || mode !== '3d') return;
+      // 切标签页回来的那一帧间隔能有好几秒，不算数
+      if (raw <= 0 || raw > 500) return;
+      if (raw < SLOW_MS) {
+        slowFrames = 0;
+        return;
+      }
+      slowFrames += 1;
+      if (slowFrames < 45) return;
+      slowFrames = 0;
+      if (perfStage === 0) {
+        perfStage = 1;
+        floor.setPixelRatio(1);
+        dirty = true;
+        return;
+      }
+      perfStage = 2;
+      stop();
+      degrade(page, root);
+    }
+
     function frame(now: number): void {
-      const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0;
+      // 已经收摊了（自动降级 / 页面隐藏）：别再碰已经 dispose 掉的 renderer
+      if (stopped) return;
+      const raw = lastTime ? now - lastTime : 0;
+      const dt = Math.min(raw / 1000, 0.05);
       lastTime = now;
+      watchPerformance(raw);
       const moved = step(dt);
       if (moved) {
         updateLocation();
@@ -573,7 +614,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       if (!dragging) return;
       dragging = false;
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-      if (travelled > TAP_SLOP) return;
+      if (travelled > (event.pointerType === 'mouse' ? TAP_SLOP : TAP_SLOP_TOUCH)) return;
 
       const hit: PickResult | null = floor.pick(event.clientX, event.clientY);
       if (!hit) return;
@@ -692,7 +733,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     observer.observe(canvas);
 
     // 首次进入的操作说明：5 秒后自己淡掉（规格：首次进入显示，5 秒后淡出）
-    if (introText) introText.textContent = introLabel;
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    if (introText) introText.textContent = touch ? introTouchLabel : introLabel;
     if (introBox) {
       window.setTimeout(() => {
         introBox.dataset.faded = 'true';
@@ -800,11 +842,14 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     }
 
     if (deepLink) openFocus(deepLink);
+    // 挂画都到位了，这才开始看帧率
+    perfReady = true;
 
     // WebGL 上下文是有限的，离开页面时收干净
     window.addEventListener('pagehide', stop);
 
     function stop(): void {
+      stopped = true;
       cancelAnimationFrame(frameHandle);
       observer.disconnect();
       minimap?.dispose();

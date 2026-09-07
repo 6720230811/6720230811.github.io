@@ -826,6 +826,61 @@ body.is-immersive .gal__focus img {
   max-height: 68vh;
 }
 
+/* ---------- 窄屏（手机）：HUD 收一号，别在巴掌大的画布上打架 ---------- */
+@media (max-width: 640px) {
+  .gal__canvas {
+    height: min(58vh, 420px);
+  }
+
+  /* 手机上的毛玻璃很贵，直接换成实色 */
+  .gal__chapter,
+  .gal__chip,
+  .gal__info,
+  .gal__intro,
+  .gal__minimap,
+  .gal__btn {
+    backdrop-filter: none;
+  }
+
+  .gal__chapter,
+  .gal__chip,
+  .gal__info,
+  .gal__intro,
+  .gal__btn {
+    background: rgba(10, 12, 16, 0.66);
+  }
+
+  .gal__minimap {
+    width: 6.5rem;
+    height: 6.5rem;
+  }
+
+  .gal__chapter-name {
+    font-size: 0.78rem;
+  }
+
+  .gal__info {
+    max-width: min(18rem, 68vw);
+    /* 让开右下角那排按钮 */
+    bottom: 4.6rem;
+  }
+
+  .gal__tools {
+    gap: 0.3rem;
+  }
+
+  .gal__btn {
+    padding: 0.32rem 0.6rem;
+    font-size: 0.74rem;
+  }
+
+  .gal__intro {
+    bottom: 5.6rem;
+    max-width: 88vw;
+    font-size: 0.72rem;
+  }
+}
+
 /* ---------- 打印与减少动效 ---------- */
 @media (prefers-reduced-motion: reduce) {
   .door,
