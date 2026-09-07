@@ -13,14 +13,12 @@ import {
   EYE_HEIGHT,
   containsPoint,
   layoutFloor,
-  routeTo,
-  spaceAt,
-  spawnOf,
   nearestWalkable,
+  routeTo,
   type PlanRoomInput,
   type Waypoint,
-  type WallKey,
 } from './plan';
+import { zoneAt } from './walls';
 import { createBigMap, createMinimap, type BigMapHandle, type MinimapHandle } from './minimap';
 import { isHallStyleId } from './styles';
 import type { FloorHandle, PickResult } from './floor';
@@ -36,7 +34,8 @@ interface PayloadItem {
   title: string;
   desc: string;
   camera: string;
-  place: { wall: WallKey; u: number; v: number; size?: number } | null;
+  /** 主题，用来决定这件作品挂在哪一段（city → 城市长廊，sea → 自然长廊） */
+  theme: string;
 }
 
 interface PayloadRoom {
@@ -118,6 +117,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
   const modeGrid = document.getElementById('gal-mode-grid');
   const cameraLabel = root.dataset.labelCamera ?? '';
   const hereLabel = where?.dataset.here ?? '';
+  /** 分区名是 { zh, en } 两份，按页面的语言取 */
+  const localeOf = (): 'zh' | 'en' => (root.dataset.locale === 'en' ? 'en' : 'zh');
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -243,7 +244,6 @@ export function mountGallery(rootEl: HTMLElement | null): void {
         (room): PlanRoomInput => ({
           id: room.id,
           label: room.label,
-          style: isHallStyleId(room.style) ? room.style : 'kimbell',
           items: room.items,
         }),
       ),
@@ -323,7 +323,7 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       }
     });
 
-    const home = spawnOf(plan, startRoomId);
+    const home = plan.spawn;
     const pos = { x: home.x, z: home.z };
     const keys = new Set<string>();
     let yaw = home.yaw;
@@ -429,34 +429,16 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       return true;
     }
 
-    /** 换房间（或进出走廊）时同步 HUD、URL 与页面标题 */
+    /** 走到另一个分区时同步 HUD（新建筑只有一个入口，URL 不跟着变 ——
+     *  分区是章节，不是可寻址的页面，改 URL 会指向不存在的路由） */
     function updateLocation(): void {
-      const space = spaceAt(plan, pos.x, pos.z);
-      const id = space?.id ?? '';
+      const id = zoneAt(pos.x, pos.z);
       if (id === hereId) return;
       hereId = id;
-      if (!space) return;
-
-      if (where) where.textContent = `${hereLabel}：${space.label}`;
-
-      // URL 换最后一段：连续画廊里没有「换厅」——space.id 就是 roomId，
-      // 走到哪儿当前房间就是离你出生点最近的那个；只有从首页点不同门才会传送到不同空间
-      const slug = space.id;
-      const url = new URL(window.location.href);
-      const parts = url.pathname.split('/').filter(Boolean);
-      if (parts.length > 0) {
-        parts[parts.length - 1] = slug;
-        url.pathname = `/${parts.join('/')}/`;
-        window.history.replaceState(null, '', url);
-      }
-      if (titleSuffix) document.title = `${space.label}${titleSuffix}`;
-      const heading = document.getElementById('gal-room-title');
-      if (heading) heading.textContent = space.label;
-      const intro = document.getElementById('gal-room-intro');
-      const room = rooms.find((item) => item.id === slug);
-      if (intro && room) intro.textContent = room.intro;
-      // space.id 就是 roomId（连续画廊里没有「换厅」，房间只决定出生点）
-      void hereId;
+      const current = plan.zones.find((item) => item.id === id);
+      if (!current) return;
+      const name = current.label[localeOf()] ?? current.label.zh;
+      if (where) where.textContent = `${hereLabel}：${name}`;
     }
 
     function frame(now: number): void {
@@ -590,8 +572,8 @@ export function mountGallery(rootEl: HTMLElement | null): void {
       path = [];
       pendingFocus = null;
       pendingYaw = null;
-      const space = spaceAt(plan, pos.x, pos.z);
-      const back = spawnOf(plan, space?.id ?? startRoomId);
+      // 新建筑只有一个出生点（序厅入口），回正就是回到那儿、朝正北
+      const back = plan.spawn;
       pos.x = back.x;
       pos.z = back.z;
       yaw = back.yaw;

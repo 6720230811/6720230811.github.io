@@ -43,6 +43,7 @@ const payload = rooms.map((room) => ({
     title: item.title[locale],
     desc: item.desc?.[locale] ?? '',
     camera: item.camera ?? '',
+    theme: item.theme,
     place: item.place ?? null,
   })),
 }));
@@ -56,6 +57,7 @@ const payload = rooms.map((room) => ({
   class="gal"
   id="gal"
   data-start-room={startRoomId}
+  data-locale={locale}
   data-rooms={JSON.stringify(payload)}
   data-label-loading={t('gallery.loading')}
   data-label-camera={t('gallery.meta.camera')}

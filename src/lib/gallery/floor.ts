@@ -19,9 +19,9 @@
  *  守住碰撞；space.id = `room-<roomId>`，换房间时 URL 不变（这建筑没门）。
  */
 import * as THREE from 'three';
-import { hallStyle, type HallStyleId, type SurfaceKind } from './styles';
 import { environmentTexture, wallLabelTexture } from './surfaces';
-import { curvePoints } from './hilbert';
+import { CORRIDOR_PATH } from './blueprint';
+import type { SurfaceKind } from './styles';
 import type { FloorPlan } from './plan';
 
 /** 整套厅堂的配色：墙、顶、地、踢脚、点缀墙、背景与雾。改色只改这里 */
@@ -381,9 +381,9 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
 
   // 2) 嵌入式灯带：顺走廊每隔一段一条，装在天花板上。
   //    既是装饰（天花板不再是一整块），也把「顶光从哪来」交代清楚。
-  const curve = curvePoints();
+  const curve = CORRIDOR_PATH;
   const trofferSpots: { x: number; z: number; yaw: number; length: number }[] = [];
-  for (let i = 0; i < curve.length - 1; i += 2) {
+  for (let i = 0; i < curve.length - 1; i += 1) {
     const a = curve[i];
     const b = curve[i + 1];
     const dx = b.x - a.x;
@@ -397,18 +397,6 @@ export function createFloor({ canvas, plan }: CreateFloorOptions): FloorHandle {
       // 灯带比段短一点，段与段之间留出「暗格」，节奏更好看
       length: length * 0.72,
     });
-  }
-  // 大厅：顶上没有曲线可跟，按 12 m 的房间均匀拉三条（沿 z 通长）
-  if (plan.hall) {
-    const { x1, z1, x2, z2 } = plan.hall.rect;
-    for (let i = 0; i < 3; i += 1) {
-      trofferSpots.push({
-        x: x1 + ((i + 0.5) / 3) * (x2 - x1),
-        z: (z1 + z2) / 2,
-        yaw: 0,
-        length: z2 - z1 - 2,
-      });
-    }
   }
   if (trofferSpots.length > 0) {
     const trofferMat = track(
@@ -724,8 +712,8 @@ function accentWallIndices(plan: FloorPlan): number[] {
   const picked = new Set<string>();
   const out: number[] = [];
   for (const placement of plan.placements) {
-    if (picked.has(placement.spaceId)) continue;
-    picked.add(placement.spaceId);
+    if (picked.has(placement.zone)) continue;
+    picked.add(placement.zone);
     let best = -1;
     let bestDist = Infinity;
     plan.walls.forEach((wall, i) => {

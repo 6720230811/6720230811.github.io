@@ -1,10 +1,10 @@
 /**
  * 平面图：左上角的小地图，以及点开之后能传送的大地图。
  *
- *  整座展厅是一座连通的 Hilbert 迷宫加一间大厅，走在里面很容易不知道自己
- *  在哪一段、大厅在哪个方向 —— 所以挂一张平面图：墙、大厅、房间名画一次到
- *  离屏 canvas（460 段墙不用每帧重描），每帧只把「人在哪儿、朝哪儿看」和
- *  「鼠标指着哪儿」盖上去。
+ *  整座展厅是一条折廊贯穿全馆（夜行折廊），走在里面很容易不知道自己
+ *  在哪一段、大厅在哪个方向 —— 所以挂一张平面图：墙画一次到离屏 canvas
+ *  （几百段墙不用每帧重描），每帧只把「人在哪儿、朝哪儿看」和「鼠标指着
+ *  哪儿」盖上去。
  *
  *  两张图共用一套画法（renderer）：小地图每帧跟着人走；大地图点开才画，
  *  在上面点一下就把人送过去（落点由 plan.nearestWalkable 吸到能站的地方）。
@@ -15,7 +15,7 @@
  *
  *  纯 2D canvas，不 import three。
  */
-import { spaceAt, type FloorPlan } from './plan';
+import type { FloorPlan } from './plan';
 
 /** 平面图四周留白（CSS px） */
 const PAD = 7;
@@ -99,7 +99,7 @@ function label(
   ctx.fillText(text, x, y);
 }
 
-/** 底图：大厅填一层灰绿，墙一次描完，房间画成小圈并标名字 */
+/** 底图：墙一次描完（S5 会补上房间名、大厅高亮、已参观区域） */
 function paintBase(
   ctx: CanvasRenderingContext2D,
   plan: FloorPlan,
@@ -107,24 +107,9 @@ function paintBase(
   labels: PlanLabels,
 ): void {
   const m = mapper(plan, size);
-  const s = markerSize(size);
   const withText = size >= LABEL_MIN;
 
-  if (plan.hall) {
-    const { x1, z1, x2, z2 } = plan.hall.rect;
-    ctx.fillStyle = 'rgba(125, 163, 142, 0.45)';
-    ctx.fillRect(m.x(x1), m.z(z1), m.len(x2 - x1), m.len(z2 - z1));
-    ctx.strokeStyle = 'rgba(158, 200, 176, 0.85)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(m.x(x1) + 0.5, m.z(z1) + 0.5, m.len(x2 - x1) - 1, m.len(z2 - z1) - 1);
-    if (withText && labels.hall) {
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      label(ctx, labels.hall, (m.x(x1) + m.x(x2)) / 2, (m.z(z1) + m.z(z2)) / 2, `600 ${Math.round(size * 0.032)}px system-ui, sans-serif`);
-    }
-  }
-
-  // 墙：全部合成一条路径再一次描边 —— 460 段墙逐段 stroke 会掉帧
+  // 墙：全部合成一条路径再一次描边 —— 几百段墙逐段 stroke 会掉帧
   ctx.strokeStyle = 'rgba(233, 229, 221, 0.5)';
   ctx.lineWidth = withText ? 1.2 : 1;
   ctx.beginPath();
@@ -133,22 +118,7 @@ function paintBase(
     ctx.lineTo(m.x(wall.b.x), m.z(wall.b.z));
   }
   ctx.stroke();
-
-  // 房间：出生点画圈，大地图上再标名字（小地图写字会糊）
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
-  for (const space of plan.spaces) {
-    const px = m.x(space.spawn.x);
-    const pz = m.z(space.spawn.z);
-    ctx.beginPath();
-    ctx.arc(px, pz, s.room, 0, Math.PI * 2);
-    ctx.lineWidth = 1.2;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.stroke();
-    if (withText) {
-      label(ctx, space.label, px, pz - s.room - 3, `500 ${Math.round(size * 0.028)}px system-ui, sans-serif`);
-    }
-  }
+  void labels;
 }
 
 /** 覆盖层：当前房间点亮、视锥、人这一点；大地图上还有鼠标指着的落点 */
@@ -163,14 +133,6 @@ function paintOverlay(
 ): void {
   const m = mapper(plan, size);
   const s = markerSize(size);
-
-  const here = spaceAt(plan, x, z);
-  if (here) {
-    ctx.beginPath();
-    ctx.arc(m.x(here.spawn.x), m.z(here.spawn.z), s.room + 1.2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.fill();
-  }
 
   if (ghost) {
     const gx = m.x(ghost.x);
