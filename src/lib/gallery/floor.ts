@@ -506,6 +506,8 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   plan.walls.forEach((wall, index) => {
     // 可移动展墙（临展厅）有自己正 / 反 / 主题三色，不走这里
     if (wall.kind === 'partition' && zoneSpec(wall.zone).screen) return;
+    // 有厚度的隔断已经是一块实体，别再画它中间那张纸（会 z-fighting）
+    if (wall.solid) return;
     const mats = zoneMats.get(wall.zone) ?? fallback;
     const kind = wall.kind === 'partition' ? 'partition' : accentSet.has(index) ? 'accent' : 'base';
     const material =
@@ -765,15 +767,20 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
    */
   const unitPlane = track(new THREE.PlaneGeometry(1, 1));
   const floorMatCache = new Map<string, THREE.MeshStandardMaterial>();
-  const floorMaterial = (band: Band, width: number, depth: number): THREE.MeshStandardMaterial => {
+  const floorMaterial = (
+    band: Band,
+    width: number,
+    depth: number,
+    color?: string,
+  ): THREE.MeshStandardMaterial => {
     const [mx, mz] = zoneSpec(band.zone).floorModule;
     const rx = Math.max(1, Math.round((band.along === 'x' ? width : depth) / mx));
     const rz = Math.max(1, Math.round((band.along === 'x' ? depth : width) / mz));
-    const key = `${band.zone}|${rx}|${rz}`;
+    const key = `${band.zone}|${rx}|${rz}|${color ?? ''}`;
     const cached = floorMatCache.get(key);
     if (cached) return cached;
     const mats = zoneMats.get(band.zone) ?? fallback;
-    const map = track(mats.floorMap.clone());
+    const map = track(color ? floorModuleTexture(color) : mats.floorMap.clone());
     map.needsUpdate = true;
     map.repeat.set(rx, rz);
     const material = track(
@@ -787,10 +794,10 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   const floorMeshes: THREE.Mesh[] = [];
 
   /** 铺一块地面：共用的 1×1 plane，靠 scale 撑到实际尺寸 */
-  const addFloor = (band: Band, y: number): void => {
+  const addFloor = (band: Band, y: number, color?: string): void => {
     const width = band.x2 - band.x1;
     const depth = band.z2 - band.z1;
-    const mesh = new THREE.Mesh(unitPlane, floorMaterial(band, width, depth));
+    const mesh = new THREE.Mesh(unitPlane, floorMaterial(band, width, depth, color));
     mesh.rotation.x = -Math.PI / 2;
     mesh.scale.set(width, depth, 1);
     mesh.position.set((band.x1 + band.x2) / 2, y, (band.z1 + band.z2) / 2);
@@ -821,6 +828,21 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       addFloor(
         { x1: piece.x1, z1: piece.z1, x2: piece.x2, z2: piece.z2, zone: room.id, along: 'x' },
         0.01,
+      );
+    }
+    // 换色的那几块（序厅入口的门垫）：比房间地面高 5 mm，压在上面
+    for (const patch of room.patches ?? []) {
+      addFloor(
+        {
+          x1: patch.x1,
+          z1: patch.z1,
+          x2: patch.x2,
+          z2: patch.z2,
+          zone: room.id,
+          along: 'x',
+        },
+        0.015,
+        patch.color,
       );
     }
   }
@@ -923,6 +945,50 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     let pieces = [room.rect];
     for (const taken of ceilingPieces) pieces = pieces.flatMap((piece) => subtract(piece, taken));
     ceilingPieces.push(room.rect);
+    // 折板天花：整片折成几条，每条一个高度（潮汐之间的「水面」）
+    const folds = room.folds;
+    if (folds) {
+      const alongX = folds.along === 'x';
+      const lo = alongX ? room.rect.x1 : room.rect.z1;
+      const hi = alongX ? room.rect.x2 : room.rect.z2;
+      const cross1 = alongX ? room.rect.z1 : room.rect.x1;
+      const cross2 = alongX ? room.rect.z2 : room.rect.x2;
+      let from = lo;
+      folds.heights.forEach((height, index) => {
+        const to = index < folds.at.length ? folds.at[index] : hi;
+        const rect = alongX
+          ? { x1: from, z1: cross1, x2: to, z2: cross2 }
+          : { x1: cross1, z1: from, x2: cross2, z2: to };
+        addCeilingPolygon(
+          [
+            { x: rect.x1, z: rect.z1 },
+            { x: rect.x2, z: rect.z1 },
+            { x: rect.x2, z: rect.z2 },
+            { x: rect.x1, z: rect.z2 },
+          ],
+          height,
+          mats.ceiling,
+        );
+        // 折与折之间的竖向收口面：不补的话两条顶之间会露出一条通到外面的缝
+        const next = index < folds.heights.length - 1 ? folds.heights[index + 1] : null;
+        if (next !== null && Math.abs(next - height) > 0.01) {
+          const riser = new THREE.Mesh(wallGeo, mats.ceiling);
+          const y = (height + next) / 2;
+          const h = Math.abs(next - height);
+          if (alongX) {
+            riser.position.set(to, y, (cross1 + cross2) / 2);
+            riser.rotation.y = Math.PI / 2;
+          } else {
+            riser.position.set((cross1 + cross2) / 2, y, to);
+            riser.rotation.y = 0;
+          }
+          riser.scale.set(cross2 - cross1, h, 1);
+          scene.add(riser);
+        }
+        from = to;
+      });
+      continue;
+    }
     // 有藻井就把井口那块挖掉（井底与井壁另外铺）
     const coffer = room.coffer;
     for (const piece of pieces) {
@@ -1079,7 +1145,8 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
             maxLines: 4,
           }),
         ),
-        7.5 - 0.02,
+        // 隔断有 0.3 m 厚，字贴在西面那一层上（7.5 - 0.15 - 0.02）
+        7.33,
         1.85,
         1.5,
         -Math.PI / 2,
@@ -1514,7 +1581,17 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   );
   for (const room of ROOMS) {
     for (const prop of room.props) {
-      if (prop.kind === 'bench') {
+      if (prop.kind === 'partition') {
+        // 有厚度的隔断：一块长方体（不再是一张纸），跟着 tint 走墙色
+        const length = Math.hypot(prop.x2 - prop.x1, prop.z2 - prop.z1);
+        const wall = new THREE.Mesh(
+          track(new THREE.BoxGeometry(prop.t ?? 0.12, prop.h, length)),
+          wallMaterial(room.id, prop.tint),
+        );
+        wall.position.set((prop.x1 + prop.x2) / 2, prop.h / 2, (prop.z1 + prop.z2) / 2);
+        wall.rotation.y = Math.atan2(prop.x2 - prop.x1, prop.z2 - prop.z1);
+        scene.add(wall);
+      } else if (prop.kind === 'bench') {
         const bench = new THREE.Mesh(
           track(new THREE.BoxGeometry(prop.w, 0.42, prop.d)),
           benchMat,

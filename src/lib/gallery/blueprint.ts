@@ -462,7 +462,17 @@ export type PropSpec =
   | { kind: 'bench'; x: number; z: number; w: number; d: number; ry: number }
   | { kind: 'sculpture'; x: number; z: number; r: number }
   /** tint：隔断自己的颜色（不写就跟房间墙一个色） */
-  | { kind: 'partition'; x1: number; z1: number; x2: number; z2: number; h: number; tint?: string };
+  /** t：隔断的厚度（给了就画成一块有厚度的实墙，不再是一张纸） */
+  | {
+      kind: 'partition';
+      x1: number;
+      z1: number;
+      x2: number;
+      z2: number;
+      h: number;
+      tint?: string;
+      t?: number;
+    };
 
 /**
  * 墙上的凹龛：沿这面墙 at 处挖一个 width 宽的洞口，退进去 depth，
@@ -476,6 +486,27 @@ export interface NicheSpec {
   depth: number;
   /** 洞口高（米） */
   top: number;
+}
+
+/**
+ * 折板天花：沿一个方向切成若干条，每条一个高度（潮汐之间那道「水面」）。
+ *  折与折之间会自动补一道竖向的收口面。
+ */
+export interface FoldSpec {
+  along: 'x' | 'z';
+  /** 切点（沿 along 方向的坐标，升序） */
+  at: number[];
+  /** 每条的高度（比 at 多一个） */
+  heights: number[];
+}
+
+/** 地面上换一块别的颜色（序厅入口的门垫） */
+export interface FloorPatch {
+  x1: number;
+  z1: number;
+  x2: number;
+  z2: number;
+  color: string;
 }
 
 /** 藻井：房间天花中央这一块沉下去，四周留一圈灯槽 */
@@ -518,6 +549,10 @@ export interface RoomSpec {
   niches?: NicheSpec[];
   /** 天花的藻井（下沉 + 四周灯槽） */
   coffer?: CofferSpec;
+  /** 天花的折板（与藻井二选一：藻井是「中间一块沉下去」，折板是「整片折几折」） */
+  folds?: FoldSpec;
+  /** 地面上换色的几块（门垫之类） */
+  patches?: FloorPatch[];
 }
 
 /**
@@ -538,9 +573,24 @@ export const ROOMS: RoomSpec[] = [
       { wall: 'e', at: 5, width: CORRIDOR.width, height: 3.4 },
     ],
     props: [
-      // 3 m 短隔墙：挡住从入口直接看到东侧出口，形成进入仪式感
-      { kind: 'partition', x1: 7.5, z1: 0, x2: 7.5, z2: 3, h: 3.1, tint: '#D7D0C4' },
+      // 3 m 短隔墙：挡住从入口直接看到东侧出口，形成进入仪式感。
+      //  0.3 m 厚（是块实墙不是一张纸），南端伸到 z=-0.3 去接微弧后的南墙
+      {
+        kind: 'partition',
+        x1: 7.5,
+        z1: -0.3,
+        x2: 7.5,
+        z2: 3,
+        h: 3.1,
+        tint: '#D7D0C4',
+        t: 0.3,
+      },
+      // 长凳：放在进门右手那块安静的角落（长廊从房间北边穿过去，西墙前是走的道），
+      //  坐下来正对北墙凹龛里的主视觉
+      { kind: 'bench', x: 8.2, z: 1.5, w: 2.4, d: 0.42, ry: 0 },
     ],
+    // 入口 1.8 m 的门垫：地面深一档，进门那一步踩在另一块材料上
+    patches: [{ x1: 2.4, z1: 0, x2: 5.6, z2: 1.8, color: '#4A4741' }],
     // 序厅四面：南（入口）深石墨、北（主视觉）深酒红、西（策展文字）浅米、东（平面图）青灰
     wallColors: { s: '#232726', n: '#4A202A', w: '#C7BFB3', e: '#3D4443' },
     // 主视觉在北墙（深酒红），嵌进凹龛里
@@ -575,6 +625,10 @@ export const ROOMS: RoomSpec[] = [
     rect: { x1: 2, z1: 20, x2: 13, z2: 27 },
     corridorThrough: false,
     doors: [{ wall: 's', at: 8, width: 3, height: DOOR.height }],
+    // 东墙整面改成大弧：弦 7 m、矢高 1.2（R≈5.7），房间像个被水冲弯的洞
+    arc: { e: 1.2 },
+    // 发光顶折三折：4.2 / 3.95 / 4.2 —— 顶是「水面」，不是一块发光的平板
+    folds: { along: 'x', at: [5.6, 9.2], heights: [4.2, 3.95, 4.2] },
     props: [{ kind: 'bench', x: 7.5, z: 23.5, w: 1.8, d: 0.45, ry: 0 }],
   },
   {

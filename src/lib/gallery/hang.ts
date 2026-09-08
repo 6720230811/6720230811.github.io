@@ -106,8 +106,9 @@ const HEAD_ROOM = 0.7;
  *  加新主题只要在这儿加一行。
  */
 const ZONE_PREFERENCE: Record<string, ZoneId[]> = {
-  city: ['city', 'night', 'large'],
-  sea: ['tide', 'nature', 'light'],
+  // 序厅是进门第一眼：每个主题的第一件先给它，于是凹龛里的主视觉是真的作品
+  city: ['entry', 'city', 'night', 'large'],
+  sea: ['entry', 'tide', 'nature', 'light'],
 };
 
 function aspectOf(item: HangItem): number {
@@ -122,7 +123,14 @@ function assignZones(items: HangItem[]): Map<ZoneId, HangItem[]> {
     const preference = ZONE_PREFERENCE[item.theme];
     const index = seen.get(item.theme) ?? 0;
     seen.set(item.theme, index + 1);
-    const zoneId = preference && preference.length > 0 ? preference[index % preference.length] : 'night';
+    // 偏好表的第一项是「进门第一眼」那间（序厅）：只给它这个主题的第一件，
+    //  其余按后面的顺序轮 —— 序厅要空，不能跟长廊一样挂满
+    const zoneId =
+      preference && preference.length > 0
+        ? index === 0
+          ? preference[0]
+          : preference[1 + ((index - 1) % (preference.length - 1))]
+        : 'night';
     const list = byZone.get(zoneId);
     if (list) list.push(item);
     else byZone.set(zoneId, [item]);
@@ -192,6 +200,8 @@ function surfaces(walls: WallSegment[]): Surface[] {
   const runs: { start: number; items: WallSegment[] }[] = [];
   const open = new Map<string, { start: number; items: WallSegment[] }>();
   walls.forEach((wall, index) => {
+    // 画成实体的隔断（有厚度）：画挂上去会陷进那块体块里，跳过
+    if (wall.solid) return;
     const run = wall.group ? open.get(wall.group) : undefined;
     if (run && touches(run.items[run.items.length - 1], wall)) {
       run.items.push(wall);

@@ -59,6 +59,8 @@ export interface WallSegment {
   group?: string;
   /** 凹龛的后壁：挂画时不扣墙角预留（龛就是给作品留的，两端不用让） */
   niche?: boolean;
+  /** 已经画成有厚度的实体（隔断给了 t）：别再画它那张纸，也别往它身上挂画 */
+  solid?: boolean;
 }
 
 export interface DoorOpening {
@@ -468,6 +470,7 @@ function propWalls(room: RoomSpec): WallSegment[] {
   for (const prop of room.props) {
     if (prop.kind !== 'partition') continue;
     const horizontal = Math.abs(prop.x2 - prop.x1) >= Math.abs(prop.z2 - prop.z1);
+    const solid = prop.t !== undefined;
     out.push({
       a: { x: prop.x1, z: prop.z1 },
       b: { x: prop.x2, z: prop.z2 },
@@ -478,6 +481,7 @@ function propWalls(room: RoomSpec): WallSegment[] {
       zone: room.id,
       kind: 'partition',
       tint: prop.tint,
+      ...(solid ? { solid: true } : {}),
     });
   }
   return out;
