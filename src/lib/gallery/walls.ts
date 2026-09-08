@@ -401,6 +401,31 @@ function arcStrip(
   return pathWalls(path, wall.normal, { ...meta, kind: 'base' });
 }
 
+/**
+ * 折墙（锯齿）：把一面墙等分几段，每段给一个偏移，拼成一条折线。
+ *  大型作品厅的南墙就是这样：中间凸出去一块、两侧各凹进来一点，
+ *  于是同一面墙上能挂三张互不干扰的画（每段朝向不同，视线不打架）。
+ *  首尾两个偏移必须是 0 —— 要接得上转角。
+ */
+function foldStrip(
+  wall: { a: Vec2; b: Vec2; normal: Vec2; from: number; to: number },
+  offsets: number[],
+  meta: { height: number; zone: ZoneId; tint?: string; group?: string; hero?: boolean },
+): WallSegment[] {
+  const steps = offsets.length - 1;
+  if (steps < 1) return [];
+  const path: Vec2[] = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const value = wall.from + ((wall.to - wall.from) * i) / steps;
+    const base = arcPointAt(wall, 0, value);
+    path.push({
+      x: base.x + wall.normal.x * offsets[i],
+      z: base.z + wall.normal.z * offsets[i],
+    });
+  }
+  return pathWalls(path, wall.normal, { ...meta, kind: 'base' });
+}
+
 /** 凹龛：两侧的门垛 + 后壁（后壁挂主视觉，所以带 hero 与 niche 两个标记） */
 function nicheWalls(
   room: RoomSpec,
@@ -438,6 +463,7 @@ function roomWalls(room: RoomSpec): WallSegment[] {
   for (const key of ['n', 'e', 's', 'w'] as WallKey[]) {
     const wall = roomWall(room, key);
     const bulge = room.arc?.[key] ?? 0;
+    const fold = room.fold?.[key];
     const niche = room.niches?.find((item) => item.wall === key);
     const gaps = [
       ...room.doors.filter((door) => door.wall === key).map(doorGap),
@@ -453,15 +479,56 @@ function roomWalls(room: RoomSpec): WallSegment[] {
       group: `${room.id}-${key}`,
       ...(heroOnStrip ? { hero: true } : {}),
     };
-    for (const piece of splitByGaps(wall.from, wall.to, gaps)) {
-      const built = bulge
-        ? arcStrip(wall, bulge, piece.start, piece.end, meta)
-        : wallStrip(wall, piece.start, piece.end, meta);
+    // 切了角的房间（八边形大厅）：每面墙两头各短一截，缺口由转角那道斜墙补
+    const cut = room.chamfer ?? 0;
+    const lo = wall.from + cut;
+    const hi = wall.to - cut;
+    for (const piece of splitByGaps(lo, hi, gaps)) {
+      const built = fold
+        ? foldStrip(wall, fold, meta)
+        : bulge
+          ? arcStrip(wall, bulge, piece.start, piece.end, meta)
+          : wallStrip(wall, piece.start, piece.end, meta);
       out.push(...built);
     }
     if (niche) out.push(...nicheWalls(room, wall, niche, info.ceiling, heroHere));
   }
+  if (room.chamfer) out.push(...cornerWalls(room, { height: info.ceiling, zone: room.id }));
   return out;
+}
+
+/** 切角房间的四道转角斜墙：把四个直角切成 45°，方盒子就变成八边形 */
+function cornerWalls(
+  room: RoomSpec,
+  meta: { height: number; zone: ZoneId },
+): WallSegment[] {
+  const c = room.chamfer ?? 0;
+  const { x1, z1, x2, z2 } = room.rect;
+  const corners: [Vec2, Vec2, Vec2][] = [
+    [
+      { x: x1 + c, z: z1 },
+      { x: x1, z: z1 + c },
+      { x: -1, z: -1 },
+    ],
+    [
+      { x: x2 - c, z: z1 },
+      { x: x2, z: z1 + c },
+      { x: 1, z: -1 },
+    ],
+    [
+      { x: x2, z: z2 - c },
+      { x: x2 - c, z: z2 },
+      { x: 1, z: 1 },
+    ],
+    [
+      { x: x1, z: z2 - c },
+      { x: x1 + c, z: z2 },
+      { x: -1, z: 1 },
+    ],
+  ];
+  return corners.flatMap(([a, b, hint]) =>
+    pathWalls([a, b], hint, { ...meta, kind: 'base' }),
+  );
 }
 
 /** 房间里的隔墙 / 可移动展墙：两面都能挂画，但这里只当墙（碰撞 + 投影） */

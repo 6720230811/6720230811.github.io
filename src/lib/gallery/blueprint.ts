@@ -336,7 +336,8 @@ export const ZONES: Zone[] = [
   {
     id: 'atrium',
     label: { zh: '中央大厅', en: 'Central Hall' },
-    ceiling: 5,
+    // 外圈 4.2：中心那 4 × 4 m 由跌级升到 5.0（walls 的高度跟着这个数走）
+    ceiling: 4.2,
     wall: '#DED7CC',
     accent: '#C9BFAF',
     accentRatio: 0.22,
@@ -547,8 +548,18 @@ export interface RoomSpec {
   arc?: Partial<Record<WallKey, number>>;
   /** 墙上的凹龛 */
   niches?: NicheSpec[];
-  /** 天花的藻井（下沉 + 四周灯槽） */
-  coffer?: CofferSpec;
+  /**
+   * 天花的藻井：一层套一层（外 → 内），每层一圈灯槽。
+   *  drop 为正是往下沉（序厅的藻井），为负是往上升（中央大厅的跌级）。
+   */
+  coffers?: CofferSpec[];
+  /**
+   * 折墙：把某面墙等分几段、每段给一个偏移，拼成锯齿墙。
+   *  首尾必须是 0（要接得上转角），而且这面墙上不能有门洞。
+   */
+  fold?: Partial<Record<WallKey, number[]>>;
+  /** 切角：四个直角各切掉这么长（方盒子 → 八边形） */
+  chamfer?: number;
   /** 天花的折板（与藻井二选一：藻井是「中间一块沉下去」，折板是「整片折几折」） */
   folds?: FoldSpec;
   /** 地面上换色的几块（门垫之类） */
@@ -600,12 +611,19 @@ export const ROOMS: RoomSpec[] = [
     // 北墙凹龛：3.4 宽、退 0.4 m，主视觉嵌进去；上面留 0.6 m 龛楣
     niches: [{ wall: 'n', at: 7.3, width: 3.4, depth: 0.4, top: 2.8 }],
     // 天花：中央 4.4 × 5.0 沉 0.35 m，四周 180 mm 灯槽 —— 压暗的厅里唯一的光
-    coffer: { x1: 3.8, z1: 1.2, x2: 8.2, z2: 6.2, drop: 0.35, slot: 0.18 },
+    coffers: [{ x1: 3.8, z1: 1.2, x2: 8.2, z2: 6.2, drop: 0.35, slot: 0.18 }],
   },
   {
     id: 'atrium',
     rect: { x1: 12, z1: 12, x2: 22, z2: 22 },
     corridorThrough: true,
+    // 四角各切 2.6 m：方盒子切成八边形（四个直角变成四道 45° 斜墙）
+    chamfer: 2.6,
+    // 三级跌级天花：外圈 4.2 → 中环 4.6 → 中心 5.0（负 drop = 往上升）
+    coffers: [
+      { x1: 13.8, z1: 13.8, x2: 20.2, z2: 20.2, drop: -0.4, slot: 0.2 },
+      { x1: 15, z1: 15, x2: 19, z2: 19, drop: -0.8, slot: 0.2 },
+    ],
     doors: [
       // 西：长廊从西侧进来（自然长廊 z=16 那一段），浅拱券 3 m
       { wall: 'w', at: 16, width: DOOR.widthArch, height: DOOR.heightMajor, arch: true },
@@ -637,9 +655,10 @@ export const ROOMS: RoomSpec[] = [
     corridorThrough: false,
     doors: [{ wall: 's', at: 28, width: DOOR.widthMajor, height: DOOR.heightMajor }],
     props: [
-      // 2–3 面可移动展墙：不挡主入口与主要回游路线
-      { kind: 'partition', x1: 25, z1: 27.5, x2: 29, z2: 27.5, h: 3.2 },
-      { kind: 'partition', x1: 31, z1: 26.5, x2: 35, z2: 26.5, h: 3.2 },
+      // 可移动展墙：统一偏 12°（不正交排），动线自然变成「之」字。
+      //  12° 的正切 ≈ 0.213：4 m 长的墙两端差 0.85 m
+      { kind: 'partition', x1: 25, z1: 26.1, x2: 29, z2: 26.94, h: 3.2 },
+      { kind: 'partition', x1: 31, z1: 27.44, x2: 35, z2: 26.6, h: 3.2 },
     ],
   },
   {
@@ -664,6 +683,9 @@ export const ROOMS: RoomSpec[] = [
       // 东：→ 总览区
       { wall: 'e', at: 4.5, width: 3, height: DOOR.height },
     ],
+    // 南墙做成锯齿：中间凸 0.6、两侧各凹 0.3 —— 同一面墙上三张画各有各的朝向，
+    //  视线不打架（北墙那 7 m 烟熏土留给主视觉，不动）
+    fold: { s: [0, -0.3, 0.6, -0.3, 0] },
     // 装置占位往西偏、收小一点：主视觉在北墙 x 22–25，占位的体块要是杵在
     //  房间正中（x 20.8–23.2），从厅里看主视觉的左边一截就被它挡了
     props: [{ kind: 'sculpture', x: 20.5, z: 3.2, r: 1.5 }],
@@ -677,6 +699,13 @@ export const ROOMS: RoomSpec[] = [
     id: 'overview',
     rect: { x1: 30, z1: 0, x2: 38, z2: 6 },
     corridorThrough: true,
+    // 出口做成漏斗：最后 2.4 m 两侧各内收，洞口从 5 m 收到 3 m（门洞宽），
+    //  上面再压一块 2.8 m 的门斗天花 —— 走出去之前先收一下
+    props: [
+      { kind: 'partition', x1: 31.2, z1: 2.4, x2: 32.5, z2: 0, h: 3.6, t: 0.24 },
+      { kind: 'partition', x1: 36.8, z1: 2.4, x2: 35.5, z2: 0, h: 3.6, t: 0.24 },
+    ],
+    coffers: [{ x1: 31.2, z1: 0, x2: 36.8, z2: 2.4, drop: 0.8, slot: 0.04 }],
     doors: [
       // 西：大型作品厅过来的支线
       { wall: 'w', at: 4.5, width: 3, height: DOOR.height },
@@ -685,7 +714,6 @@ export const ROOMS: RoomSpec[] = [
       // 北：长廊（终章）从这里进来
       { wall: 'n', at: 34, width: CORRIDOR.width, height: DOOR.heightMajor },
     ],
-    props: [],
   },
 ];
 

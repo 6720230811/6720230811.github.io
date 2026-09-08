@@ -903,6 +903,30 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       scene.add(mesh);
     }
   }
+  /** 一块天花的形状：切了角（八边形大厅）就把四个直角切掉 */
+  const ceilingPoints = (rect: Rect, chamfer?: number): Vec2[] => {
+    const { x1, z1, x2, z2 } = rect;
+    if (!chamfer) {
+      return [
+        { x: x1, z: z1 },
+        { x: x2, z: z1 },
+        { x: x2, z: z2 },
+        { x: x1, z: z2 },
+      ];
+    }
+    const c = chamfer;
+    return [
+      { x: x1 + c, z: z1 },
+      { x: x2 - c, z: z1 },
+      { x: x2, z: z1 + c },
+      { x: x2, z: z2 - c },
+      { x: x2 - c, z: z2 },
+      { x: x1 + c, z: z2 },
+      { x: x1, z: z2 - c },
+      { x: x1, z: z1 + c },
+    ];
+  };
+
   /**
    * 一块多边形天花：房间的顶按它自己的形状铺（矩形就是四点多边形）。
    *  ShapeGeometry 的 uv 是形状的坐标（米），直接用会把贴图拉爆 ——
@@ -989,8 +1013,9 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       });
       continue;
     }
-    // 有藻井就把井口那块挖掉（井底与井壁另外铺）
-    const coffer = room.coffer;
+    // 有藻井就把最外面那层的井口挖掉（井底与井壁另外铺）
+    const coffers = room.coffers ?? [];
+    const coffer = coffers[0];
     for (const piece of pieces) {
       const shapes = coffer
         ? subtract(piece, {
@@ -1002,12 +1027,7 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
         : [piece];
       for (const shape of shapes) {
         addCeilingPolygon(
-          [
-            { x: shape.x1, z: shape.z1 },
-            { x: shape.x2, z: shape.z1 },
-            { x: shape.x2, z: shape.z2 },
-            { x: shape.x1, z: shape.z2 },
-          ],
+          ceilingPoints(shape, room.chamfer),
           zoneSpec(room.id).ceiling,
           mats.ceiling,
         );
@@ -1270,23 +1290,22 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     disposables.push(slots);
   }
   /**
-   * 藻井：井口四周一圈竖向井壁 + 下沉的井底 + 井底与井壁之间那圈灯槽。
-   *  压暗的厅里，这圈灯槽几乎是唯一的光 —— 人一进门先看见它。
+   * 藻井：井口四周一圈竖向井壁 + 井底 + 井底与井壁之间那圈灯槽。
+   *  可以一层套一层（中央大厅的三级跌级：外圈 4.2 → 中环 4.6 → 中心 5.0），
+   *  drop 为负就是往上升（井底比天花高）。压暗的厅里，这圈灯槽几乎是唯一的光。
    */
   for (const room of ROOMS) {
-    const coffer = room.coffer;
-    if (!coffer) continue;
+    const coffers = room.coffers ?? [];
+    if (coffers.length === 0) continue;
     const mats = zoneMats.get(room.id) ?? fallback;
     const ceiling = zoneSpec(room.id).ceiling;
-    const bottom = ceiling - coffer.drop;
-    const slot = coffer.slot;
-    const inner = {
-      x1: coffer.x1 + slot,
-      z1: coffer.z1 + slot,
-      x2: coffer.x2 - slot,
-      z2: coffer.z2 - slot,
-    };
-    /** 一块竖面：从 (x1,z1) 到 (x2,z2)，高度 from→to */
+    const points = (rect: Rect): Vec2[] => [
+      { x: rect.x1, z: rect.z1 },
+      { x: rect.x2, z: rect.z1 },
+      { x: rect.x2, z: rect.z2 },
+      { x: rect.x1, z: rect.z2 },
+    ];
+    /** 一块竖面：从 (x1,z1) 到 (x2,z2) */
     const riser = (
       x1: number,
       z1: number,
@@ -1294,47 +1313,58 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       z2: number,
       y: number,
       h: number,
-      material: THREE.MeshStandardMaterial,
     ): void => {
-      const mesh = new THREE.Mesh(wallGeo, material);
+      const mesh = new THREE.Mesh(wallGeo, wallMaterial(room.id));
       mesh.position.set((x1 + x2) / 2, y + h / 2, (z1 + z2) / 2);
       mesh.rotation.y = Math.atan2(x2 - x1, z2 - z1) + Math.PI / 2;
       mesh.scale.set(Math.hypot(x2 - x1, z2 - z1), h, 1);
       scene.add(mesh);
     };
-    const riserMat = wallMaterial(room.id);
-    // 四面井壁（南、北、东、西）
-    riser(coffer.x1, coffer.z2, coffer.x2, coffer.z2, bottom, coffer.drop, riserMat);
-    riser(coffer.x2, coffer.z1, coffer.x1, coffer.z1, bottom, coffer.drop, riserMat);
-    riser(coffer.x1, coffer.z1, coffer.x1, coffer.z2, bottom, coffer.drop, riserMat);
-    riser(coffer.x2, coffer.z2, coffer.x2, coffer.z1, bottom, coffer.drop, riserMat);
-    // 井底
-    addCeilingPolygon(
-      [
-        { x: inner.x1, z: inner.z1 },
-        { x: inner.x2, z: inner.z1 },
-        { x: inner.x2, z: inner.z2 },
-        { x: inner.x1, z: inner.z2 },
-      ],
-      bottom,
-      mats.ceiling,
-    );
-    // 灯槽：井底四周那一圈（比井底再低 1 cm，不与它共面）
-    const slotMat = slotMaterial(room.id, 2800);
-    const slotY = bottom - 0.01;
-    const bands: [number, number, number, number][] = [
-      [coffer.x1, inner.z2, coffer.x2, coffer.z2],
-      [coffer.x1, coffer.z1, coffer.x2, inner.z1],
-      [coffer.x1, inner.z1, inner.x1, inner.z2],
-      [inner.x2, inner.z1, coffer.x2, inner.z2],
-    ];
-    for (const [x1, z1, x2, z2] of bands) {
-      const mesh = new THREE.Mesh(unitPlane, slotMat);
+    /** 一块平铺的发光带（灯槽） */
+    const glowBand = (x1: number, z1: number, x2: number, z2: number, y: number): void => {
+      const mesh = new THREE.Mesh(unitPlane, slotMaterial(room.id, 2800));
       mesh.rotation.x = Math.PI / 2;
       mesh.scale.set(x2 - x1, z2 - z1, 1);
-      mesh.position.set((x1 + x2) / 2, slotY, (z1 + z2) / 2);
+      mesh.position.set((x1 + x2) / 2, y, (z1 + z2) / 2);
       scene.add(mesh);
-    }
+    };
+
+    coffers.forEach((coffer, index) => {
+      const next = coffers[index + 1];
+      const y = ceiling - coffer.drop;
+      // 上一层：第一层的上面就是房间天花，再往里是外面那层的井底
+      const above = index === 0 ? ceiling : ceiling - coffers[index - 1].drop;
+      const slot = coffer.slot;
+      const inner = {
+        x1: coffer.x1 + slot,
+        z1: coffer.z1 + slot,
+        x2: coffer.x2 - slot,
+        z2: coffer.z2 - slot,
+      };
+      // 井底：里面还套着一层就把那一块挖掉
+      for (const piece of next ? subtract(inner, next) : [inner]) {
+        addCeilingPolygon(points(piece), y, mats.ceiling);
+      }
+      // 四面井壁：从井底到上一层
+      const low = Math.min(y, above);
+      const high = Math.abs(above - y);
+      if (high > 0.01) {
+        riser(coffer.x1, coffer.z2, coffer.x2, coffer.z2, low, high);
+        riser(coffer.x2, coffer.z1, coffer.x1, coffer.z1, low, high);
+        riser(coffer.x1, coffer.z1, coffer.x1, coffer.z2, low, high);
+        riser(coffer.x2, coffer.z2, coffer.x2, coffer.z1, low, high);
+      }
+      // 灯槽：井底四周那一圈（比井底低 1 cm，不与它共面）
+      const bandY = y - 0.01;
+      for (const [x1, z1, x2, z2] of [
+        [coffer.x1, inner.z2, coffer.x2, coffer.z2],
+        [coffer.x1, coffer.z1, coffer.x2, inner.z1],
+        [coffer.x1, inner.z1, inner.x1, inner.z2],
+        [inner.x2, inner.z1, coffer.x2, inner.z2],
+      ] as [number, number, number, number][]) {
+        glowBand(x1, z1, x2, z2, bandY);
+      }
+    });
   }
 
   /**
@@ -1581,11 +1611,11 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   );
   for (const room of ROOMS) {
     for (const prop of room.props) {
-      if (prop.kind === 'partition') {
+      if (prop.kind === 'partition' && prop.t !== undefined) {
         // 有厚度的隔断：一块长方体（不再是一张纸），跟着 tint 走墙色
         const length = Math.hypot(prop.x2 - prop.x1, prop.z2 - prop.z1);
         const wall = new THREE.Mesh(
-          track(new THREE.BoxGeometry(prop.t ?? 0.12, prop.h, length)),
+          track(new THREE.BoxGeometry(prop.t, prop.h, length)),
           wallMaterial(room.id, prop.tint),
         );
         wall.position.set((prop.x1 + prop.x2) / 2, prop.h / 2, (prop.z1 + prop.z2) / 2);
