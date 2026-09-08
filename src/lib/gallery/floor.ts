@@ -18,6 +18,7 @@ import {
   BRANCHES,
   CORRIDOR,
   CORRIDOR_PATH,
+  CORRIDOR_PATCHES,
   DOOR,
   ROOMS,
   zone as zoneSpec,
@@ -810,6 +811,21 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
 
   for (const band of corridor) addFloor(band, 0);
   for (const band of branchBands) addFloor(band, 0.005);
+  // 长廊地面上换色的几块（城市长廊端景墙前的停顿区）：比长廊地面高 5 mm
+  for (const patch of CORRIDOR_PATCHES) {
+    addFloor(
+      {
+        x1: patch.x1,
+        z1: patch.z1,
+        x2: patch.x2,
+        z2: patch.z2,
+        zone: patch.zone ?? 'night',
+        along: 'x',
+      },
+      0.012,
+      patch.color,
+    );
+  }
   /**
    * 房间：各铺一块。中央大厅与潮汐之间的矩形有 1×2 m 的一小块重叠，
    *  两块地面同高会闪、两块天花高度不同会在厅里压出一块低顶 ——
@@ -1380,17 +1396,25 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     const midX = (niche.x1 + niche.x2) / 2;
     const midZ = (niche.z1 + niche.z2) / 2;
 
-    // 龛楣：朝房间那一面（法线 = -n）
+    // 龛楣：洞口顶到天花那截（朝房间那一面，法线 = -n）
     const lintelHeight = Math.max(0.1, ceiling - niche.top);
     const lintel = new THREE.Mesh(wallGeo, wallMaterial(niche.zone, niche.tint));
     lintel.position.set(midX, niche.top + lintelHeight / 2, midZ);
     lintel.rotation.y = Math.atan2(-niche.nx, -niche.nz);
     lintel.scale.set(width, lintelHeight, 1);
     scene.add(lintel);
+    // 龛台：离地的壁龛（夜行那三处）下面那截也是墙
+    if (niche.bottom > 0.01) {
+      const sill = new THREE.Mesh(wallGeo, wallMaterial(niche.zone, niche.tint));
+      sill.position.set(midX, niche.bottom / 2, midZ);
+      sill.rotation.y = Math.atan2(-niche.nx, -niche.nz);
+      sill.scale.set(width, niche.bottom, 1);
+      scene.add(sill);
+    }
 
     // 两条暗缝灯：贴在门垛上、朝龛内
     const stripMat = slotMaterial(niche.zone);
-    const stripH = Math.max(0.4, niche.top - 0.5);
+    const stripH = Math.max(0.3, niche.top - niche.bottom - 0.3);
     for (const side of [-1, 1]) {
       const at = side < 0 ? { x: niche.x1, z: niche.z1 } : { x: niche.x2, z: niche.z2 };
       // 朝龛内的方向：从这一侧门垛看向龛心
@@ -1398,7 +1422,7 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       const strip = new THREE.Mesh(wallGeo, stripMat);
       strip.position.set(
         at.x + niche.nx * (niche.depth / 2) + facing.x * 0.02,
-        niche.top - 0.15 - stripH / 2,
+        niche.bottom + (niche.top - niche.bottom) / 2,
         at.z + niche.nz * (niche.depth / 2) + facing.z * 0.02,
       );
       strip.rotation.y = Math.atan2(facing.x, facing.z);

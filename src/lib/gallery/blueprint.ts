@@ -485,8 +485,10 @@ export interface NicheSpec {
   at: number;
   width: number;
   depth: number;
-  /** 洞口高（米） */
+  /** 洞口顶高（米），上面是龛楣 */
   top: number;
+  /** 洞口底高（米），下面是龛台；不写就是落地 */
+  bottom?: number;
 }
 
 /**
@@ -501,13 +503,15 @@ export interface FoldSpec {
   heights: number[];
 }
 
-/** 地面上换一块别的颜色（序厅入口的门垫） */
+/** 地面上换一块别的颜色（序厅入口的门垫、城市长廊端景前的停顿区） */
 export interface FloorPatch {
   x1: number;
   z1: number;
   x2: number;
   z2: number;
   color: string;
+  /** 铺装模块按这个分区走（长廊里的换色块没有房间可以挂） */
+  zone?: ZoneId;
 }
 
 /** 藻井：房间天花中央这一块沉下去，四周留一圈灯槽 */
@@ -748,6 +752,41 @@ export const CORRIDOR_CUTS: Rect[] = [
   { x1: 26.4, z1: 24.6, x2: 29.6, z2: 25.4 },
   // 慢门长廊南墙（z=14）给沉浸展厅的 3.2 m 门洞
   { x1: 28.4, z1: 13.6, x2: 31.6, z2: 14.4 },
+];
+
+/**
+ * 长廊墙上的壁龛：按中心线的弧长定位到某一侧的墙上。
+ *  长廊不像房间有四面墙可以挂数据，只能按「走到第几米、左边还是右边」说。
+ */
+export interface CorridorNicheSpec {
+  /** 壁龛中心落在长廊墙上的位置（世界坐标，取最近的那段墙） */
+  at: { x: number; z: number };
+  /** 沿行进方向的左手墙 / 右手墙 */
+  side: 'left' | 'right';
+  width: number;
+  depth: number;
+  /** 洞口顶高 */
+  top: number;
+  /** 洞口底高（离地） */
+  bottom: number;
+  tint?: string;
+}
+
+/**
+ * 夜行长廊右墙三处壁龛：0.9 宽、0.75 高、退 0.35，龛底 1.35（视线高）。
+ *  位置：z=3 那道墙上三处（x 11.4 / 13.1 / 14.8，间距不规则）—— 都躲开了序厅
+ *  （序厅把 x 2–10 / z 0–7 范围内的长廊墙裁掉了，开在那一段的龛会跟着被裁掉）。
+ *  间距故意不规则：是「被水冲出来的孔」，不是装饰节奏。
+ *  龛内衬暗石墨，与那道竖缝同色。
+ */
+export const CORRIDOR_NICHES: CorridorNicheSpec[] = [
+  { at: { x: 11.4, z: 3 }, side: 'left', width: 0.9, depth: 0.35, top: 2.1, bottom: 1.35, tint: '#232726' },
+  { at: { x: 13.1, z: 3 }, side: 'left', width: 0.9, depth: 0.35, top: 2.1, bottom: 1.35, tint: '#232726' },
+  { at: { x: 14.8, z: 3 }, side: 'left', width: 0.9, depth: 0.35, top: 2.1, bottom: 1.35, tint: '#232726' },
+];
+/** 长廊地面上换色的几块：城市长廊端景墙前那块 2.4 × 2.4 的停顿区 */
+export const CORRIDOR_PATCHES: FloorPatch[] = [
+  { x1: 4, z1: 8.8, x2: 6.4, z2: 11.2, color: '#4E4A44', zone: 'city' },
 ];
 
 /** 门廊：入口与出口各挑出 1.2 m，三面墙（朝北是敞口，接房间门洞） */

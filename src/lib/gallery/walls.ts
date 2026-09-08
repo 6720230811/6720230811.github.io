@@ -23,6 +23,7 @@ import {
   BRANCHES,
   CORRIDOR,
   CORRIDOR_CUTS,
+  CORRIDOR_NICHES,
   CORRIDOR_PATH,
   PORCHES,
   ROOMS,
@@ -96,8 +97,10 @@ export interface NicheOpening {
   nx: number;
   nz: number;
   depth: number;
-  /** 洞口高（米），上面是龛楣 */
+  /** 洞口顶高（米），上面是龛楣 */
   top: number;
+  /** 洞口底高（米），下面是龛台 */
+  bottom: number;
   tint?: string;
 }
 
@@ -823,6 +826,119 @@ function doorOpenings(room: RoomSpec): DoorOpening[] {
   });
 }
 
+/**
+ * 在**任意一段墙**上挖一个壁龛：从 along 处量 width 宽，沿墙芯方向退 depth。
+ *  长廊的墙是折线偏移出来的，没有房间那套「哪面墙 + 沿墙坐标」的说法，
+ *  只能直接对这一段墙下手：切两截 + 两片门垛 + 一片后壁。
+ */
+function nicheInSegment(
+  wall: WallSegment,
+  from: number,
+  to: number,
+  spec: { depth: number; top: number; bottom: number; tint?: string },
+): { pieces: WallSegment[]; niche: NicheOpening } {
+  const dx = wall.b.x - wall.a.x;
+  const dz = wall.b.z - wall.a.z;
+  const length = wall.length || 1;
+  const dir = { x: dx / length, z: dz / length };
+  const n = wall.normal;
+  const at = (value: number): Vec2 => ({
+    x: wall.a.x + dir.x * value,
+    z: wall.a.z + dir.z * value,
+  });
+  const back = (point: Vec2): Vec2 => ({
+    x: point.x + n.x * spec.depth,
+    z: point.z + n.z * spec.depth,
+  });
+  const p1 = at(from);
+  const p2 = at(to);
+  const b1 = back(p1);
+  const b2 = back(p2);
+  const meta = { height: wall.height, zone: wall.zone, tint: spec.tint ?? wall.tint };
+  const pieces: WallSegment[] = [];
+  // 洞口两侧剩下的墙
+  for (const [a, b] of [
+    [wall.a, p1],
+    [p2, wall.b],
+  ] as [Vec2, Vec2][]) {
+    if (Math.hypot(b.x - a.x, b.z - a.z) >= 0.2) {
+      pieces.push(...pathWalls([a, b], n, { ...meta, kind: 'base' }));
+    }
+  }
+  // 门垛：墙芯在龛外（沿墙的两端）
+  pieces.push(...pathWalls([p1, b1], { x: -dir.x, z: -dir.z }, { ...meta, kind: 'base' }));
+  pieces.push(...pathWalls([p2, b2], dir, { ...meta, kind: 'base' }));
+  // 后壁
+  pieces.push(...pathWalls([b1, b2], n, { ...meta, kind: 'base' }));
+  return {
+    pieces,
+    niche: {
+      zone: wall.zone,
+      x1: p1.x,
+      z1: p1.z,
+      x2: p2.x,
+      z2: p2.z,
+      nx: n.x,
+      nz: n.z,
+      depth: spec.depth,
+      top: spec.top,
+      bottom: spec.bottom,
+      ...(meta.tint ? { tint: meta.tint } : {}),
+    },
+  };
+}
+
+/**
+ * 长廊墙上找壁龛落在哪一段：取离这个点最近的那段墙，返回下标 + 沿墙的距离。
+ *  不用弧长定位 —— 转角处「最近的中心线点」有两解（前后两段等距），
+ *  弧长会跳，直接按世界坐标投影反而稳。
+ */
+function locatePoint(
+  list: WallSegment[],
+  at: Vec2,
+): { index: number; along: number } | null {
+  let best: { index: number; along: number } | null = null;
+  let bestDist = Infinity;
+  list.forEach((wall, index) => {
+    const dx = wall.b.x - wall.a.x;
+    const dz = wall.b.z - wall.a.z;
+    const l2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((at.x - wall.a.x) * dx + (at.z - wall.a.z) * dz) / l2));
+    const dist = Math.hypot(at.x - (wall.a.x + dx * t), at.z - (wall.a.z + dz * t));
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { index, along: t * wall.length };
+    }
+  });
+  // 离墙超过半米就是数据写错了，宁可不开这个龛
+  return bestDist <= 0.5 ? best : null;
+}
+
+/** 把 CORRIDOR_NICHES 插到长廊两侧墙上 */
+function corridorNiches(
+  bySide: Map<1 | -1, WallSegment[]>,
+): { walls: WallSegment[]; niches: NicheOpening[] } {
+  const niches: NicheOpening[] = [];
+  for (const spec of CORRIDOR_NICHES) {
+    // side = +1 那一侧的墙，在行进方向的右手边（与长廊竖缝那套 side 判定一致：
+    //  法线朝墙芯、人站在长廊里看过去，+1 是右墙）
+    const side: 1 | -1 = spec.side === 'left' ? -1 : 1;
+    const list = bySide.get(side);
+    if (!list) continue;
+    const hit = locatePoint(list, spec.at);
+    if (!hit) continue;
+    const wall = list[hit.index];
+    const from = hit.along - spec.width / 2;
+    const to = hit.along + spec.width / 2;
+    // 太靠墙端（转角、门洞边）就不挖：不然会把墙角切掉一小截
+    if (from < 0.3 || to > wall.length - 0.3 || to - from < 0.2) continue;
+    const built = nicheInSegment(wall, from, to, spec);
+    list.splice(hit.index, 1, ...built.pieces);
+    niches.push(built.niche);
+  }
+  return { walls: [...(bySide.get(1) ?? []), ...(bySide.get(-1) ?? [])], niches };
+}
+
 /** 房间的凹龛洞口：给场景做龛楣与龛内暗缝灯 */
 function nicheOpenings(room: RoomSpec): NicheOpening[] {
   return (room.niches ?? []).map((niche) => {
@@ -840,6 +956,7 @@ function nicheOpenings(room: RoomSpec): NicheOpening[] {
       nz: wall.normal.z,
       depth: niche.depth,
       top: niche.top,
+      bottom: 0,
       ...(room.wallColors?.[niche.wall] ? { tint: room.wallColors[niche.wall] } : {}),
     };
   });
@@ -857,11 +974,12 @@ export function buildWalls(): BuildResult {
   const half = CORRIDOR.width / 2;
 
   // 1) 主长廊：两侧偏移，段落按中点的弧长落到某一章
-  const corridor: WallSegment[] = [];
+  const corridorBySide = new Map<1 | -1, WallSegment[]>();
   for (const side of [1, -1] as (1 | -1)[]) {
     const path = offsetPath(CORRIDOR_PATH, half, side, CORRIDOR.chamfer);
-    corridor.push(
-      ...polylineWalls(
+    corridorBySide.set(
+      side,
+      polylineWalls(
         path,
         side,
         // 墙高跟着章节净高走：自然 3.8、光影 4.0 —— 墙不跟到顶，墙顶与天花之间会漏光
@@ -876,6 +994,9 @@ export function buildWalls(): BuildResult {
       ),
     );
   }
+  // 长廊墙上的壁龛（夜行那三处）：先挖，再裁，不然洞会被裁墙的逻辑抹掉
+  const corridorWithNiches = corridorNiches(corridorBySide);
+  const corridor: WallSegment[] = corridorWithNiches.walls;
 
   // 2) 必须开敞的范围：长廊穿过的房间、长廊上给支廊开的口子
   const openings: Opening[] = [
@@ -903,7 +1024,7 @@ export function buildWalls(): BuildResult {
   return {
     walls,
     doors: ROOMS.flatMap(doorOpenings),
-    niches: ROOMS.flatMap(nicheOpenings),
+    niches: [...ROOMS.flatMap(nicheOpenings), ...corridorWithNiches.niches],
     obstacles: walls.map(wallObstacle),
   };
 }
