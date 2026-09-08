@@ -25,6 +25,7 @@ import {
   CORRIDOR_CUTS,
   CORRIDOR_NICHES,
   CORRIDOR_PATH,
+  CORRIDOR_ROUNDS,
   PORCHES,
   ROOMS,
   ZONES,
@@ -127,14 +128,73 @@ function corridorZoneAt(arc: number): ZoneId {
 }
 
 /**
+ * 偏移折线上的一点。带 group 的那几点（弧墙）会被挂画逻辑并成一面墙，
+ *  没有 group 的就是普通的一段直墙。
+ */
+interface PathPoint extends Vec2 {
+  group?: string;
+}
+
+/**
+ * 凸角倒圆：两条偏移线各往里挪 r，交点就是圆心；再从第一条线的切点扫到第二条。
+ *
+ *  返回一串点，除最后一点之外都带 group —— 最后一点之后那段已经不是弧了，
+ *  带上 group 会把后面那截直墙也算进这面弧墙。
+ *  切点越界（r 大于两侧直墙的一半）时返回 null，调用方退回尖角。
+ */
+function cornerArc(
+  vertex: Vec2,
+  d1: Vec2,
+  d2: Vec2,
+  n1: Vec2,
+  n2: Vec2,
+  radius: number,
+  group: string,
+): PathPoint[] | null {
+  // 圆心：line1 过 (vertex - n1·r) 方向 d1，line2 过 (vertex - n2·r) 方向 d2
+  const p1 = { x: vertex.x - n1.x * radius, z: vertex.z - n1.z * radius };
+  const p2 = { x: vertex.x - n2.x * radius, z: vertex.z - n2.z * radius };
+  const den = d1.x * d2.z - d1.z * d2.x;
+  if (Math.abs(den) < 1e-6) return null;
+  const t = ((p2.x - p1.x) * d2.z - (p2.z - p1.z) * d2.x) / den;
+  const cx = p1.x + d1.x * t;
+  const cz = p1.z + d1.z * t;
+  // 两个切点：圆心沿两侧法线各推 r（推回原来那两条偏移线上）
+  const t1 = { x: cx + n1.x * radius, z: cz + n1.z * radius };
+  const t2 = { x: cx + n2.x * radius, z: cz + n2.z * radius };
+  const a1 = Math.atan2(t1.z - cz, t1.x - cx);
+  const a2 = Math.atan2(t2.z - cz, t2.x - cx);
+  let sweep = a2 - a1;
+  while (sweep > Math.PI) sweep -= Math.PI * 2;
+  while (sweep < -Math.PI) sweep += Math.PI * 2;
+  const count = Math.max(4, Math.ceil((Math.abs(sweep) * radius) / 0.6));
+  const out: PathPoint[] = [];
+  for (let i = 0; i <= count; i += 1) {
+    const angle = a1 + (sweep * i) / count;
+    const point = { x: cx + Math.cos(angle) * radius, z: cz + Math.sin(angle) * radius };
+    out.push(i === count ? point : { ...point, group });
+  }
+  return out;
+}
+
+/**
  * 把折线朝一侧偏移：顶点用 miter 斜接（两段延长相交，转角不留缺口）。
  * side = +1 是行进方向的左手侧，-1 是右手侧。
  *
  * 转角内侧（拐弯的那一侧）切一个 chamfer 米的小倒角：把 miter 顶点换成沿
  * 两侧各退 chamfer 的两个点。
+ *
+ * rounds 里点名的折点，若这一侧正好是外侧（凸角），尖角换成一段圆弧；
+ * 半径会被两侧直墙的长度压住（切点不能跑到直墙外面去）。
  */
-function offsetPath(points: Vec2[], distance: number, side: 1 | -1, chamfer: number): Vec2[] {
-  const out: Vec2[] = [];
+function offsetPath(
+  points: Vec2[],
+  distance: number,
+  side: 1 | -1,
+  chamfer: number,
+  rounds?: Map<number, number>,
+): PathPoint[] {
+  const out: PathPoint[] = [];
   for (let i = 0; i < points.length; i += 1) {
     const cur = points[i];
     const prev = i > 0 ? points[i - 1] : undefined;
@@ -182,6 +242,27 @@ function offsetPath(points: Vec2[], distance: number, side: 1 | -1, chamfer: num
       continue;
     }
 
+    // 倒圆：这一侧是外侧（凸角）且这个折点配了半径 → 尖角换成一段圆弧。
+    //  半径压到两侧直墙的四成，免得切点跑到直墙外面、把直墙整段吃掉
+    const wanted = rounds?.get(i);
+    if (wanted) {
+      const limit =
+        Math.min(Math.hypot(cur.x - prev.x, cur.z - prev.z), Math.hypot(next.x - cur.x, next.z - cur.z)) * 0.4;
+      const arc = cornerArc(
+        vertex,
+        d1,
+        d2,
+        n1,
+        n2,
+        Math.min(wanted, limit),
+        `round-${i}`,
+      );
+      if (arc) {
+        out.push(...arc);
+        continue;
+      }
+    }
+
     out.push(vertex);
   }
   return out;
@@ -190,7 +271,7 @@ function offsetPath(points: Vec2[], distance: number, side: 1 | -1, chamfer: num
 /** 一条偏移折线 → 墙段（normal 朝墙芯，即偏移的那一侧）。分区按每段中点算，
  *  不用下标 —— 倒角会往折线里插点，下标跟中心线对不上。 */
 function polylineWalls(
-  path: Vec2[],
+  path: PathPoint[],
   side: 1 | -1,
   info: { heightOf: (mid: Vec2) => number; kind: WallSegment['kind'] },
   zoneOf: (mid: Vec2) => ZoneId,
@@ -214,6 +295,8 @@ function polylineWalls(
       zone: zoneOf({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }),
       kind: info.kind,
       tint: tintOf?.({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 }, side),
+      // 带 group 的（倒圆拆出来的短段）并成一面墙：挂画时不会再被当成八面碎墙
+      ...(a.group ? { group: a.group } : {}),
     });
   }
   return out;
@@ -974,9 +1057,25 @@ export function buildWalls(): BuildResult {
   const half = CORRIDOR.width / 2;
 
   // 1) 主长廊：两侧偏移，段落按中点的弧长落到某一章
+  //  倒圆的半径按折点给（CORRIDOR_ROUNDS 用世界坐标点名折点，取最近的那一个）
+  const rounds = new Map<number, number>();
+  for (const round of CORRIDOR_ROUNDS) {
+    let best = -1;
+    let bestDist = Infinity;
+    CORRIDOR_PATH.forEach((point, index) => {
+      if (index === 0 || index === CORRIDOR_PATH.length - 1) return;
+      const dist = Math.hypot(point.x - round.at.x, point.z - round.at.z);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = index;
+      }
+    });
+    // 差得远就是数据写错了，宁可不倒圆
+    if (best > 0 && bestDist < 0.5) rounds.set(best, round.r);
+  }
   const corridorBySide = new Map<1 | -1, WallSegment[]>();
   for (const side of [1, -1] as (1 | -1)[]) {
-    const path = offsetPath(CORRIDOR_PATH, half, side, CORRIDOR.chamfer);
+    const path = offsetPath(CORRIDOR_PATH, half, side, CORRIDOR.chamfer, rounds);
     corridorBySide.set(
       side,
       polylineWalls(

@@ -312,7 +312,9 @@ export const ZONES: Zone[] = [
     ceilingColor: '#283338',
     trim: { top: 0.03 },
     floorColor: '#57534D',
-    floorModule: [1.2, 2.4],
+    // 地面模块换成 0.6 × 4.8 的纵向长条（长边顺着走的方向）——
+    //  与「慢门」那条长曝光的拖影同向，脚下的线也在往前拉
+    floorModule: [4.8, 0.6],
     kind: 'corridor',
     span: [78, 95],
   },
@@ -787,6 +789,90 @@ export const CORRIDOR_NICHES: CorridorNicheSpec[] = [
 /** 长廊地面上换色的几块：城市长廊端景墙前那块 2.4 × 2.4 的停顿区 */
 export const CORRIDOR_PATCHES: FloorPatch[] = [
   { x1: 4, z1: 8.8, x2: 6.4, z2: 11.2, color: '#4E4A44', zone: 'city' },
+];
+
+/**
+ * 长廊转角的圆角：把 miter 生成的尖角换成一段圆弧（「被水磨圆的转角」）。
+ *  只作用在那一侧的**凸角**上 —— 凸角是水流冲刷的外岸，圆弧往里让，
+ *  转角就被磨掉一块；凹角仍然走 0.05 m 的倒角。
+ *  半径受相邻两段的长度限制（切点不能越过转角两侧的直墙）。
+ */
+export const CORRIDOR_ROUNDS: { at: Vec2; r: number }[] = [
+  // 终章尽头：沿 z=8 往东走到头，正对着的那个转角做成 1/4 圆弧（R = 3）。
+  //  走过去时墙不是「撞上来再转」，而是一路被磨圆着把人送到出口方向
+  { at: { x: 34, z: 8 }, r: 3 },
+];
+
+/**
+ * 天花的百叶段（光影长廊）：一段铝合金竖向百叶挂在天花下，叶片之间透出的光
+ *  在右墙上拉出条纹 —— 这是「光影」这一章的字面意思，也是全馆唯一一处
+ *  「静态几何、但看着有动感」的地方。
+ *  along / center / from / to 说的是叶片排布的那条线（沿人走的方向）：
+ *  along = 'x' 时叶片垂直于 x，center 是这段长廊中心线在 z 上的坐标。
+ */
+export interface LouverSpec {
+  /** 叶片排布的方向（人走的方向） */
+  along: 'x' | 'z';
+  /** 长廊中心线在另一个轴上的坐标 */
+  center: number;
+  /** 起止（沿 along 轴，米） */
+  from: number;
+  to: number;
+  /** 叶片间距（中到中） */
+  pitch: number;
+  /** 叶片高（竖向 80 mm） */
+  depth: number;
+  /** 叶片厚（沿行走方向 25 mm） */
+  thickness: number;
+  /** 叶片底标高 */
+  bottom: number;
+  /** 叶片后面那道洗顶灯槽的色温 */
+  kelvin: number;
+}
+
+export const CORRIDOR_LOUVERS: LouverSpec[] = [
+  {
+    // 光影长廊 z=23 那段，x 20–28 共 8 m：避开了两头的转角（17 与 34）
+    along: 'x',
+    center: 23,
+    from: 20,
+    to: 28,
+    pitch: 0.14,
+    depth: 0.08,
+    thickness: 0.025,
+    bottom: 3.76,
+    kelvin: 3500,
+  },
+];
+
+/**
+ * 墙脚的连续光槽（慢门长廊）：一条不中断的细光带，像长曝光拖出来的那条影。
+ *  path 是贴着墙的一条折线（可以拐弯，跟着长廊走）；色温从起点渐变到终点。
+ */
+export interface WallLightSpec {
+  /** 贴墙的折线（墙内侧，横穿门洞时会被门洞打断的那种位置别放） */
+  path: Vec2[];
+  /** 槽底离地高度 */
+  bottom: number;
+  /** 槽宽 */
+  width: number;
+  /** 色温：起点 → 终点 */
+  kelvin: [number, number];
+}
+
+export const CORRIDOR_WALL_LIGHTS: WallLightSpec[] = [
+  {
+    // 慢门长廊的右墙：从中央大厅那个凹角起，往西 9 m 再拐向南 3 m，共 12 m。
+    //  贴地 300 mm 起 —— 光压在脚边，把「慢门」那条拖影落在人走的那条线上
+    path: [
+      { x: 32, z: 18 },
+      { x: 23, z: 18 },
+      { x: 23, z: 15 },
+    ],
+    bottom: 0.3,
+    width: 0.06,
+    kelvin: [4000, 3400],
+  },
 ];
 
 /** 门廊：入口与出口各挑出 1.2 m，三面墙（朝北是敞口，接房间门洞） */

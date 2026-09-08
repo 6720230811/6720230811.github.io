@@ -17,8 +17,10 @@ import * as THREE from 'three';
 import {
   BRANCHES,
   CORRIDOR,
+  CORRIDOR_LOUVERS,
   CORRIDOR_PATH,
   CORRIDOR_PATCHES,
+  CORRIDOR_WALL_LIGHTS,
   DOOR,
   ROOMS,
   zone as zoneSpec,
@@ -1452,6 +1454,182 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     scene.add(mesh);
   }
 
+  // ---- 天花的百叶段（光影长廊） ----
+  //  一段 8 m 的铝合金竖向百叶挂在天花下，叶片后面藏一条洗顶光带：光从叶缝里
+  //  漏下来，在右墙上拉出竖向的条纹 —— 「光影」这一章的字面意思。
+  //  叶片是有厚度的板（不是一张纸）：走过去时看得见侧面，才像百叶。
+  {
+    const bladeGeo = track(new THREE.BoxGeometry(1, 1, 1));
+    const bladeMat = track(
+      new THREE.MeshStandardMaterial({
+        color: '#B7BABE',
+        roughness: 0.42,
+        metalness: 0.55,
+        envMapIntensity: 0.6,
+      }),
+    );
+    const streakMat = track(
+      new THREE.MeshBasicMaterial({
+        map: track(lightStreakTexture()),
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    for (const louver of CORRIDOR_LOUVERS) {
+      const horizontal = louver.along === 'x';
+      const from = Math.min(louver.from, louver.to);
+      const span = Math.abs(louver.to - louver.from);
+      const count = Math.max(2, Math.round(span / louver.pitch));
+      /** 第 i 片叶片在 along 那个轴上的位置 */
+      const bladeAt = (i: number): number => from + ((i + 0.5) * span) / count;
+
+      const blades = new THREE.InstancedMesh(bladeGeo, bladeMat, count);
+      for (let i = 0; i < count; i += 1) {
+        const at = bladeAt(i);
+        pos.set(
+          horizontal ? at : louver.center,
+          louver.bottom + louver.depth / 2,
+          horizontal ? louver.center : at,
+        );
+        quat.setFromEuler(euler.set(0, 0, 0));
+        blades.setMatrixAt(
+          i,
+          matrix.compose(
+            pos,
+            quat,
+            scale.set(
+              horizontal ? louver.thickness : CORRIDOR.width,
+              louver.depth,
+              horizontal ? CORRIDOR.width : louver.thickness,
+            ),
+          ),
+        );
+      }
+      blades.instanceMatrix.needsUpdate = true;
+      scene.add(blades);
+      disposables.push(blades);
+
+      // 叶片后面那道洗顶光带：贴着天花、比百叶段四周各收 10 cm，
+      //  正视时藏在叶缝后面，走起来才从缝里漏出来
+      const panel = new THREE.Mesh(
+        unitPlane,
+        track(
+          new THREE.MeshStandardMaterial({
+            color: '#FFF6E6',
+            emissive: kelvinColor(louver.kelvin),
+            emissiveIntensity: 1.7,
+            roughness: 1,
+            metalness: 0,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+          }),
+        ),
+      );
+      panel.rotation.x = Math.PI / 2;
+      panel.scale.set(
+        horizontal ? span - 0.2 : CORRIDOR.width - 0.2,
+        horizontal ? CORRIDOR.width - 0.2 : span - 0.2,
+        1,
+      );
+      panel.position.set(
+        horizontal ? (louver.from + louver.to) / 2 : louver.center,
+        louver.bottom + louver.depth + 0.06,
+        horizontal ? louver.center : (louver.from + louver.to) / 2,
+      );
+      scene.add(panel);
+
+      // 叶缝漏在右墙上的那几道竖光：与叶片同间距，上亮下淡。
+      //  是画上去的条纹不是真投影 —— 真阴影要开 shadowMap，全馆就这一处不值当
+      const mid = horizontal
+        ? { x: (louver.from + louver.to) / 2, z: louver.center }
+        : { x: louver.center, z: (louver.from + louver.to) / 2 };
+      const forward = corridorDirection(nearestArc(mid.x, mid.z));
+      // 行进方向的右手边（与长廊竖缝那套 side 判定一致）
+      const right = { x: forward.z, z: -forward.x };
+      const streaks = new THREE.InstancedMesh(slotGeo, streakMat, count);
+      for (let i = 0; i < count; i += 1) {
+        const at = bladeAt(i);
+        pos.set(
+          (horizontal ? at : louver.center) + right.x * (CORRIDOR.width / 2 - 0.02),
+          2.45,
+          (horizontal ? louver.center : at) + right.z * (CORRIDOR.width / 2 - 0.02),
+        );
+        // 面朝走廊（法线 = -right）
+        quat.setFromEuler(euler.set(0, Math.atan2(-right.x, -right.z), 0));
+        streaks.setMatrixAt(i, matrix.compose(pos, quat, scale.set(0.07, 2.1, 1)));
+      }
+      streaks.instanceMatrix.needsUpdate = true;
+      scene.add(streaks);
+      disposables.push(streaks);
+    }
+  }
+  // ---- 墙脚的连续光槽（慢门长廊） ----
+  //  贴地 300 mm 起、60 mm 宽、一路不中断，像长曝光拖出来的那条影；色温沿途
+  //  渐变（4000 → 3400 K）。渐变只能分段给材质（emissive 不吃 instanceColor），
+  //  所以按 2 m 一段切开 —— 十几段、十几种颜色，一份材质缓存就够。
+  for (const line of CORRIDOR_WALL_LIGHTS) {
+    const total = line.path.slice(1).reduce((sum, point, i) => {
+      const prev = line.path[i];
+      return sum + Math.hypot(point.x - prev.x, point.z - prev.z);
+    }, 0);
+    const mats = new Map<number, THREE.MeshStandardMaterial>();
+    const materialAt = (mid: number): THREE.MeshStandardMaterial => {
+      const t = total > 0.01 ? mid / total : 0;
+      const kelvin = line.kelvin[0] + (line.kelvin[1] - line.kelvin[0]) * t;
+      const key = Math.round(kelvin / 50) * 50;
+      const cached = mats.get(key);
+      if (cached) return cached;
+      const material = track(
+        new THREE.MeshStandardMaterial({
+          color: '#FFF8EC',
+          emissive: kelvinColor(kelvin),
+          emissiveIntensity: 1.7,
+          roughness: 1,
+          metalness: 0,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+        }),
+      );
+      mats.set(key, material);
+      return material;
+    };
+
+    let travelled = 0;
+    for (let i = 0; i + 1 < line.path.length; i += 1) {
+      const a = line.path[i];
+      const b = line.path[i + 1];
+      const length = Math.hypot(b.x - a.x, b.z - a.z);
+      if (length < 0.05) continue;
+      const dir = { x: (b.x - a.x) / length, z: (b.z - a.z) / length };
+      // 朝走廊内侧推 12 mm：贴在墙面上会与墙共面闪色。
+      //  方向取段方向的垂直线，正负号才看中心线 —— 直接拿「段中点指向中心线」
+      //  的向量当朝向，在转角附近最近点有歧义，会把槽转歪、一端栽进墙里
+      const at = pointAtArc(nearestArc(a.x + (dir.x * length) / 2, a.z + (dir.z * length) / 2));
+      let inward = { x: -dir.z, z: dir.x };
+      if (at) {
+        const vx = at.point.x - (a.x + (dir.x * length) / 2);
+        const vz = at.point.z - (a.z + (dir.z * length) / 2);
+        if (vx * inward.x + vz * inward.z < 0) inward = { x: -inward.x, z: -inward.z };
+      }
+      const steps = Math.max(1, Math.ceil(length / 2));
+      for (let s = 0; s < steps; s += 1) {
+        const s0 = (length * s) / steps;
+        const s1 = (length * (s + 1)) / steps;
+        const mesh = new THREE.Mesh(slotGeo, materialAt(travelled + (s0 + s1) / 2));
+        mesh.position.set(
+          a.x + (dir.x * (s0 + s1)) / 2 + inward.x * 0.012,
+          line.bottom + line.width / 2,
+          a.z + (dir.z * (s0 + s1)) / 2 + inward.z * 0.012,
+        );
+        mesh.rotation.y = Math.atan2(inward.x, inward.z);
+        mesh.scale.set(s1 - s0, line.width, 1);
+        scene.add(mesh);
+      }
+      travelled += length;
+    }
+  }
+
   // ---- 门洞：门楣（墙材质）+ 门套（深色）+ 中央/沉浸的浅拱券 ----
   // 十几道门、每道 4 个体块，逐个建 Mesh 就是几十个 draw call 和几十份
   // BoxGeometry。这里只把变换记下来，最后按材质各合成一个 InstancedMesh。
@@ -2146,6 +2324,30 @@ function makeSoftGlow(): THREE.CanvasTexture {
     g.addColorStop(1, 'rgba(255,248,232,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
+ * 叶缝漏在墙上的那道竖光：上亮下淡的竖向渐变。
+ *  只是一张贴在墙前的透明面片 —— 真投影要开 shadowMap，全馆就这一处不值当。
+ */
+function lightStreakTexture(): THREE.CanvasTexture {
+  const w = 32;
+  const h = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(255,248,232,0.62)');
+    g.addColorStop(0.45, 'rgba(255,246,228,0.34)');
+    g.addColorStop(1, 'rgba(255,244,224,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;

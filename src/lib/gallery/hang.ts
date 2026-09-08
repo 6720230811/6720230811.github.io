@@ -19,7 +19,17 @@
  *  - 留白 ≥ 30% → FILL 0.7
  *  - 数据暂缺挂统一的中性占位画框，不复制已有作品
  */
-import { CORRIDOR_PATH, ZONES, zone, type Vec2, type ZoneId } from './blueprint';
+import {
+  CORRIDOR,
+  CORRIDOR_LOUVERS,
+  CORRIDOR_PATH,
+  CORRIDOR_WALL_LIGHTS,
+  ZONES,
+  zone,
+  type LouverSpec,
+  type Vec2,
+  type ZoneId,
+} from './blueprint';
 import { nearestArc } from './walls';
 import type { WallSegment } from './walls';
 
@@ -43,6 +53,11 @@ export interface ArtWall {
   ceilingHeight: number;
   /** 房间点名的主视觉墙（RoomSpec.heroWall） */
   hero?: boolean;
+  /**
+   * 弧墙上能平贴墙面的最大画宽（由弦高推算）；不给 = 直墙。
+   *  短于 MIN_FLAT 的弧墙（转角倒圆那一类）不挂画。
+   */
+  flat?: number;
   /**
    * 弧墙的折线（含首尾）。有它，作品就沿折线排 —— 直墙直接用 start→end
    *  插值就够了，弧墙那样排会让画浮在弦的外面（弧越高偏得越多）。
@@ -95,6 +110,14 @@ const NICHE_KEEP = 0.15;
 const DOOR_KEEP = 0.9;
 /** 短于这个长度就不挂画 */
 const MIN_WALL = 2.6;
+/**
+ * 弧墙上能平贴墙面的最大画幅：短于这个就不挂。
+ *  一片平的画贴在弧上，两端会陷进墙里（90° 转角那种弦高，3 m 的画两端要陷
+ *  19 cm）。按弦高算出「偏离墙面不超过 5 cm」的最大宽度，够不上一件最小的
+ *  画（1.1 m）就干脆不挂 —— 转角就该是转角，不是展墙。
+ */
+const MIN_FLAT = 1.1;
+const FLAT_TOL = 0.05;
 /** 只填七成墙面，留白三成 */
 const FILL = 0.7;
 /** 画心离天花至少留这么多 */
@@ -166,6 +189,66 @@ function corridorDirection(arc: number): Vec2 {
 }
 
 /**
+ * 百叶条纹落在的那面墙（行进方向的右手边，与 floor 里条纹的判定一致）。
+ *  返回条纹带的那条线（沿百叶的起止）。
+ */
+function louverWallLine(louver: LouverSpec): Vec2[] {
+  const mid =
+    louver.along === 'x'
+      ? { x: (louver.from + louver.to) / 2, z: louver.center }
+      : { x: louver.center, z: (louver.from + louver.to) / 2 };
+  const forward = corridorDirection(nearestArc(mid.x, mid.z));
+  const right = { x: forward.z, z: -forward.x };
+  const half = CORRIDOR.width / 2;
+  const at = (t: number): Vec2 =>
+    louver.along === 'x'
+      ? { x: t, z: louver.center + right.z * half }
+      : { x: louver.center + right.x * half, z: t };
+  return [at(louver.from), at(louver.to)];
+}
+
+/**
+ * 特征段占了这面墙多少（0–1）：连续光槽（慢门）与天花百叶的条纹带（光影）
+ *  是那面墙的主角，作品的画框和光晕板是贴着墙面的一大片板，会整段压在
+ *  光 / 条纹前面把它们挡成一截一截。按每 0.5 m 取一个样本点到特征折线算
+ *  距离，落在 SLOT_KEEP 内算被占。
+ */
+const SLOT_KEEP = 0.25;
+function featureCoverage(surface: { start: Vec2; end: Vec2 }): number {
+  const dx = surface.end.x - surface.start.x;
+  const dz = surface.end.z - surface.start.z;
+  const length = Math.hypot(dx, dz);
+  if (length < 0.5) return 0;
+  const lines: Vec2[][] = [
+    ...CORRIDOR_WALL_LIGHTS.map((line) => line.path),
+    ...CORRIDOR_LOUVERS.map((louver) => louverWallLine(louver)),
+  ];
+  if (lines.length === 0) return 0;
+  const steps = Math.max(2, Math.ceil(length / 0.5));
+  let covered = 0;
+  for (let i = 0; i <= steps; i += 1) {
+    const px = surface.start.x + (dx * i) / steps;
+    const pz = surface.start.z + (dz * i) / steps;
+    let best = Infinity;
+    for (const path of lines) {
+      for (let s = 0; s + 1 < path.length; s += 1) {
+        const a = path[s];
+        const b = path[s + 1];
+        const ex = b.x - a.x;
+        const ez = b.z - a.z;
+        const t = Math.max(
+          0,
+          Math.min(1, ((px - a.x) * ex + (pz - a.z) * ez) / (ex * ex + ez * ez || 1)),
+        );
+        best = Math.min(best, Math.hypot(px - (a.x + ex * t), pz - (a.z + ez * t)));
+      }
+    }
+    if (best < SLOT_KEEP) covered += 1;
+  }
+  return covered / (steps + 1);
+}
+
+/**
  * 从墙里挑出作品墙，并给每个分区定一面 hero（主视觉）墙。
  *  hero 优先挑「与长廊垂直」的那面 —— 尽端、转角正对面；房间里挑最长那面。
  *  房间要是用 RoomSpec.heroWall 点名了一面，就认那一面（规格的重点墙）。
@@ -184,6 +267,36 @@ interface Surface {
   path?: Vec2[];
   /** 凹龛的后壁：两端不扣墙角预留 */
   niche?: boolean;
+  /**
+   * 弧墙上能平贴墙面的最大画宽（由弦高推算）。
+   *  直墙不给这个字段 —— 整面都是平的。
+   */
+  flat?: number;
+}
+
+/**
+ * 弧墙能平贴多宽的画：按「偏离墙面不超过 FLAT_TOL」从弦高反推。
+ *  弦高 f 与弦长 c 已知时，宽度 w 的那段弦高约 f·(w/c)²（圆的弦高在这个
+ *  量级上按平方走）—— 于是 w = c·√(FLAT_TOL/f)。f 极小（微弧、倒角）就不算了。
+ */
+function flatSpan(points: Vec2[]): number | undefined {
+  const first = points[0];
+  const last = points[points.length - 1];
+  const cx = last.x - first.x;
+  const cz = last.z - first.z;
+  const chord = Math.hypot(cx, cz);
+  if (chord < 0.5) return undefined;
+  let bulge = 0;
+  for (const point of points) {
+    const t = ((point.x - first.x) * cx + (point.z - first.z) * cz) / (chord * chord);
+    const at = Math.max(0, Math.min(1, t));
+    bulge = Math.max(
+      bulge,
+      Math.hypot(point.x - (first.x + cx * at), point.z - (first.z + cz * at)),
+    );
+  }
+  if (bulge < 0.01) return undefined;
+  return chord * Math.sqrt(FLAT_TOL / bulge);
 }
 
 /** 两段墙首尾相接吗（弧墙拆出来的短段必须严丝合缝） */
@@ -242,6 +355,8 @@ function surfaces(walls: WallSegment[]): Surface[] {
       nz += inward(piece).z;
     }
     const len = Math.hypot(nx, nz) || 1;
+    const path = [first.a, ...run.items.map((piece) => piece.b)];
+    const flat = flatSpan(path);
     out.push({
       id: `w${run.start}`,
       zone: first.zone,
@@ -250,9 +365,10 @@ function surfaces(walls: WallSegment[]): Surface[] {
       normal: { x: nx / len, z: nz / len },
       length,
       height: first.height,
-      path: [first.a, ...run.items.map((piece) => piece.b)],
+      path,
       ...(run.items.some((piece) => piece.hero) ? { hero: true } : {}),
       ...(run.items.some((piece) => piece.niche) ? { niche: true } : {}),
+      ...(flat !== undefined ? { flat } : {}),
     });
   }
   return out;
@@ -269,6 +385,10 @@ export function deriveArtWalls(walls: WallSegment[]): ArtWall[] {
       : Math.min(CORNER_KEEP, (surface.length - 1) / 2);
     const usable = surface.length - reserve * 2;
     if (usable < 1) continue;
+    // 弯得太急的墙不挂：画的两端会陷进墙里（转角倒圆那一类，让它是转角就好）
+    if (surface.flat !== undefined && surface.flat < MIN_FLAT) continue;
+    // 特征段不挂画：连续光槽 / 百叶条纹是那面墙的主角（画框和光晕板会压住它们）
+    if (featureCoverage(surface) > 0.5) continue;
     const type: ArtWallType =
       surface.zone === 'immersion' ? 'video' : info.kind === 'room' ? 'salon' : 'standard';
     const gap = type === 'salon' ? SALON_GAP : GAP;
