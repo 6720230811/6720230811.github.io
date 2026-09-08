@@ -106,8 +106,10 @@ const zh = {
   'screening.play': '开始放映',
   'screening.pause': '暂停',
   'screening.focus': '镜头对焦',
+  'screening.autoFocus': '自动对焦',
   'screening.seat': '回到沙发',
   'screening.projector': '前往放映机',
+  'screening.clarity': '清晰观影',
   'screening.immersive': '沉浸观看',
   'screening.standby': '放映机已关闭',
   'screening.starting': '放映机启动中',
@@ -124,6 +126,8 @@ const zh = {
   'screening.selected': '已选择',
   'screening.noSource': '请先选择放映内容',
   'screening.uploadFailed': '无法读取所选文件',
+  'screening.lowResolution': '片源分辨率低于 720P，放大后可能模糊',
+  'screening.lowQuality': '清晰度偏低',
 
   // 博客与文章
   'blog.title': '博客',
@@ -296,8 +300,10 @@ const en: Record<keyof typeof zh, string> = {
   'screening.play': 'Start screening',
   'screening.pause': 'Pause',
   'screening.focus': 'Lens focus',
+  'screening.autoFocus': 'Auto focus',
   'screening.seat': 'Return to sofa',
   'screening.projector': 'Approach projector',
+  'screening.clarity': 'Clarity view',
   'screening.immersive': 'Immersive view',
   'screening.standby': 'Projector off',
   'screening.starting': 'Projector starting',
@@ -314,6 +320,8 @@ const en: Record<keyof typeof zh, string> = {
   'screening.selected': 'Selected',
   'screening.noSource': 'Choose a source first',
   'screening.uploadFailed': 'The selected file could not be read',
+  'screening.lowResolution': 'Source is below 720p and may look soft when enlarged',
+  'screening.lowQuality': 'Low resolution',
 
   // 博客与文章
   'blog.title': 'Blog',

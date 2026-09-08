@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 type MachineState = 'off' | 'starting' | 'ready' | 'playing' | 'paused' | 'cooling';
-type ViewMode = 'seat' | 'projector';
+type ViewMode = 'seat' | 'projector' | 'clarity';
 type Action = 'projector' | 'power' | 'source' | 'play' | 'prev' | 'next' | 'focus';
 
 interface GalleryItem {
@@ -45,9 +45,12 @@ interface Labels {
   selected: string;
   noSource: string;
   uploadFailed: string;
+  lowResolution: string;
+  lowQuality: string;
 }
 
 const SCREEN_ASPECT = 16 / 9;
+const OPTIMAL_FOCUS = 0.82;
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 function clamp(value: number, min: number, max: number): number {
@@ -281,7 +284,8 @@ function createBeam(origin: THREE.Vector3): { mesh: THREE.Mesh; material: THREE.
       void main() {
         float grain = mix(.82, 1.0, hash(floor(vWorld * 7.0 + uTime * .12)));
         float edge = smoothstep(0.0, .08, vProgress) * (1.0 - smoothstep(.78, 1.0, vProgress) * .5);
-        gl_FragColor = vec4(uColor, uOpacity * edge * grain * mix(.95, .18, vProgress));
+        float screenFade = 1.0 - smoothstep(.72, .96, vProgress);
+        gl_FragColor = vec4(uColor, uOpacity * edge * screenFade * grain * mix(.95, .18, vProgress));
       }
     `,
     transparent: true,
@@ -301,6 +305,7 @@ function createScreenMaterial(texture: THREE.Texture): THREE.ShaderMaterial {
       uFocus: { value: 0.18 },
       uMediaAspect: { value: SCREEN_ASPECT },
       uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
+      uSharpness: { value: 0 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -315,6 +320,7 @@ function createScreenMaterial(texture: THREE.Texture): THREE.ShaderMaterial {
       uniform float uFocus;
       uniform float uMediaAspect;
       uniform vec2 uTexel;
+      uniform float uSharpness;
       varying vec2 vUv;
 
       void main() {
@@ -332,7 +338,8 @@ function createScreenMaterial(texture: THREE.Texture): THREE.ShaderMaterial {
         }
         float radius = uFocus * 6.0;
         vec2 d = uTexel * radius;
-        vec3 color = texture2D(tMap, uv).rgb * .28;
+        vec3 center = texture2D(tMap, uv).rgb;
+        vec3 color = center * .28;
         color += texture2D(tMap, uv + vec2(d.x, 0.0)).rgb * .12;
         color += texture2D(tMap, uv - vec2(d.x, 0.0)).rgb * .12;
         color += texture2D(tMap, uv + vec2(0.0, d.y)).rgb * .12;
@@ -341,6 +348,14 @@ function createScreenMaterial(texture: THREE.Texture): THREE.ShaderMaterial {
         color += texture2D(tMap, uv - d).rgb * .06;
         color += texture2D(tMap, uv + vec2(d.x, -d.y)).rgb * .06;
         color += texture2D(tMap, uv + vec2(-d.x, d.y)).rgb * .06;
+        vec3 soft = (
+          texture2D(tMap, uv + vec2(uTexel.x, 0.0)).rgb +
+          texture2D(tMap, uv - vec2(uTexel.x, 0.0)).rgb +
+          texture2D(tMap, uv + vec2(0.0, uTexel.y)).rgb +
+          texture2D(tMap, uv - vec2(0.0, uTexel.y)).rgb
+        ) * .25;
+        color = clamp(color + (center - soft) * uSharpness, 0.0, 1.0);
+        color = clamp((color - .5) * (1.0 + uSharpness * .18) + .5, 0.0, 1.0);
         vec3 projected = color * inside + vec3(.012) * (1.0 - inside);
         vec3 unlitCloth = vec3(.17, .162, .148);
         color = mix(unlitCloth, projected, clamp(uBrightness, 0.0, 1.0));
@@ -381,6 +396,8 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     selected: root.dataset.labelSelected ?? 'Selected',
     noSource: root.dataset.labelNoSource ?? 'Choose a source',
     uploadFailed: root.dataset.labelUploadFailed ?? 'Cannot read file',
+    lowResolution: root.dataset.labelLowResolution ?? 'Source is below 720p',
+    lowQuality: root.dataset.labelLowQuality ?? 'Low resolution',
   };
   const locale = root.dataset.locale === 'en' ? 'en' : 'zh';
   const galleryItems = readItems(root);
@@ -392,6 +409,7 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   const viewButton = root.querySelector<HTMLButtonElement>('#screening-view');
   const sourceButton = root.querySelector<HTMLButtonElement>('#screening-source');
   const playButton = root.querySelector<HTMLButtonElement>('#screening-play');
+  const clarityButton = root.querySelector<HTMLButtonElement>('#screening-clarity');
   const immersiveButton = root.querySelector<HTMLButtonElement>('#screening-immersive');
   const sourceDialog = root.querySelector<HTMLDialogElement>('#screening-source-dialog');
   const gallerySeriesButton = root.querySelector<HTMLButtonElement>('#screening-gallery-series');
@@ -400,6 +418,8 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   const intervalInput = root.querySelector<HTMLSelectElement>('#screening-interval');
   const focusPanel = root.querySelector<HTMLElement>('#screening-focus');
   const focusInput = root.querySelector<HTMLInputElement>('#screening-focus-range');
+  const autoFocusButton = root.querySelector<HTMLButtonElement>('#screening-auto-focus');
+  const qualityEl = root.querySelector<HTMLElement>('#screening-quality');
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
   const lowPower = (navigator.hardwareConcurrency ?? 8) <= 4 || window.matchMedia?.('(pointer: coarse)').matches;
@@ -416,6 +436,19 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   const camera = new THREE.PerspectiveCamera(58, 1, 0.08, 40);
   const seatPose = makePose(new THREE.Vector3(0, 1.46, 1.48), new THREE.Vector3(0, 2.03, -4.86));
   const projectorPose = makePose(new THREE.Vector3(3.15, 2.24, 2.15), new THREE.Vector3(2.35, 1.42, 0.42));
+  const clarityPose = makePose(new THREE.Vector3(0, 1.56, 0.08), new THREE.Vector3(0, 2.05, -4.86));
+  const viewConfig: Record<ViewMode, {
+    pose: ReturnType<typeof makePose>;
+    fov: number;
+    pitch: number;
+    yawLimit: number;
+    zoomMin: number;
+    zoomMax: number;
+  }> = {
+    seat: { pose: seatPose, fov: 58, pitch: -0.02, yawLimit: 3.05, zoomMin: 50, zoomMax: 66 },
+    projector: { pose: projectorPose, fov: 54, pitch: -0.08, yawLimit: 1.2, zoomMin: 50, zoomMax: 66 },
+    clarity: { pose: clarityPose, fov: 44, pitch: 0, yawLimit: 0.42, zoomMin: 38, zoomMax: 52 },
+  };
   camera.position.copy(seatPose.position);
   camera.quaternion.copy(seatPose.quaternion);
 
@@ -785,13 +818,15 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   let videoLoaded = false;
   let autoplayWhenReady = false;
   let screenBrightness = 0.025;
-  let focusValue = Number(focusInput?.value ?? 0.82);
+  let focusValue = Number(focusInput?.value ?? OPTIMAL_FOCUS);
+  let autoFocus = true;
   let beamOpacity = 0;
   let roomLevel = 1;
   let averageColor = new THREE.Color('#dbe3df');
   let averageLuma = 0.45;
   let lastColorSample = 0;
   let cameraTransitioning = false;
+  let targetFov = 58;
   let lookYaw = 0;
   let lookPitch = -0.02;
   let dragging = false;
@@ -902,6 +937,16 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     }, 2200);
   }
 
+  function setAutoFocus(enabled: boolean): void {
+    autoFocus = enabled;
+    if (enabled) {
+      focusValue = OPTIMAL_FOCUS;
+      if (focusInput) focusInput.value = String(OPTIMAL_FOCUS);
+      lensBarrel.rotation.z = (focusValue - 0.5) * 0.7;
+    }
+    autoFocusButton?.setAttribute('aria-pressed', String(enabled));
+  }
+
   function pressButton(action: Action): void {
     const mesh = buttons.find((button) => button.userData.action === action);
     if (mesh) mesh.userData.press = 1;
@@ -938,6 +983,7 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     videoTexture = null;
     pendingVideo = false;
     videoLoaded = false;
+    if (qualityEl) qualityEl.hidden = true;
   }
 
   function clearLocalSource(): void {
@@ -980,6 +1026,7 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
 
   function prepareVideo(selected: VideoSource): void {
     clearVideo();
+    setAutoFocus(true);
     video = document.createElement('video');
     video.src = selected.src;
     video.preload = 'metadata';
@@ -989,14 +1036,26 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     videoTexture = new THREE.VideoTexture(video);
     videoTexture.colorSpace = THREE.SRGBColorSpace;
     videoTexture.minFilter = THREE.LinearFilter;
+    videoTexture.magFilter = THREE.LinearFilter;
+    videoTexture.generateMipmaps = false;
     videoLoaded = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
     video.addEventListener('loadeddata', () => {
       videoLoaded = true;
     });
     video.addEventListener('loadedmetadata', () => {
       if (!video) return;
-      screenMaterial.uniforms.uMediaAspect.value = video.videoWidth / Math.max(video.videoHeight, 1);
-      screenMaterial.uniforms.uTexel.value.set(1 / Math.max(video.videoWidth, 1), 1 / Math.max(video.videoHeight, 1));
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      screenMaterial.uniforms.uMediaAspect.value = width / Math.max(height, 1);
+      screenMaterial.uniforms.uTexel.value.set(1 / Math.max(width, 1), 1 / Math.max(height, 1));
+      if (qualityEl) {
+        const quality = height >= 2160 ? '4K' : height >= 1440 ? '1440P' : height >= 1080 ? '1080P' : height >= 720 ? '720P' : `${height}P`;
+        qualityEl.textContent = `${width} × ${height} · ${quality}${height < 720 ? ` · ${labels.lowQuality}` : ''}`;
+        qualityEl.dataset.quality = height < 720 ? 'low' : 'good';
+        qualityEl.title = height < 720 ? labels.lowResolution : '';
+        qualityEl.hidden = false;
+      }
+      if (height < 720) showHint(labels.lowResolution);
     });
     video.addEventListener('ended', () => setMachine('paused'));
   }
@@ -1100,16 +1159,24 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   }
 
   function setView(next: ViewMode): void {
+    const config = viewConfig[next];
     view = next;
     cameraTransitioning = true;
     lookYaw = 0;
-    lookPitch = next === 'seat' ? -0.02 : -0.08;
+    lookPitch = config.pitch;
+    targetFov = config.fov;
     if (focusPanel) focusPanel.hidden = next !== 'projector';
     if (viewButton) {
       viewButton.dataset.view = next;
-      viewButton.textContent = next === 'seat'
-        ? root.dataset.labelProjector ?? 'Projector'
-        : root.dataset.labelSeat ?? 'Seat';
+      viewButton.textContent = next === 'projector'
+        ? root.dataset.labelSeat ?? 'Seat'
+        : root.dataset.labelProjector ?? 'Projector';
+    }
+    if (clarityButton) {
+      clarityButton.setAttribute('aria-pressed', String(next === 'clarity'));
+      clarityButton.textContent = next === 'clarity'
+        ? root.dataset.labelSeat ?? 'Seat'
+        : root.dataset.labelClarity ?? 'Clarity view';
     }
   }
 
@@ -1178,6 +1245,7 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     ensureAudio();
     if (view === 'projector' && pickAction(event) === 'focus') {
       focusDragging = true;
+      setAutoFocus(false);
       lastX = event.clientX;
       canvas.setPointerCapture(event.pointerId);
       if (focusPanel) focusPanel.hidden = false;
@@ -1201,7 +1269,8 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
       const dx = event.clientX - lastX;
       const dy = event.clientY - lastY;
       dragDistance += Math.abs(dx) + Math.abs(dy);
-      lookYaw = clamp(lookYaw - dx * 0.003, view === 'seat' ? -3.05 : -1.2, view === 'seat' ? 3.05 : 1.2);
+      const yawLimit = viewConfig[view].yawLimit;
+      lookYaw = clamp(lookYaw - dx * 0.003, -yawLimit, yawLimit);
       lookPitch = clamp(lookPitch - dy * 0.0025, -0.35, 0.25);
       lastX = event.clientX;
       lastY = event.clientY;
@@ -1230,7 +1299,7 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     dragging = false;
     if (dragDistance < 8) {
       const action = pickAction(event);
-      if (action) triggerAction(view === 'seat' ? 'projector' : action);
+      if (action) triggerAction(view === 'projector' ? action : 'projector');
     }
   });
   canvas.addEventListener('pointerleave', () => {
@@ -1241,13 +1310,14 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   });
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
-    camera.fov = clamp(camera.fov + event.deltaY * 0.015, 50, 66);
-    camera.updateProjectionMatrix();
+    const config = viewConfig[view];
+    targetFov = clamp(targetFov + event.deltaY * 0.015, config.zoomMin, config.zoomMax);
   }, { passive: false });
 
-  viewButton?.addEventListener('click', () => setView(view === 'seat' ? 'projector' : 'seat'));
+  viewButton?.addEventListener('click', () => setView(view === 'projector' ? 'seat' : 'projector'));
   sourceButton?.addEventListener('click', openSource);
   playButton?.addEventListener('click', () => void startPlayback());
+  clarityButton?.addEventListener('click', () => setView(view === 'clarity' ? 'seat' : 'clarity'));
   gallerySeriesButton?.addEventListener('click', () => {
     if (galleryItems.length === 0) return;
     setSource({ kind: 'images', items: galleryItems.map((item) => ({ src: item.src, title: item.title })) });
@@ -1271,9 +1341,11 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     slideInterval = Number(intervalInput.value) || 5;
   });
   focusInput?.addEventListener('input', () => {
+    setAutoFocus(false);
     focusValue = Number(focusInput.value);
     lensBarrel.rotation.z = (focusValue - 0.5) * 0.7;
   });
+  autoFocusButton?.addEventListener('click', () => setAutoFocus(true));
   immersiveButton?.addEventListener('click', () => {
     const immersive = !document.body.classList.contains('is-screening-immersive');
     document.body.classList.toggle('is-screening-immersive', immersive);
@@ -1291,7 +1363,9 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     }
     if (event.key === 'ArrowLeft') changeSlide(-1);
     if (event.key === 'ArrowRight') changeSlide(1);
-    if (event.key.toLowerCase() === 'p') setView(view === 'seat' ? 'projector' : 'seat');
+    if (event.key.toLowerCase() === 'p') setView(view === 'projector' ? 'seat' : 'projector');
+    if (event.key.toLowerCase() === 'c') setView(view === 'clarity' ? 'seat' : 'clarity');
+    if (event.key.toLowerCase() === 'a' && source?.kind === 'video') setAutoFocus(true);
     if (event.key === 'Escape' && document.body.classList.contains('is-screening-immersive')) {
       document.body.classList.remove('is-screening-immersive');
       immersiveButton?.setAttribute('aria-pressed', 'false');
@@ -1365,9 +1439,14 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     const targetBrightness = powered * (isPlaying ? 1 : machine === 'ready' || machine === 'paused' ? 0.68 : 0.42) * imageFade;
     screenBrightness = damp(screenBrightness, Math.max(0.012, targetBrightness), 5, dt);
     screenMaterial.uniforms.uBrightness.value = screenBrightness;
-    screenMaterial.uniforms.uFocus.value = Math.abs(focusValue - 0.82) * 1.35;
+    screenMaterial.uniforms.uFocus.value = autoFocus ? 0 : Math.abs(focusValue - OPTIMAL_FOCUS) * 1.35;
+    screenMaterial.uniforms.uSharpness.value = source?.kind === 'video' && autoFocus ? 0.22 : 0;
 
-    const targetBeam = powered * (isPlaying ? 0.16 + averageLuma * 0.16 : 0.075);
+    const targetBeam = powered * (isPlaying
+      ? source?.kind === 'video'
+        ? 0.035 + averageLuma * 0.025
+        : 0.16 + averageLuma * 0.16
+      : 0.075);
     beamOpacity = damp(beamOpacity, targetBeam, 3.5, dt);
     beam.material.uniforms.uOpacity.value = beamOpacity;
     beam.material.uniforms.uTime.value = now / 1000;
@@ -1400,7 +1479,13 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
       button.userData.press = damp(button.userData.press, 0, 14, dt);
     }
 
-    const pose = view === 'seat' ? seatPose : projectorPose;
+    const nextFov = damp(camera.fov, targetFov, reducedMotion ? 30 : 5, dt);
+    if (Math.abs(nextFov - camera.fov) > 0.001) {
+      camera.fov = nextFov;
+      camera.updateProjectionMatrix();
+    }
+
+    const pose = viewConfig[view].pose;
     if (cameraTransitioning) {
       const rate = reducedMotion ? 30 : 3.6;
       camera.position.lerp(pose.position, 1 - Math.exp(-rate * dt));

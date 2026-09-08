@@ -39,9 +39,13 @@ const items = gallery.items
   data-label-power={t('screening.power')}
   data-label-source={t('screening.source')}
   data-label-focus={t('screening.focus')}
+  data-label-auto-focus={t('screening.autoFocus')}
   data-label-seat={t('screening.seat')}
   data-label-projector={t('screening.projector')}
+  data-label-clarity={t('screening.clarity')}
   data-label-immersive={t('screening.immersive')}
+  data-label-low-resolution={t('screening.lowResolution')}
+  data-label-low-quality={t('screening.lowQuality')}
   data-label-exit={t('gallery.exit')}
   data-label-prev={t('gallery.prev')}
   data-label-next={t('gallery.next')}
@@ -56,13 +60,19 @@ const items = gallery.items
 
   <div class="screening__topbar">
     <span class="screening__eyebrow">PRIVATE SCREENING ROOM</span>
-    <span class="screening__state" id="screening-state" aria-live="polite">{t('screening.standby')}</span>
+    <div class="screening__status">
+      <span class="screening__quality" id="screening-quality" aria-live="polite" hidden></span>
+      <span class="screening__state" id="screening-state" aria-live="polite">{t('screening.standby')}</span>
+    </div>
   </div>
 
   <div class="screening__tooltip" id="screening-tooltip" hidden></div>
 
   <div class="screening__focus" id="screening-focus" hidden>
-    <label for="screening-focus-range">{t('screening.focus')}</label>
+    <div class="screening__focus-head">
+      <label for="screening-focus-range">{t('screening.focus')}</label>
+      <button id="screening-auto-focus" type="button" aria-pressed="true">{t('screening.autoFocus')}</button>
+    </div>
     <input id="screening-focus-range" type="range" min="0" max="1" step="0.01" value="0.82" />
   </div>
 
@@ -75,6 +85,9 @@ const items = gallery.items
       <button class="screening__button" id="screening-source" type="button">{t('screening.source')}</button>
       <button class="screening__button screening__button--primary" id="screening-play" type="button">
         {t('screening.play')}
+      </button>
+      <button class="screening__button" id="screening-clarity" type="button" aria-pressed="false">
+        {t('screening.clarity')}
       </button>
       <button class="screening__button" id="screening-immersive" type="button" aria-pressed="false">
         {t('screening.immersive')}
