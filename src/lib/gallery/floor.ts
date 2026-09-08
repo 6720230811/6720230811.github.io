@@ -25,7 +25,7 @@ import {
   type Vec2,
   type ZoneId,
 } from './blueprint';
-import { nearestArc } from './walls';
+import { nearestArc, zoneAt } from './walls';
 import {
   ceilingTexture,
   environmentTexture,
@@ -418,9 +418,19 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
           }),
         )
       : wall;
+    const ceilingMap = track(ceilingTexture(item.ceilingColor, item.ceilingRipple === true));
     const ceiling = track(
       new THREE.MeshStandardMaterial({
-        map: track(ceilingTexture(item.ceilingColor, item.ceilingRipple === true)),
+        map: ceilingMap,
+        // 发光的顶棚（潮汐之间的大面积漫射柔光）：复用同一张贴图当 emissiveMap，
+        //  S11 烘进去那道波纹照样调制发光 —— 于是顶不是一块死板的白，是"水面"
+        ...(item.glow
+          ? {
+              emissive: new THREE.Color(item.glow.color),
+              emissiveMap: ceilingMap,
+              emissiveIntensity: item.glow.intensity,
+            }
+          : {}),
         roughness: 0.95,
         metalness: 0,
         side: THREE.DoubleSide,
@@ -1382,6 +1392,21 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   scene.environment = environment;
   pmrem.dispose();
 
+  /**
+   * 分区环境光：序厅压到 0.3，于是"进门先暗、往里走才放开"。
+   *  环境是全场一份（半球光 + environment），所以是跟着人走的整体曝光，
+   *  不是给某个房间单独点灯。跨门洞时插值一点点（每帧 6% ≈ 半秒），
+   *  免得一步跨过去整屏跳一下。
+   */
+  let ambientNow = zoneSpec(zoneAt(plan.spawn.x, plan.spawn.z)).ambient ?? 1;
+  let ambientTarget = ambientNow;
+  const applyAmbient = (level: number): void => {
+    hemi.intensity = LIGHTING.ambient * level;
+    scene.environmentIntensity = level;
+  };
+  // 出生点在序厅：第一帧就得是压暗后的样子，不能等走出 1.5 m 才变
+  applyAmbient(ambientNow);
+
   // 作品灯：一小池 SpotLight，永远只照相机附近那几张画。
   // 全都不投影 —— 规格允许 2–3 盏，但动态阴影在这个尺度上收益很小、代价很大，
   // 空间层次靠天花高度和墙色做，不靠阴影。
@@ -1451,6 +1476,26 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       track1.position.set((large.rect.x1 + large.rect.x2) / 2 + dx, ceiling - 0.03, cz);
       scene.add(track1);
     }
+  }
+
+  // 潮汐之间：顶棚整体发光（规格的"大面积漫射柔光"）已经在材质上，
+  //  这里只补一盏很弱的顶光 —— emissive 面片自己不照亮任何东西，
+  //  不给它一点真实的光，厅里就只剩环境光，顶看着像贴上去的。
+  const tide = ROOMS.find((room) => room.id === 'tide');
+  const tideGlow = zoneSpec('tide').glow;
+  if (tide && tideGlow?.fill) {
+    const fill = new THREE.PointLight(
+      new THREE.Color(tideGlow.color),
+      tideGlow.fill,
+      20,
+      1.6,
+    );
+    fill.position.set(
+      (tide.rect.x1 + tide.rect.x2) / 2,
+      zoneSpec('tide').ceiling - 0.7,
+      (tide.rect.z1 + tide.rect.z2) / 2,
+    );
+    scene.add(fill);
   }
 
   // 沉浸展厅：结构与灯具一律藏起来，只在地面边缘留几点低亮度安全引导光，
@@ -1715,6 +1760,7 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       if ((x - aimedAt.x) ** 2 + (z - aimedAt.z) ** 2 < 1.5 * 1.5) return;
       aimedAt = { x, z };
       aimSpots(x, z);
+      ambientTarget = zoneSpec(zoneAt(x, z)).ambient ?? 1;
     },
 
     setSize(width, height) {
@@ -1729,6 +1775,11 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     },
 
     render() {
+      // 分区环境光插值：站着不动时 |target - now| 是 0，什么也不做
+      if (Math.abs(ambientTarget - ambientNow) > 0.002) {
+        ambientNow += (ambientTarget - ambientNow) * 0.06;
+        applyAmbient(ambientNow);
+      }
       renderer.render(scene, camera);
     },
 

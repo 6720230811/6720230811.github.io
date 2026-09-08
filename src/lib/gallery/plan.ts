@@ -49,6 +49,17 @@ export interface ZoneSpec {
   ceilingColor: string;
   /** 天花烘一层极轻微的静态波纹明暗 */
   ceilingRipple?: boolean;
+  /**
+   * 天花整体发光：大面积漫射柔光（潮汐之间的「水面」）。
+   *  只是 emissive + 一点点很弱的补光，不是真实光源 —— 亮面在顶上，
+   *  厅里那点漫射靠补光给，没有投影。
+   */
+  glow?: { color: string; intensity: number; fill?: number };
+  /**
+   * 这个分区的环境光乘数：1 = 全馆默认。
+   *  序厅压到 0.3 —— 进门先暗，往里走才放开。
+   */
+  ambient?: number;
   floorColor: string;
   floorModule: [number, number];
   kind: 'corridor' | 'room';
@@ -100,6 +111,8 @@ function skeleton(): Skeleton {
       accent: item.accent,
       ceilingColor: item.ceilingColor,
       ...(item.ceilingRipple ? { ceilingRipple: true } : {}),
+      ...(item.glow ? { glow: item.glow } : {}),
+      ...(item.ambient !== undefined ? { ambient: item.ambient } : {}),
       floorColor: item.floorColor,
       floorModule: item.floorModule,
       kind: item.kind,

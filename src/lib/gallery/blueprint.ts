@@ -159,6 +159,18 @@ export interface Zone {
   /** 天花烘一层极轻微的静态波纹明暗（潮汐之间） */
   ceilingRipple?: boolean;
   /**
+   * 天花整体发光：大面积漫射柔光（潮汐之间的「水面」）。
+   *  只是 emissive + 一点点很弱的补光，不是真实光源 —— 亮面在顶上，
+   *  厅里那点漫射靠补光给，没有投影。
+   */
+  glow?: { color: string; intensity: number; fill?: number };
+  /**
+   * 这个分区的环境光乘数：1 = 全馆默认。
+   *  序厅压到 0.3 —— 进门先暗，往里走（城市长廊 / 中央大厅）才放开，
+   *  「先暗再亮」是进门那一下的节奏。
+   */
+  ambient?: number;
+  /**
    * 天花上规则但简洁的轨道灯（临展厅）：rows 条平行轨，灯具每 spacing 米一个。
    *  规格：轨道与灯具颜色 #363938。
    */
@@ -197,6 +209,9 @@ export const ZONES: Zone[] = [
     floorColor: '#57534D',
     floorModule: [1.2, 1.2],
     kind: 'room',
+    // 环境光压到 0.3：进门先暗，往里走（城市长廊 / 中央大厅）才放开 ——
+    //  实测整屏平均亮度 序厅 80 / 夜行长廊 93 / 城市长廊 137
+    ambient: 0.3,
   },
   {
     id: 'night',
@@ -227,7 +242,7 @@ export const ZONES: Zone[] = [
     accent: '#364852',
     accentRatio: 0.26,
     // 左墙暖混凝土灰（微水泥）、右墙暖矿物灰泥且比左墙亮
-    sideWalls: { left: '#AEA69B', right: '#D7D0C4' },
+    sideWalls: { left: '#AEA69B', right: '#DFD8CB' },
     // 端景墙顶部藏一道洗墙灯槽
     wash: true,
     // 8–10 m 一道 8 mm 青铜竖向分缝
@@ -340,6 +355,8 @@ export const ZONES: Zone[] = [
     // 大面积漫射柔光 + 极轻微的静态波纹明暗（不许动态水纹投影）
     ceilingRipple: true,
     ceilingColor: '#DCE0D9',
+    // 顶棚自己发一层冷白的光（偏青，像水面的天光），波纹照样调制它
+    glow: { color: '#CFE4DC', intensity: 0.55, fill: 4.5 },
     floorColor: '#57534D',
     floorModule: [1.2, 2.4],
     kind: 'room',
