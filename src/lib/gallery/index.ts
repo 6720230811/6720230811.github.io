@@ -281,9 +281,11 @@ export function mountGallery(rootEl: HTMLElement | null): void {
     }
     // 小地图 / 大地图：底图懒加载（网格模式下画布量出来是 0），切到 3D 之后
     // 第一帧才画。大地图点一下就传送，落点吸到能站的地方
-    const minimap: MinimapHandle | null = minimapEl ? createMinimap(minimapEl, plan) : null;
+    // 两张图都要知道页面语言：厅的名字是 { zh, en } 两份
+    const mapLabels = { hall: root.dataset.labelHall || '', locale: localeOf() };
+    const minimap: MinimapHandle | null = minimapEl ? createMinimap(minimapEl, plan, mapLabels) : null;
     const bigmap: BigMapHandle | null = mapCanvasEl
-      ? createBigMap(mapCanvasEl, plan, { hall: root.dataset.labelHall || '' })
+      ? createBigMap(mapCanvasEl, plan, mapLabels)
       : null;
 
     function openMap(): void {

@@ -12,9 +12,11 @@
 import {
   BUILDING,
   EYE_HEIGHT,
+  ROOMS,
   SPAWN,
   THEME_COLOR,
   ZONES,
+  zone,
   type Rect,
   type ZoneId,
 } from './blueprint';
@@ -67,6 +69,13 @@ export interface ZoneSpec {
   span?: [number, number];
 }
 
+/** 一间厅：位置与名字（名字跟 3D 里的 HUD 同一套，两种语言都在） */
+export interface Space {
+  id: ZoneId;
+  rect: Rect;
+  label: Record<Locale, string>;
+}
+
 export interface Waypoint {
   x: number;
   z: number;
@@ -77,6 +86,8 @@ export interface FloorPlan {
   obstacles: Obstacle[];
   doors: DoorOpening[];
   zones: ZoneSpec[];
+  /** 每间厅的位置：地图上标「厅在哪儿」用 */
+  spaces: Space[];
   artWalls: ArtWall[];
   placements: Placement[];
   /**
@@ -117,6 +128,11 @@ function skeleton(): Skeleton {
       floorModule: item.floorModule,
       kind: item.kind,
       ...(item.span ? { span: item.span } : {}),
+    })),
+    spaces: ROOMS.map((room) => ({
+      id: room.id,
+      rect: room.rect,
+      label: zone(room.id).label,
     })),
     bounds: BUILDING,
     spawn: { x: SPAWN.x, z: SPAWN.z, yaw: SPAWN.yaw },

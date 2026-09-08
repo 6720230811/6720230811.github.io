@@ -9,6 +9,9 @@
  *  两张图共用一套画法（renderer）：小地图每帧跟着人走；大地图点开才画，
  *  在上面点一下就把人送过去（落点由 plan.nearestWalkable 吸到能站的地方）。
  *
+ *  每间厅都在图上标出来：铺一层极淡的底 + 中心一个空心小圈（小地图到此为止，
+ *  大地图再挂名字）—— 名字取自 plan.spaces，跟 3D 里 HUD 上的分区名是同一套。
+ *
  *  朝向跟 index.ts 的 step() 同一套约定：相机 forward = (-sin yaw, -cos yaw)。
  *  （相机默认看 -Z，绕 Y 转 yaw 之后就是这个方向 —— 别照搬 plan.ts 里画框
  *  那套 atan2(nx, nz)，画框的正面是 +Z，跟相机差一个 π。）
@@ -52,6 +55,8 @@ export interface BigMapHandle {
 export interface PlanLabels {
   /** 大厅的名字（房间名来自 plan.spaces[].label，不用传） */
   hall?: string;
+  /** 房间名取哪种语言（不传按中文） */
+  locale?: 'zh' | 'en';
 }
 
 /** 记号的大小随图缩放：小地图上 3 px 的点，放大到 544 px 得按比例长 */
@@ -99,7 +104,7 @@ function label(
   ctx.fillText(text, x, y);
 }
 
-/** 底图：墙一次描完（S5 会补上房间名、大厅高亮、已参观区域） */
+/** 底图：墙一次描完，再把每间厅铺一层底、点一个圈（大地图上挂名字） */
 function paintBase(
   ctx: CanvasRenderingContext2D,
   plan: FloorPlan,
@@ -107,7 +112,19 @@ function paintBase(
   labels: PlanLabels,
 ): void {
   const m = mapper(plan, size);
+  const s = markerSize(size);
   const withText = size >= LABEL_MIN;
+
+  // 厅：先淡淡铺一层底 —— 光看墙的线读不出「这一大块是间厅」
+  ctx.fillStyle = 'rgba(246, 190, 118, 0.07)';
+  for (const space of plan.spaces) {
+    ctx.fillRect(
+      m.x(space.rect.x1),
+      m.z(space.rect.z1),
+      m.len(space.rect.x2 - space.rect.x1),
+      m.len(space.rect.z2 - space.rect.z1),
+    );
+  }
 
   // 墙：全部合成一条路径再一次描边 —— 几百段墙逐段 stroke 会掉帧
   ctx.strokeStyle = 'rgba(233, 229, 221, 0.5)';
@@ -118,7 +135,25 @@ function paintBase(
     ctx.lineTo(m.x(wall.b.x), m.z(wall.b.z));
   }
   ctx.stroke();
-  void labels;
+
+  // 每间厅中心一个空心小圈：走在折廊里最容易丢的就是「大厅在哪个方向」。
+  //  小地图上只留圈（152 px 写七个名字会糊成一团），大地图上再挂名字。
+  ctx.lineWidth = Math.max(1, size * 0.004);
+  ctx.strokeStyle = 'rgba(246, 190, 118, 0.85)';
+  ctx.textAlign = 'center';
+  for (const space of plan.spaces) {
+    const cx = m.x((space.rect.x1 + space.rect.x2) / 2);
+    const cz = m.z((space.rect.z1 + space.rect.z2) / 2);
+    ctx.beginPath();
+    ctx.arc(cx, cz, s.room, 0, Math.PI * 2);
+    ctx.stroke();
+    if (withText) {
+      const name = space.label[labels.locale ?? 'zh'] ?? space.label.zh;
+      const font = `600 ${Math.max(9, Math.round(size * 0.031))}px system-ui, sans-serif`;
+      label(ctx, name, cx, cz - s.room - 4, font);
+    }
+  }
+  ctx.textAlign = 'start';
 }
 
 /** 覆盖层：当前房间点亮、视锥、人这一点；大地图上还有鼠标指着的落点 */
@@ -244,8 +279,12 @@ function renderer(
 }
 
 /** 左上角那张：每帧跟着人走 */
-export function createMinimap(canvas: HTMLCanvasElement, plan: FloorPlan): MinimapHandle {
-  const view = renderer(canvas, plan);
+export function createMinimap(
+  canvas: HTMLCanvasElement,
+  plan: FloorPlan,
+  labels: PlanLabels = {},
+): MinimapHandle {
+  const view = renderer(canvas, plan, labels);
   return {
     update(x, z, yaw) {
       view.set(x, z, yaw);
