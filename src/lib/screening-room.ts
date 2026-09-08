@@ -88,6 +88,20 @@ function readItems(root: HTMLElement): GalleryItem[] {
   }
 }
 
+function makeTiledCanvasTexture(
+  canvas: HTMLCanvasElement,
+  renderer: THREE.WebGLRenderer,
+  repeatX: number,
+  repeatY: number,
+): THREE.CanvasTexture {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeatX, repeatY);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return texture;
+}
+
 function makeCarpetTexture(renderer: THREE.WebGLRenderer): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -105,12 +119,50 @@ function makeCarpetTexture(renderer: THREE.WebGLRenderer): THREE.CanvasTexture {
     }
     ctx.putImageData(image, 0, 0);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(10, 9);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  return texture;
+  return makeTiledCanvasTexture(canvas, renderer, 10, 9);
+}
+
+function makeWoodTexture(renderer: THREE.WebGLRenderer): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#b7a797';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.lineWidth = 1;
+    for (let y = 5; y < 256; y += 7) {
+      ctx.beginPath();
+      for (let x = 0; x <= 256; x += 8) {
+        const wave = Math.sin(x * 0.075 + y * 0.19) * 1.8;
+        if (x === 0) ctx.moveTo(x, y + wave);
+        else ctx.lineTo(x, y + wave);
+      }
+      ctx.strokeStyle = `rgba(58, 31, 19, ${0.1 + ((y * 13) % 7) * 0.012})`;
+      ctx.stroke();
+    }
+  }
+  return makeTiledCanvasTexture(canvas, renderer, 3, 11);
+}
+
+function makeMineralTexture(renderer: THREE.WebGLRenderer): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#cbc7c2';
+    ctx.fillRect(0, 0, 128, 128);
+    const image = ctx.getImageData(0, 0, 128, 128);
+    for (let i = 0; i < image.data.length; i += 4) {
+      const grain = ((i * 29) % 31) - 15;
+      image.data[i] = clamp(image.data[i] + grain, 0, 255);
+      image.data[i + 1] = clamp(image.data[i + 1] + grain, 0, 255);
+      image.data[i + 2] = clamp(image.data[i + 2] + grain, 0, 255);
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  return makeTiledCanvasTexture(canvas, renderer, 4, 4);
 }
 
 function makeDisplayTexture(): { texture: THREE.CanvasTexture; draw: (state: string, detail: string) => void } {
@@ -362,7 +414,7 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   scene.background = new THREE.Color('#100e0d');
   scene.fog = new THREE.FogExp2('#171310', 0.024);
   const camera = new THREE.PerspectiveCamera(58, 1, 0.08, 40);
-  const seatPose = makePose(new THREE.Vector3(0, 1.2, 1.72), new THREE.Vector3(0, 2.03, -4.86));
+  const seatPose = makePose(new THREE.Vector3(0, 1.46, 1.48), new THREE.Vector3(0, 2.03, -4.86));
   const projectorPose = makePose(new THREE.Vector3(3.15, 2.24, 2.15), new THREE.Vector3(2.35, 1.42, 0.42));
   camera.position.copy(seatPose.position);
   camera.quaternion.copy(seatPose.quaternion);
@@ -400,6 +452,34 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     return mesh;
   };
 
+  const addRoundedFloor = (
+    width: number,
+    depth: number,
+    radius: number,
+    position: [number, number, number],
+    material: THREE.Material,
+  ): THREE.Mesh => {
+    const x = width / 2;
+    const z = depth / 2;
+    const shape = new THREE.Shape();
+    shape.moveTo(-x + radius, -z);
+    shape.lineTo(x - radius, -z);
+    shape.quadraticCurveTo(x, -z, x, -z + radius);
+    shape.lineTo(x, z - radius);
+    shape.quadraticCurveTo(x, z, x - radius, z);
+    shape.lineTo(-x + radius, z);
+    shape.quadraticCurveTo(-x, z, -x, z - radius);
+    shape.lineTo(-x, -z + radius);
+    shape.quadraticCurveTo(-x, -z, -x + radius, -z);
+    const geometry = track(new THREE.ShapeGeometry(shape));
+    geometry.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(...position);
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    return mesh;
+  };
+
   const wallMaterial = track(new THREE.MeshStandardMaterial({ color: '#211f1d', roughness: 0.96 }));
   const warmWallMaterial = track(new THREE.MeshStandardMaterial({ color: '#2b2520', roughness: 0.98 }));
   const ceilingMaterial = track(new THREE.MeshStandardMaterial({ color: '#151412', roughness: 0.98 }));
@@ -410,26 +490,61 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   const sofaMaterial = track(new THREE.MeshStandardMaterial({ color: '#81766b', roughness: 1 }));
   const sofaBaseMaterial = track(new THREE.MeshStandardMaterial({ color: '#5f5148', roughness: 0.98 }));
   const cushionMaterial = track(new THREE.MeshStandardMaterial({ color: '#4f5848', roughness: 1 }));
+  const woodFloorTexture = track(makeWoodTexture(renderer));
+  const mineralTexture = track(makeMineralTexture(renderer));
+  const acousticMaterial = track(new THREE.MeshStandardMaterial({ map: mineralTexture, color: '#34382f', roughness: 1 }));
+  const stoneMaterial = track(new THREE.MeshStandardMaterial({ map: mineralTexture, color: '#4a4541', roughness: 0.82 }));
+  const bronzeMaterial = track(new THREE.MeshStandardMaterial({ color: '#6d5038', roughness: 0.42, metalness: 0.62 }));
+  const coveMaterial = track(new THREE.MeshStandardMaterial({ color: '#4d382a', emissive: '#d8a06e', emissiveIntensity: 0.72, roughness: 0.72 }));
+  const guideMaterial = track(new THREE.MeshStandardMaterial({ color: '#2e2119', emissive: '#b56f3f', emissiveIntensity: 0.28, roughness: 0.8 }));
   const carpetTexture = track(makeCarpetTexture(renderer));
-  const floorMaterial = track(new THREE.MeshStandardMaterial({ map: carpetTexture, color: '#504a45', roughness: 1 }));
+  const woodFloorMaterial = track(new THREE.MeshStandardMaterial({ map: woodFloorTexture, color: '#4b382d', roughness: 0.82 }));
+  const rugMaterial = track(new THREE.MeshStandardMaterial({ map: carpetTexture, color: '#504a45', roughness: 1 }));
   const textureLoader = new THREE.TextureLoader();
 
   // Room shell: 9.6 × 8.5 × 3.8 m, with a floating acoustic ceiling.
-  addBox([9.6, 0.12, 8.5], [0, -0.06, -0.75], floorMaterial);
-  addBox([9.6, 3.8, 0.2], [0, 1.9, -5], wallMaterial);
-  addBox([0.2, 3.8, 8.5], [-4.8, 1.9, -0.75], warmWallMaterial);
-  addBox([0.2, 3.8, 8.5], [4.8, 1.9, -0.75], wallMaterial);
-  addBox([9.6, 3.8, 0.2], [0, 1.9, 3.5], warmWallMaterial);
+  addBox([9.6, 0.12, 8.5], [0, -0.06, -0.75], woodFloorMaterial);
+  addRoundedFloor(4.8, 3.2, 0.38, [-0.15, 0.012, 1.1], rugMaterial);
+  addBox([9.36, 3.8, 0.2], [0, 1.9, -5], wallMaterial);
+  addBox([0.2, 3.8, 8.26], [-4.8, 1.9, -0.75], warmWallMaterial);
+  addBox([0.2, 3.8, 8.26], [4.8, 1.9, -0.75], wallMaterial);
+  // The rear shell is split around the entrance so the portal has real depth.
+  addBox([7.52, 3.8, 0.2], [-0.92, 1.9, 3.5], warmWallMaterial);
+  addBox([0.22, 3.8, 0.2], [4.57, 1.9, 3.5], warmWallMaterial);
+  addBox([1.62, 1, 0.2], [3.65, 3.3, 3.5], warmWallMaterial);
   addBox([9.6, 0.14, 8.5], [0, 3.87, -0.75], ceilingMaterial);
-  addBox([7.5, 0.18, 6.7], [0, 3.63, -0.85], ceilingMaterial);
+  addRoundedBox([7.25, 0.18, 6.2], [0, 3.61, -0.75], ceilingMaterial, scene, 0.08);
   addBox([9.25, 0.08, 0.06], [0, 0.08, -4.86], trimMaterial);
   addBox([0.06, 0.08, 8.1], [-4.66, 0.08, -0.75], trimMaterial);
   addBox([0.06, 0.08, 8.1], [4.66, 0.08, -0.75], trimMaterial);
+  addBox([9.25, 0.08, 0.06], [0, 0.08, 3.36], trimMaterial);
+
+  // A visible 30 mm shadow gap and concealed cove break up the ceiling/wall junction.
+  addBox([7.05, 0.035, 0.055], [0, 3.49, -3.78], coveMaterial);
+  addBox([7.05, 0.035, 0.055], [0, 3.49, 2.28], coveMaterial);
+  addBox([0.055, 0.035, 6.0], [-3.49, 3.49, -0.75], coveMaterial);
+  addBox([0.055, 0.035, 6.0], [3.49, 3.49, -0.75], coveMaterial);
+
+  // Chamfer inserts catch a thin highlight instead of leaving four computer-sharp room corners.
+  for (const [x, z] of [[-4.69, -4.89], [4.69, -4.89], [-4.69, 3.39], [4.69, 3.39]] as const) {
+    const corner = addRoundedBox([0.3, 3.52, 0.3], [x, 1.84, z], wallMaterial, scene, 0.075);
+    corner.rotation.y = Math.PI / 4;
+  }
+
+  // Build a false front wall around the screen so the projection surface sits in a 20 cm-deep reveal.
+  addRoundedBox([6.02, 3.34, 0.08], [0, 2.04, -4.89], trimMaterial, scene, 0.035);
+  addRoundedBox([9.12, 0.32, 0.24], [0, 3.58, -4.72], wallMaterial, scene, 0.08);
+  addRoundedBox([9.12, 0.34, 0.24], [0, 0.25, -4.72], wallMaterial, scene, 0.08);
+  const leftScreenWing = addRoundedBox([1.42, 3.34, 0.24], [-3.7, 1.94, -4.7], wallMaterial, scene, 0.08);
+  const rightScreenWing = addRoundedBox([1.42, 3.34, 0.24], [3.7, 1.94, -4.7], wallMaterial, scene, 0.08);
+  leftScreenWing.rotation.y = 0.11;
+  rightScreenWing.rotation.y = -0.11;
 
   // Framed gallery works on the left; partial walnut slats keep the opposite wall legible in low light.
   const framePositions = [-2.8, -1.15, 0.5, 2.15];
+  const pictureLights: THREE.SpotLight[] = [];
   framePositions.forEach((z, index) => {
-    addBox([0.11, 1.7, 1.34], [-4.66, 1.92, z], trimMaterial);
+    addRoundedBox([0.11, 1.7, 1.34], [-4.66, 1.92, z], trimMaterial, scene, 0.04);
     const pictureMaterial = track(new THREE.MeshStandardMaterial({ color: '#d8d0c5', roughness: 0.88 }));
     const picture = new THREE.Mesh(track(new THREE.PlaneGeometry(1.18, 1.54)), pictureMaterial);
     picture.position.set(-4.6, 1.92, z);
@@ -456,8 +571,33 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
       pictureMaterial.map = track(texture);
       pictureMaterial.needsUpdate = true;
     });
+
+    const artLight = new THREE.SpotLight(0xffdec2, 22, 3.6, 0.38, 0.55, 2);
+    artLight.position.set(-4.03, 3.18, z);
+    artLight.target.position.set(-4.62, 1.76, z);
+    scene.add(artLight, artLight.target);
+    pictureLights.push(artLight);
   });
-  for (let z = 0.5; z <= 3; z += 0.22) addBox([0.09, 2.5, 0.08], [4.66, 1.75, z], woodMaterial);
+
+  // Uneven slat groups give the equipment wall a rhythm without becoming a full decorative screen.
+  for (const [start, end] of [[-2.65, -1.82], [-1.38, -0.5], [0.45, 1.3], [1.78, 3.0]] as const) {
+    for (let z = start; z <= end; z += 0.17) addBox([0.09, 2.5, 0.055], [4.66, 1.75, z], woodMaterial);
+  }
+
+  // Rear acoustic bays and a recessed luminous portal make the entrance read as a destination, not a flat wall.
+  for (const [x, height] of [[-3.72, 1.44], [-2.88, 1.62], [-2.04, 1.5], [-1.2, 1.68], [-0.36, 1.54]] as const) {
+    addRoundedBox([0.72, height, 0.11], [x, 2.04, 3.33], acousticMaterial, scene, 0.05);
+  }
+  addRoundedBox([0.12, 2.72, 0.42], [3, 1.42, 3.46], trimMaterial, scene, 0.045);
+  addRoundedBox([0.12, 2.72, 0.42], [4.3, 1.42, 3.46], trimMaterial, scene, 0.045);
+  addRoundedBox([1.42, 0.12, 0.42], [3.65, 2.72, 3.46], trimMaterial, scene, 0.045);
+  addRoundedBox([1.18, 2.42, 0.065], [3.65, 1.29, 3.68], blackMetalMaterial, scene, 0.045);
+  addRoundedBox([1.1, 0.055, 0.06], [3.65, 2.55, 3.2], guideMaterial, scene, 0.025);
+
+  // Low-level wayfinding lights mark the clear 1.2 m route from the entrance to the projector.
+  for (const z of [-2.7, -1.15, 0.4, 1.95, 3.05]) {
+    addRoundedBox([0.055, 0.16, 0.42], [4.62, 0.28, z], guideMaterial, scene, 0.025);
+  }
 
   const screenStandby = makeStandbyTexture(locale === 'zh' ? '暮色放映室' : 'Twilight Screening Room');
   track(screenStandby.texture);
@@ -498,9 +638,19 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     for (const z of [-0.38, 0.38]) addBox([0.12, 0.18, 0.12], [x, 0.16, z], woodMaterial, sofa);
   }
 
+  // A small stone-and-bronze table offsets the sofa without narrowing the projector route.
+  const sideTableTop = new THREE.Mesh(track(new THREE.CylinderGeometry(0.29, 0.29, 0.065, 40)), stoneMaterial);
+  sideTableTop.position.set(-2.18, 0.5, 1.72);
+  sideTableTop.castShadow = true;
+  scene.add(sideTableTop);
+  const sideTableBase = new THREE.Mesh(track(new THREE.CylinderGeometry(0.11, 0.16, 0.46, 32)), bronzeMaterial);
+  sideTableBase.position.set(-2.18, 0.25, 1.72);
+  sideTableBase.castShadow = true;
+  scene.add(sideTableBase);
+
   // Projector pedestal and procedural device, separated into genuinely movable controls.
-  addBox([1.22, 0.08, 0.92], [2.85, 1.05, 0.62], blackMetalMaterial);
-  addBox([0.72, 1.04, 0.62], [2.85, 0.52, 0.62], metalMaterial);
+  addRoundedBox([1.22, 0.1, 0.92], [2.85, 1.05, 0.62], blackMetalMaterial, scene, 0.045);
+  addRoundedBox([0.72, 1.0, 0.62], [2.85, 0.52, 0.62], metalMaterial, scene, 0.09);
   const projector = new THREE.Group();
   projector.position.set(2.85, 1.09, 0.62);
   projector.rotation.y = 0.4;
@@ -596,6 +746,18 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   const sideLight = new THREE.PointLight(0xe1b18a, 30, 7, 2);
   sideLight.position.set(4.15, 1.4, 2.1);
   scene.add(sideLight);
+  const coveLights = [
+    { position: [0, 3.4, -3.68], target: [0, 2.72, -2.82], width: 6.6 },
+    { position: [0, 3.4, 2.18], target: [0, 2.72, 1.32], width: 6.6 },
+    { position: [-3.4, 3.4, -0.75], target: [-2.54, 2.72, -0.75], width: 5.5 },
+    { position: [3.4, 3.4, -0.75], target: [2.54, 2.72, -0.75], width: 5.5 },
+  ].map(({ position, target, width }) => {
+    const light = new THREE.RectAreaLight(0xffc38f, 6, width, 0.12);
+    light.position.set(position[0], position[1], position[2]);
+    light.lookAt(target[0], target[1], target[2]);
+    scene.add(light);
+    return light;
+  });
   const screenLight = new THREE.RectAreaLight('#e8e0d6', 0, 5.2, 2.9);
   screenLight.position.set(0, 2.05, -4.55);
   screenLight.lookAt(0, 1.6, 2);
@@ -1039,7 +1201,7 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
       const dx = event.clientX - lastX;
       const dy = event.clientY - lastY;
       dragDistance += Math.abs(dx) + Math.abs(dy);
-      lookYaw = clamp(lookYaw - dx * 0.003, view === 'seat' ? -0.72 : -0.26, view === 'seat' ? 0.72 : 0.26);
+      lookYaw = clamp(lookYaw - dx * 0.003, view === 'seat' ? -3.05 : -1.2, view === 'seat' ? 3.05 : 1.2);
       lookPitch = clamp(lookPitch - dy * 0.0025, -0.35, 0.25);
       lastX = event.clientX;
       lastY = event.clientY;
@@ -1218,6 +1380,10 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
     hemisphere.intensity = 0.24 + roomLevel * 0.68;
     ceilingLight.intensity = 14 + roomLevel * 82;
     sideLight.intensity = 8 + roomLevel * 38;
+    coveMaterial.emissiveIntensity = damp(coveMaterial.emissiveIntensity, 0.06 + roomLevel * 0.66, 2.8, dt);
+    guideMaterial.emissiveIntensity = damp(guideMaterial.emissiveIntensity, machine === 'playing' ? 0.1 : 0.22 + roomLevel * 0.18, 3, dt);
+    for (const light of coveLights) light.intensity = damp(light.intensity, 1.2 + roomLevel * 7.2, 2.8, dt);
+    for (const light of pictureLights) light.intensity = damp(light.intensity, machine === 'playing' ? 1.8 : 4 + roomLevel * 18, 3, dt);
     screenLight.intensity = damp(screenLight.intensity, isPlaying ? 6 + averageLuma * 18 : powered * 2.2, 3.5, dt);
     screenLight.color.lerp(averageColor, 0.06);
     lensGlassMaterial.emissiveIntensity = damp(lensGlassMaterial.emissiveIntensity, powered * 2.4, 4, dt);
