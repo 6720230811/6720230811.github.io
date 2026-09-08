@@ -786,6 +786,52 @@ export const CORRIDOR_NICHES: CorridorNicheSpec[] = [
   { at: { x: 13.1, z: 3 }, side: 'left', width: 0.9, depth: 0.35, top: 2.1, bottom: 1.35, tint: '#232726' },
   { at: { x: 14.8, z: 3 }, side: 'left', width: 0.9, depth: 0.35, top: 2.1, bottom: 1.35, tint: '#232726' },
 ];
+/**
+ * 长廊墙上的框景洞口：开一个穿透墙面的口子，后面是一个浅浅的光腔 ——
+ *  站在洞口前能看见「远处某个厅的发光顶被切下来一角」。
+ *
+ *  真借景开不出来：自然长廊北墙（z=18）与潮汐厅南墙（z=20）之间还隔着 2 m，
+ *  透过去只能看见一堵墙。所以光腔里的光是「借来的」—— 用潮汐厅发光顶同一个
+ *  颜色（冷白偏青 `#CFE4DC`）造一片上亮下暗的渐变 + 顶部一块斜的亮板，
+ *  看上去像隔着一段距离看见那边的顶棚在发光。
+ */
+export interface CorridorVistaSpec {
+  /** 洞口中心落在长廊墙上的位置（世界坐标，取最近的那段墙） */
+  at: { x: number; z: number };
+  /** 沿行进方向的左手墙 / 右手墙 */
+  side: 'left' | 'right';
+  width: number;
+  /** 洞口底高 / 顶高（顶到天花那截是洞口楣） */
+  bottom: number;
+  top: number;
+  /** 光腔的进深（往墙外退多少） */
+  depth: number;
+  /** 借来的光：与潮汐厅发光顶同色，冷白偏青 */
+  glow: { color: string; intensity: number };
+  /** 洞口收边：60 mm 青铜 */
+  frame: { color: string; width: number };
+}
+
+/**
+ * 自然长廊那一处框景洞口（设计：弧长 46 朝潮汐厅方向，2.4 × 2.6）。
+ *  弧长 46 那个位置实际落在中央大厅里（大厅穿通，长廊墙到 x 11.9 就没了），
+ *  所以挪到北墙还剩下的那截上：x 3.6–6.0（转角外角 x=3 往东 0.6 m 起），
+ *  朝北 2 m 就是潮汐厅南墙 —— 方向仍是「面朝潮汐厅」。
+ *  顶 3.5 / 底 0.9：洞口偏上，走进去时是抬头看见一角光，不是平视一扇窗。
+ */
+export const CORRIDOR_VISTAS: CorridorVistaSpec[] = [
+  {
+    at: { x: 4.8, z: 18 },
+    side: 'right',
+    width: 2.4,
+    bottom: 0.9,
+    top: 3.5,
+    depth: 0.5,
+    glow: { color: '#CFE4DC', intensity: 1.2 },
+    frame: { color: '#896A47', width: 0.06 },
+  },
+];
+
 /** 长廊地面上换色的几块：城市长廊端景墙前那块 2.4 × 2.4 的停顿区 */
 export const CORRIDOR_PATCHES: FloorPatch[] = [
   { x1: 4, z1: 8.8, x2: 6.4, z2: 11.2, color: '#4E4A44', zone: 'city' },

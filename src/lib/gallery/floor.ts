@@ -1434,6 +1434,122 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   }
 
 
+  // ---- 长廊墙上的框景洞口（自然长廊那一处「借景」） ----
+  //  真借景开不出来：洞口朝北 2 m 就是潮汐厅的南墙，透过去只有一堵墙。
+  //  所以洞后是一个 0.5 m 深的浅腔，腔底一片「上亮下暗、斜着一角」的冷光
+  //  （与潮汐厅发光顶同色）—— 看上去像隔着一段距离看见那边的顶棚在发光，
+  //  那一角光就是「借」来的。腔内其余各面都是暗的，洞口于是有厚度。
+  const vistaGlow = track(vistaGlowTexture());
+  const up = new THREE.Vector3(0, 1, 0);
+  for (const vista of plan.vistas) {
+    const ceiling = zoneSpec(vista.zone).ceiling;
+    const width = Math.hypot(vista.x2 - vista.x1, vista.z2 - vista.z1);
+    const dx = (vista.x2 - vista.x1) / width;
+    const dz = (vista.z2 - vista.z1) / width;
+    const midX = (vista.x1 + vista.x2) / 2;
+    const midZ = (vista.z1 + vista.z2) / 2;
+    /** 从墙里指向人的那一侧（洞口可见的这一面） */
+    const inward = { x: -vista.nx, z: -vista.nz };
+    const ry = Math.atan2(inward.x, inward.z);
+    const midY = (vista.top + vista.bottom) / 2;
+    const height = vista.top - vista.bottom;
+    /** 洞里 t 米处、洞口中心线上的那点 */
+    const into = (t: number): { x: number; z: number } => ({
+      x: midX + vista.nx * t,
+      z: midZ + vista.nz * t,
+    });
+
+    // 洞口楣（洞口顶到天花）与窗台（地面到洞口底）
+    const lintelH = Math.max(0.1, ceiling - vista.top);
+    const lintel = new THREE.Mesh(wallGeo, wallMaterial(vista.zone, vista.tint));
+    lintel.position.set(midX, vista.top + lintelH / 2, midZ);
+    lintel.rotation.y = ry;
+    lintel.scale.set(width, lintelH, 1);
+    scene.add(lintel);
+    const sill = new THREE.Mesh(wallGeo, wallMaterial(vista.zone, vista.tint));
+    sill.position.set(midX, vista.bottom / 2, midZ);
+    sill.rotation.y = ry;
+    sill.scale.set(width, vista.bottom, 1);
+    scene.add(sill);
+
+    // 腔底那片冷光：盖住后面那片只用来挡人的墙
+    const glowMat = track(
+      new THREE.MeshStandardMaterial({
+        color: '#141B1D',
+        map: vistaGlow,
+        emissive: new THREE.Color(vista.glow.color),
+        emissiveMap: vistaGlow,
+        emissiveIntensity: vista.glow.intensity,
+        roughness: 1,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      }),
+    );
+    const back = into(vista.depth - 0.02);
+    const glow = new THREE.Mesh(wallGeo, glowMat);
+    glow.position.set(back.x, midY, back.z);
+    glow.rotation.y = ry;
+    glow.scale.set(width, height, 1);
+    scene.add(glow);
+
+    // 腔内衬：顶 / 底 / 两侧都压暗（暗石墨，与竖缝同色）
+    const linerMat = track(
+      new THREE.MeshStandardMaterial({
+        color: TRIM.color,
+        roughness: 1,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      }),
+    );
+    const mid = into(vista.depth / 2);
+    const plateQuat = new THREE.Quaternion();
+    for (const [y, flip] of [
+      [vista.top, 1],
+      [vista.bottom, -1],
+    ] as [number, number][]) {
+      const plate = new THREE.Mesh(wallGeo, linerMat);
+      plate.position.set(mid.x, y, mid.z);
+      plate.quaternion
+        .setFromAxisAngle(up, ry)
+        .multiply(plateQuat.setFromEuler(euler.set((flip * Math.PI) / 2, 0, 0)));
+      plate.scale.set(width, vista.depth, 1);
+      scene.add(plate);
+    }
+    for (const side of [-1, 1]) {
+      const at = side < 0 ? { x: vista.x1, z: vista.z1 } : { x: vista.x2, z: vista.z2 };
+      // 朝腔内的方向：从这一侧看向洞心
+      const facing = side < 0 ? { x: dx, z: dz } : { x: -dx, z: -dz };
+      const cheek = new THREE.Mesh(wallGeo, linerMat);
+      cheek.position.set(
+        at.x + vista.nx * (vista.depth / 2),
+        midY,
+        at.z + vista.nz * (vista.depth / 2),
+      );
+      cheek.rotation.y = Math.atan2(facing.x, facing.z);
+      cheek.scale.set(vista.depth, height, 1);
+      scene.add(cheek);
+    }
+
+    // 洞口收边：60 mm 做旧青铜，四条（往人这一侧让 12 mm，别与墙共面）
+    const fw = vista.frame.width;
+    for (const [off, y, w, h] of [
+      [0, vista.top - fw / 2, width + fw * 2, fw],
+      [0, vista.bottom + fw / 2, width + fw * 2, fw],
+      [-(width / 2 - fw / 2), midY, fw, height],
+      [width / 2 - fw / 2, midY, fw, height],
+    ] as [number, number, number, number][]) {
+      const bar = new THREE.Mesh(wallGeo, bronzeMat);
+      bar.position.set(
+        midX + dx * off + inward.x * 0.012,
+        y,
+        midZ + dz * off + inward.z * 0.012,
+      );
+      bar.rotation.y = ry;
+      bar.scale.set(w, h, 1);
+      scene.add(bar);
+    }
+  }
+
   // ---- 端景墙顶部的隐藏式洗墙灯槽（城市、慢门） ----
   //  贴着天花、离墙 0.95 m 的一条窄光带（规格：洗墙灯离墙 0.9–1.1 m），
   //  光落在端景墙那件主作品上，槽本身藏在视线之上。
@@ -2346,6 +2462,32 @@ function lightStreakTexture(): THREE.CanvasTexture {
     g.addColorStop(0, 'rgba(255,248,232,0.62)');
     g.addColorStop(0.45, 'rgba(255,246,228,0.34)');
     g.addColorStop(1, 'rgba(255,244,224,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
+ * 框景洞口里那片「借来的光」：从右上往左下的冷白渐变，亮的是被照亮的那
+ *  一角顶棚，暗的那一头是阴影里的墙。同一张图既当 map 又当 emissiveMap ——
+ *  亮的那一头真的发光，暗的那一头不发光，于是「只有一角在亮」。
+ */
+function vistaGlowTexture(): THREE.CanvasTexture {
+  const w = 128;
+  const h = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const g = ctx.createLinearGradient(w, 0, 0, h);
+    g.addColorStop(0, '#F4FBF8');
+    g.addColorStop(0.28, '#BFD8D1');
+    g.addColorStop(0.6, '#4E5F60');
+    g.addColorStop(1, '#0F1517');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   }

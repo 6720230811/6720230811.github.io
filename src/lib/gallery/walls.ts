@@ -26,6 +26,7 @@ import {
   CORRIDOR_NICHES,
   CORRIDOR_PATH,
   CORRIDOR_ROUNDS,
+  CORRIDOR_VISTAS,
   PORCHES,
   ROOMS,
   ZONES,
@@ -1022,6 +1023,33 @@ function corridorNiches(
   return { walls: [...(bySide.get(1) ?? []), ...(bySide.get(-1) ?? [])], niches };
 }
 
+/** 把 CORRIDOR_VISTAS 插到长廊两侧墙上：穿透的框景洞口 + 后面的光腔 */
+function corridorVistas(
+  bySide: Map<1 | -1, WallSegment[]>,
+): { walls: WallSegment[]; vistas: VistaOpening[] } {
+  const vistas: VistaOpening[] = [];
+  for (const spec of CORRIDOR_VISTAS) {
+    const side: 1 | -1 = spec.side === 'left' ? -1 : 1;
+    const list = bySide.get(side);
+    if (!list) continue;
+    const hit = locatePoint(list, spec.at);
+    if (!hit) continue;
+    const wall = list[hit.index];
+    const from = hit.along - spec.width / 2;
+    const to = hit.along + spec.width / 2;
+    if (from < 0.3 || to > wall.length - 0.3 || to - from < 0.2) continue;
+    // 与壁龛同一套切法（两侧墙 + 门垛 + 后壁）：后壁挡住人，光腔在它前面造
+    const built = nicheInSegment(wall, from, to, spec);
+    list.splice(hit.index, 1, ...built.pieces);
+    vistas.push({
+      ...built.niche,
+      glow: spec.glow,
+      frame: spec.frame,
+    });
+  }
+  return { walls: [...(bySide.get(1) ?? []), ...(bySide.get(-1) ?? [])], vistas };
+}
+
 /** 房间的凹龛洞口：给场景做龛楣与龛内暗缝灯 */
 function nicheOpenings(room: RoomSpec): NicheOpening[] {
   return (room.niches ?? []).map((niche) => {
@@ -1045,10 +1073,23 @@ function nicheOpenings(room: RoomSpec): NicheOpening[] {
   });
 }
 
+/**
+ * 框景洞口的洞口（供场景做青铜收边与后面的光腔）：
+ *  几何与 NicheOpening 一样，(x1,z1)-(x2,z2) 是洞口这条线。
+ */
+export interface VistaOpening extends NicheOpening {
+  /** 借来的光：与潮汐厅发光顶同色 */
+  glow: { color: string; intensity: number };
+  /** 洞口收边 */
+  frame: { color: string; width: number };
+}
+
 export interface BuildResult {
   walls: WallSegment[];
   doors: DoorOpening[];
   niches: NicheOpening[];
+  /** 长廊墙上的框景洞口（自然长廊那一处） */
+  vistas: VistaOpening[];
   obstacles: Obstacle[];
 }
 
@@ -1093,9 +1134,10 @@ export function buildWalls(): BuildResult {
       ),
     );
   }
-  // 长廊墙上的壁龛（夜行那三处）：先挖，再裁，不然洞会被裁墙的逻辑抹掉
+  // 长廊墙上的壁龛（夜行那三处）与框景洞口：先挖，再裁，不然洞会被裁墙的逻辑抹掉
   const corridorWithNiches = corridorNiches(corridorBySide);
-  const corridor: WallSegment[] = corridorWithNiches.walls;
+  const corridorWithVistas = corridorVistas(corridorBySide);
+  const corridor: WallSegment[] = corridorWithVistas.walls;
 
   // 2) 必须开敞的范围：长廊穿过的房间、长廊上给支廊开的口子
   const openings: Opening[] = [
@@ -1124,6 +1166,7 @@ export function buildWalls(): BuildResult {
     walls,
     doors: ROOMS.flatMap(doorOpenings),
     niches: [...ROOMS.flatMap(nicheOpenings), ...corridorWithNiches.niches],
+    vistas: corridorWithVistas.vistas,
     obstacles: walls.map(wallObstacle),
   };
 }

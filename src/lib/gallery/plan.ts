@@ -26,12 +26,13 @@ import {
   type DoorOpening,
   type NicheOpening,
   type Obstacle,
+  type VistaOpening,
   type WallSegment,
 } from './walls';
 import { deriveArtWalls, hang, type ArtWall, type HangItem, type Placement } from './hang';
 import type { Locale } from '../../i18n/ui';
 
-export type { ArtWall, DoorOpening, NicheOpening, Obstacle, Placement, WallSegment };
+export type { ArtWall, DoorOpening, NicheOpening, Obstacle, Placement, VistaOpening, WallSegment };
 export { EYE_HEIGHT };
 export type { Rect, ZoneId };
 
@@ -97,6 +98,8 @@ export interface FloorPlan {
   spaces: Space[];
   /** 墙上的凹龛洞口：场景拿它做龛楣与龛内的暗缝灯 */
   niches: NicheOpening[];
+  /** 长廊墙上的框景洞口：场景拿它做青铜收边与洞后的光腔 */
+  vistas: VistaOpening[];
   artWalls: ArtWall[];
   placements: Placement[];
   /**
@@ -139,6 +142,7 @@ function skeleton(): Skeleton {
       ...(item.span ? { span: item.span } : {}),
     })),
     niches: built.niches,
+    vistas: built.vistas,
     spaces: ROOMS.map((room) => ({
       id: room.id,
       rect: room.rect,
