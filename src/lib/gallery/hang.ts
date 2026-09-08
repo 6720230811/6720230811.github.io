@@ -43,6 +43,11 @@ export interface ArtWall {
   ceilingHeight: number;
   /** 房间点名的主视觉墙（RoomSpec.heroWall） */
   hero?: boolean;
+  /**
+   * 弧墙的折线（含首尾）。有它，作品就沿折线排 —— 直墙直接用 start→end
+   *  插值就够了，弧墙那样排会让画浮在弦的外面（弧越高偏得越多）。
+   */
+  path?: Vec2[];
 }
 
 /** 排展用的作品信息（plan.ts 从 payload 里取最小字段） */
@@ -155,35 +160,117 @@ function corridorDirection(arc: number): Vec2 {
  *  hero 优先挑「与长廊垂直」的那面 —— 尽端、转角正对面；房间里挑最长那面。
  *  房间要是用 RoomSpec.heroWall 点名了一面，就认那一面（规格的重点墙）。
  */
+/** 一面「能挂画的面」：直墙是一段，弧墙是同 group 的若干段并起来的 */
+interface Surface {
+  id: string;
+  zone: ZoneId;
+  start: Vec2;
+  end: Vec2;
+  /** 指向房间 / 长廊内侧（作品挂在墙面上、朝这个方向） */
+  normal: Vec2;
+  length: number;
+  height: number;
+  hero?: boolean;
+  path?: Vec2[];
+}
+
+/** 两段墙首尾相接吗（弧墙拆出来的短段必须严丝合缝） */
+function touches(a: WallSegment, b: WallSegment): boolean {
+  return Math.hypot(a.b.x - b.a.x, a.b.z - b.a.z) < 1e-3;
+}
+
+/**
+ * 把墙段并成「面」：同 group 且首尾相接的段（弧墙）合成一面，其余各是一面。
+ *  不写 group 的墙行为与以前完全一样 —— 现在全馆还没有弧墙，这里只是先把
+ *  路铺好（P1 的序厅凹龛、潮汐东墙都要用）。
+ */
+function surfaces(walls: WallSegment[]): Surface[] {
+  const runs: { start: number; items: WallSegment[] }[] = [];
+  const open = new Map<string, { start: number; items: WallSegment[] }>();
+  walls.forEach((wall, index) => {
+    const run = wall.group ? open.get(wall.group) : undefined;
+    if (run && touches(run.items[run.items.length - 1], wall)) {
+      run.items.push(wall);
+      return;
+    }
+    const next = { start: index, items: [wall] };
+    runs.push(next);
+    // 同 group 但接不上（中间被门洞 / 开口切掉）→ 另起一面
+    if (wall.group) open.set(wall.group, next);
+  });
+
+  const out: Surface[] = [];
+  for (const run of runs) {
+    const first = run.items[0];
+    const length = run.items.reduce((sum, piece) => sum + piece.length, 0);
+    if (length < MIN_WALL) continue;
+    const inward = (wall: WallSegment): Vec2 => ({ x: -wall.normal.x, z: -wall.normal.z });
+    if (run.items.length === 1) {
+      out.push({
+        id: `w${run.start}`,
+        zone: first.zone,
+        start: first.a,
+        end: first.b,
+        normal: inward(first),
+        length,
+        height: first.height,
+        ...(first.hero ? { hero: true } : {}),
+      });
+      continue;
+    }
+    const last = run.items[run.items.length - 1];
+    // 弧墙的法线是转的：取各段的平均方向（单位化），只用于「哪一侧是屋内」
+    let nx = 0;
+    let nz = 0;
+    for (const piece of run.items) {
+      nx += inward(piece).x;
+      nz += inward(piece).z;
+    }
+    const len = Math.hypot(nx, nz) || 1;
+    out.push({
+      id: `w${run.start}`,
+      zone: first.zone,
+      start: first.a,
+      end: last.b,
+      normal: { x: nx / len, z: nz / len },
+      length,
+      height: first.height,
+      path: [first.a, ...run.items.map((piece) => piece.b)],
+      ...(run.items.some((piece) => piece.hero) ? { hero: true } : {}),
+    });
+  }
+  return out;
+}
+
 export function deriveArtWalls(walls: WallSegment[]): ArtWall[] {
   const out: ArtWall[] = [];
-  walls.forEach((wall, index) => {
-    if (wall.length < MIN_WALL) return;
-    const info = zone(wall.zone);
-    const reserve = Math.min(CORNER_KEEP, (wall.length - 1) / 2);
-    const usable = wall.length - reserve * 2;
-    if (usable < 1) return;
+  for (const surface of surfaces(walls)) {
+    const info = zone(surface.zone);
+    const reserve = Math.min(CORNER_KEEP, (surface.length - 1) / 2);
+    const usable = surface.length - reserve * 2;
+    if (usable < 1) continue;
     const type: ArtWallType =
-      wall.zone === 'immersion' ? 'video' : info.kind === 'room' ? 'salon' : 'standard';
+      surface.zone === 'immersion' ? 'video' : info.kind === 'room' ? 'salon' : 'standard';
     const gap = type === 'salon' ? SALON_GAP : GAP;
     const pitch = (type === 'salon' ? TALL : WIDE) + gap;
     // 留白三成：塞得下的件数 × FILL
     const capacity = Math.max(1, Math.floor(Math.floor((usable + gap) / pitch) * FILL));
     out.push({
-      id: `w${index}`,
-      zone: wall.zone,
-      start: wall.a,
-      end: wall.b,
-      normal: { x: -wall.normal.x, z: -wall.normal.z },
-      length: wall.length,
+      id: surface.id,
+      zone: surface.zone,
+      start: surface.start,
+      end: surface.end,
+      normal: surface.normal,
+      length: surface.length,
       capacity,
       type,
       reservedStart: reserve,
       reservedEnd: reserve,
-      ceilingHeight: wall.height,
-      ...(wall.hero ? { hero: true } : {}),
+      ceilingHeight: surface.height,
+      ...(surface.hero ? { hero: true } : {}),
+      ...(surface.path ? { path: surface.path } : {}),
     });
-  });
+  }
 
   for (const info of ZONES) {
     // hero 要放得下 2.6–3.4 m 的主视觉：可用墙面够长才当 hero
@@ -221,6 +308,50 @@ export function deriveArtWalls(walls: WallSegment[]): ArtWall[] {
     }
   }
   return out;
+}
+
+/**
+ * 沿折线走 along 米：返回墙面上的那点与朝向。
+ *  局部法线取垂直于当前这一段、且与整面墙的 normal 同侧的那一个 ——
+ *  于是弧墙上每一件都正对自己脚下那段墙，而不是齐刷刷朝一个方向。
+ */
+function alongPath(
+  path: Vec2[],
+  normal: Vec2,
+  along: number,
+): { x: number; z: number; ry: number } {
+  let left = along;
+  for (let i = 0; i + 1 < path.length; i += 1) {
+    const a = path[i];
+    const b = path[i + 1];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const length = Math.hypot(dx, dz) || 1;
+    if (left > length && i + 2 < path.length) {
+      left -= length;
+      continue;
+    }
+    const ux = dx / length;
+    const uz = dz / length;
+    let nx = -uz;
+    let nz = ux;
+    if (nx * normal.x + nz * normal.z < 0) {
+      nx = uz;
+      nz = -ux;
+    }
+    const t = Math.max(0, Math.min(1, left / length));
+    return {
+      x: a.x + ux * t + nx * 0.06,
+      z: a.z + uz * t + nz * 0.06,
+      ry: Math.atan2(nx, nz),
+    };
+  }
+  const last = path[path.length - 1];
+  return {
+    x: last.x + normal.x * 0.06,
+    z: last.z + normal.z * 0.06,
+    ry: Math.atan2(normal.x, normal.z),
+  };
 }
 
 interface Slot {
@@ -291,14 +422,22 @@ export function hang(artWalls: ArtWall[], items: HangItem[]): Placement[] {
 
     slots.forEach((slot, index) => {
       const along = shift + slot.center;
+      // 弧墙沿折线走（每件的朝向跟着墙转），直墙仍是 start→end 直线插值
+      const at = wall.path
+        ? alongPath(wall.path, wall.normal, along)
+        : {
+            x: wall.start.x + ux * along + wall.normal.x * 0.06,
+            z: wall.start.z + uz * along + wall.normal.z * 0.06,
+            ry,
+          };
       out.push({
         id: slot.item ? slot.item.id : `void:${wall.id}:${index}`,
         zone: wall.zone,
         wallId: wall.id,
-        x: wall.start.x + ux * along + wall.normal.x * 0.06,
+        x: at.x,
         y: CENTER_Y,
-        z: wall.start.z + uz * along + wall.normal.z * 0.06,
-        ry,
+        z: at.z,
+        ry: at.ry,
         fw: slot.fw,
         fh: slot.fh,
         title: slot.item ? slot.item.title : '',

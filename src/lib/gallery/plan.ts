@@ -20,7 +20,13 @@ import {
   type Rect,
   type ZoneId,
 } from './blueprint';
-import { buildWalls, type DoorOpening, type Obstacle, type WallSegment } from './walls';
+import {
+  buildWalls,
+  CLEARANCE,
+  type DoorOpening,
+  type Obstacle,
+  type WallSegment,
+} from './walls';
 import { deriveArtWalls, hang, type ArtWall, type HangItem, type Placement } from './hang';
 import type { Locale } from '../../i18n/ui';
 
@@ -317,12 +323,33 @@ export function routeTo(plan: FloorPlan, from: Waypoint, to: Waypoint): Waypoint
   return out;
 }
 
+/**
+ * 点到线段的最近距离：斜墙 / 弧墙的碰撞靠它算。
+ *  （墙在场景里是一片没有厚度的 plane，所以是「离这根线多远」，不是「进没进盒子」）
+ */
+function distanceToSegment(px: number, pz: number, wall: WallSegment): number {
+  const dx = wall.b.x - wall.a.x;
+  const dz = wall.b.z - wall.a.z;
+  const lengthSq = dx * dx + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, ((px - wall.a.x) * dx + (pz - wall.a.z) * dz) / lengthSq));
+  return Math.hypot(px - (wall.a.x + dx * t), pz - (wall.a.z + dz * t));
+}
+
 /** 能不能站在这儿：不撞墙 */
 export function containsPoint(plan: FloorPlan, x: number, z: number): boolean {
+  // 粗筛：连膨胀过的 AABB 都没进，就不可能贴着这面墙
+  let near = false;
   for (const obstacle of plan.obstacles) {
     if (x >= obstacle.x1 && x <= obstacle.x2 && z >= obstacle.z1 && z <= obstacle.z2) {
-      return false;
+      near = true;
+      break;
     }
+  }
+  if (!near) return true;
+  // 精筛：点到线段距离。轴对齐的墙与老办法（AABB）结果一样，
+  //  弧墙 / 斜墙才显出差别 —— AABB 会在弧的外侧多挡出小半米
+  for (const wall of plan.walls) {
+    if (distanceToSegment(x, z, wall) <= CLEARANCE) return false;
   }
   return true;
 }

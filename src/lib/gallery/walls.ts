@@ -50,6 +50,12 @@ export interface WallSegment {
   tint?: string;
   /** 房间点名的主视觉墙（RoomSpec.heroWall）：hang.ts 优先把 hero 挂这儿 */
   hero?: boolean;
+  /**
+   * 同一面连续墙面的编号（弧墙是拆成一串短段画出来的）。
+   *  hang.ts 把同 group 且首尾相接的段合并成一面「作品墙」—— 不然每段 0.6 m
+   *  都短于最短挂画长度，整面弧墙一张都挂不上。
+   */
+  group?: string;
 }
 
 export interface DoorOpening {
@@ -75,6 +81,8 @@ export interface Obstacle {
 }
 
 const HALF_T = CORRIDOR.wallT / 2;
+/** 人贴着墙能站到的最近距离：半墙厚 + 人身半径 */
+export const CLEARANCE = HALF_T + BODY_R;
 /** 轴对齐判定用的容差 */
 const EPS = 1e-6;
 
@@ -185,6 +193,55 @@ function polylineWalls(
     });
   }
   return out;
+}
+
+/**
+ * 弧墙：圆心 (cx, cz)、半径 r，从 from 扫到 to，拆成一串短墙段。
+ *
+ *  弧在引擎里没有真曲线 —— 拆成足够短的直段（默认每段约 0.6 m），墙还是
+ *  那个 InstancedMesh 的一片 plane，只是拼成一条弧。所有段共用一个 group：
+ *  挂画时它们会被并成一面墙（见 hang.ts:deriveArtWalls）。
+ *
+ *  side = +1 时 normal 指向圆心那侧（与 polylineWalls 的约定一致）；
+ *  房间那面「向外鼓」的弧（墙芯在房间外）用 +1，凹进去的龛用 -1。
+ */
+export function arcWall(options: {
+  cx: number;
+  cz: number;
+  r: number;
+  /** 起止角（弧度，世界 XZ 平面） */
+  from: number;
+  to: number;
+  height: number;
+  zone: ZoneId;
+  /** 合并挂画用的组名（同一面弧必须同一个） */
+  group: string;
+  /** 分段数；不给就按弧长每 0.6 m 一段 */
+  segments?: number;
+  side?: 1 | -1;
+  kind?: WallSegment['kind'];
+  tint?: string;
+  hero?: boolean;
+}): WallSegment[] {
+  const { cx, cz, r, from, to, height, zone, group } = options;
+  const span = Math.abs(to - from);
+  const segments = options.segments ?? Math.max(6, Math.round((span * r) / 0.6));
+  const path: Vec2[] = [];
+  for (let i = 0; i <= segments; i += 1) {
+    const angle = from + ((to - from) * i) / segments;
+    path.push({ x: cx + Math.cos(angle) * r, z: cz + Math.sin(angle) * r });
+  }
+  return polylineWalls(
+    path,
+    options.side ?? 1,
+    { heightOf: () => height, kind: options.kind ?? 'base' },
+    () => zone,
+    () => options.tint,
+  ).map((wall) => ({
+    ...wall,
+    group,
+    ...(options.hero ? { hero: true } : {}),
+  }));
 }
 
 /** 一面墙拆成若干段：落在这段里的 [from, to] 区间要挖掉 */
@@ -313,44 +370,66 @@ interface Opening {
 }
 
 /**
- * 把一段墙落在 opening 里的部分切掉。墙是轴对齐的（倒角那 0.05 m 斜边除外），
- * 所以按区间切就行。
+ * 线段落在矩形里的参数区间 [t0, t1]（Liang–Barsky）。完全在矩形外返回 null。
+ *  矩形按 HALF_T 外扩：墙正好压在开口边线上时（长廊墙贴着房间边界）也要算进去。
+ */
+function insideSpan(a: Vec2, b: Vec2, opening: Opening): [number, number] | null {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const p = [-dx, dx, -dz, dz];
+  const q = [
+    a.x - (opening.x1 - HALF_T),
+    opening.x2 + HALF_T - a.x,
+    a.z - (opening.z1 - HALF_T),
+    opening.z2 + HALF_T - a.z,
+  ];
+  let t0 = 0;
+  let t1 = 1;
+  for (let i = 0; i < 4; i += 1) {
+    if (Math.abs(p[i]) < EPS) {
+      // 平行于这对边：在外面就整段不相交
+      if (q[i] < 0) return null;
+      continue;
+    }
+    const t = q[i] / p[i];
+    if (p[i] < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+  }
+  return t0 <= t1 ? [t0, t1] : null;
+}
+
+/** 沿 a→b 插值取点 */
+function alongWall(wall: WallSegment, t: number): Vec2 {
+  return {
+    x: wall.a.x + (wall.b.x - wall.a.x) * t,
+    z: wall.a.z + (wall.b.z - wall.a.z) * t,
+  };
+}
+
+function sliceBetween(wall: WallSegment, from: number, to: number): WallSegment {
+  const a = alongWall(wall, from);
+  const b = alongWall(wall, to);
+  return { ...wall, a, b, length: Math.hypot(b.x - a.x, b.z - a.z) };
+}
+
+/**
+ * 把一段墙落在 opening 里的那截切掉，留下两头。
+ *  墙可以是任意方向（弧墙拆出来的短段、斜切的展墙、转角倒角那截斜边），
+ *  所以不按轴切 —— 用线段与矩形求交算出「在开口里」的那段参数区间。
  */
 function trimWall(wall: WallSegment, openings: Opening[]): WallSegment[] {
   let pieces: WallSegment[] = [wall];
   for (const opening of openings) {
     const next: WallSegment[] = [];
     for (const piece of pieces) {
-      const horizontal = Math.abs(piece.a.z - piece.b.z) < EPS;
-      const vertical = Math.abs(piece.a.x - piece.b.x) < EPS;
-      if (!horizontal && !vertical) {
-        // 倒角那截斜边：中点在外就整段留下，在内就整段去掉
-        const mid = { x: (piece.a.x + piece.b.x) / 2, z: (piece.a.z + piece.b.z) / 2 };
-        const inside =
-          mid.x > opening.x1 && mid.x < opening.x2 && mid.z > opening.z1 && mid.z < opening.z2;
-        if (!inside) next.push(piece);
-        continue;
-      }
-      const lo = horizontal ? Math.min(piece.a.x, piece.b.x) : Math.min(piece.a.z, piece.b.z);
-      const hi = horizontal ? Math.max(piece.a.x, piece.b.x) : Math.max(piece.a.z, piece.b.z);
-      const oLo = horizontal ? opening.x1 - HALF_T : opening.z1 - HALF_T;
-      const oHi = horizontal ? opening.x2 + HALF_T : opening.z2 + HALF_T;
-      const fixed = horizontal ? piece.a.z : piece.a.x;
-      const crosses =
-        fixed > (horizontal ? opening.z1 - HALF_T : opening.x1 - HALF_T) &&
-        fixed < (horizontal ? opening.z2 + HALF_T : opening.x2 + HALF_T);
-      if (!crosses || hi <= oLo || lo >= oHi) {
+      const span = insideSpan(piece.a, piece.b, opening);
+      if (!span) {
         next.push(piece);
         continue;
       }
-      const at = (value: number): Vec2 =>
-        horizontal ? { x: value, z: fixed } : { x: fixed, z: value };
-      if (lo < oLo) {
-        next.push({ ...piece, a: at(lo), b: at(oLo), length: oLo - lo });
-      }
-      if (hi > oHi) {
-        next.push({ ...piece, a: at(oHi), b: at(hi), length: hi - oHi });
-      }
+      const [t0, t1] = span;
+      if (t0 > 0) next.push(sliceBetween(piece, 0, t0));
+      if (t1 < 1) next.push(sliceBetween(piece, t1, 1));
     }
     pieces = next;
   }
@@ -388,17 +467,24 @@ function subtractSpan(
   return out;
 }
 
-/** 按区间切一段墙：端点顺着 a→b 的方向插值 */
+/**
+ * 按区间切一段墙：沿 a→b 的方向插值。
+ *  端点未必是「小 → 大」—— 顺着折线（或弧）切出来的段可能是反着的，
+ *  所以按 a→b 的参数取值，不能从最小值往最大值走（那样会把切出来那截挪错位置）。
+ */
 function sliceWall(wall: WallSegment, lo: number, hi: number): WallSegment | null {
   if (hi - lo < 0.2) return null;
   const horizontal = axisOf(wall) === 'h';
-  const from = horizontal ? Math.min(wall.a.x, wall.b.x) : Math.min(wall.a.z, wall.b.z);
-  const stepX = horizontal ? Math.sign(wall.b.x - wall.a.x) : 0;
-  const stepZ = horizontal ? 0 : Math.sign(wall.b.z - wall.a.z);
-  const at = (value: number): Vec2 => ({
-    x: wall.a.x + stepX * (value - from),
-    z: wall.a.z + stepZ * (value - from),
-  });
+  const from = horizontal ? wall.a.x : wall.a.z;
+  const to = horizontal ? wall.b.x : wall.b.z;
+  const span = to - from || 1;
+  const at = (value: number): Vec2 => {
+    const t = (value - from) / span;
+    return {
+      x: wall.a.x + (wall.b.x - wall.a.x) * t,
+      z: wall.a.z + (wall.b.z - wall.a.z) * t,
+    };
+  };
   return { ...wall, a: at(lo), b: at(hi), length: hi - lo };
 }
 
@@ -455,7 +541,12 @@ function dropDuplicates(walls: WallSegment[]): WallSegment[] {
   return out;
 }
 
-/** 墙的 AABB 障碍：向厚度方向膨胀半墙厚 + 人身半径 */
+/**
+ * 墙的 AABB：向四周膨胀 CLEARANCE。
+ *  只是**粗筛** —— plan.ts:containsPoint 先拿它排掉「离这面墙还很远」的点，
+ *  再对候选点算「点到线段距离」。斜墙 / 弧墙的 AABB 会比墙本身胖出小半米，
+ *  光靠盒子判碰撞会在弧墙边上多出一圈看不见的垫。
+ */
 function wallObstacle(wall: WallSegment): Obstacle {
   const margin = HALF_T + BODY_R;
   return {

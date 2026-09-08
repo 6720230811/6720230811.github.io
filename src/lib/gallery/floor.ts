@@ -881,6 +881,41 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       scene.add(mesh);
     }
   }
+  /**
+   * 一块多边形天花：房间的顶按它自己的形状铺（矩形就是四点多边形）。
+   *  ShapeGeometry 的 uv 是形状的坐标（米），直接用会把贴图拉爆 ——
+   *  这里把 uv 归一到包围盒，跟原来那张 1×1 plane 拉出来的效果一致。
+   */
+  const addCeilingPolygon = (
+    points: Vec2[],
+    y: number,
+    material: THREE.MeshStandardMaterial,
+  ): void => {
+    const shape = new THREE.Shape(points.map((point) => new THREE.Vector2(point.x, point.z)));
+    const geometry = track(new THREE.ShapeGeometry(shape));
+    const uv = geometry.getAttribute('uv');
+    let minX = Infinity;
+    let minZ = Infinity;
+    let maxX = -Infinity;
+    let maxZ = -Infinity;
+    for (const point of points) {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minZ = Math.min(minZ, point.z);
+      maxZ = Math.max(maxZ, point.z);
+    }
+    const spanX = maxX - minX || 1;
+    const spanZ = maxZ - minZ || 1;
+    for (let i = 0; i < uv.count; i += 1) {
+      uv.setXY(i, (uv.getX(i) - minX) / spanX, (uv.getY(i) - minZ) / spanZ);
+    }
+    uv.needsUpdate = true;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = Math.PI / 2; // 朝下（+Z 转到 -Y）
+    mesh.position.set(0, y, 0);
+    scene.add(mesh);
+  };
+
   // 房间：各按自己的净高铺一块（比长廊高，是空间层次的主要来源）
   const ceilingPieces: Rect[] = [];
   for (const room of ROOMS) {
@@ -889,15 +924,16 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     for (const taken of ceilingPieces) pieces = pieces.flatMap((piece) => subtract(piece, taken));
     ceilingPieces.push(room.rect);
     for (const piece of pieces) {
-      const mesh = new THREE.Mesh(unitPlane, mats.ceiling);
-      mesh.rotation.x = Math.PI / 2;
-      mesh.scale.set(piece.x2 - piece.x1, piece.z2 - piece.z1, 1);
-      mesh.position.set(
-        (piece.x1 + piece.x2) / 2,
+      addCeilingPolygon(
+        [
+          { x: piece.x1, z: piece.z1 },
+          { x: piece.x2, z: piece.z1 },
+          { x: piece.x2, z: piece.z2 },
+          { x: piece.x1, z: piece.z2 },
+        ],
         zoneSpec(room.id).ceiling,
-        (piece.z1 + piece.z2) / 2,
+        mats.ceiling,
       );
-      scene.add(mesh);
     }
   }
 
