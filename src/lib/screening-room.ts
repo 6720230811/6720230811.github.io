@@ -532,7 +532,7 @@ export function mountScreeningRoom(rootEl: HTMLElement | null): void {
   }
 
   // Build a false front wall around the screen so the projection surface sits in a 20 cm-deep reveal.
-  addRoundedBox([6.02, 3.34, 0.08], [0, 2.04, -4.89], trimMaterial, scene, 0.035);
+  addRoundedBox([6.02, 3.34, 0.08], [0, 2.04, -4.925], trimMaterial, scene, 0.035);
   addRoundedBox([9.12, 0.32, 0.24], [0, 3.58, -4.72], wallMaterial, scene, 0.08);
   addRoundedBox([9.12, 0.34, 0.24], [0, 0.25, -4.72], wallMaterial, scene, 0.08);
   const leftScreenWing = addRoundedBox([1.42, 3.34, 0.24], [-3.7, 1.94, -4.7], wallMaterial, scene, 0.08);
