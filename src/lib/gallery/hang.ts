@@ -90,6 +90,8 @@ const GROUP_RUN = 5;
 const GROUP_GAP = 2.5;
 /** 距墙角（门洞那 0.8–1 也含在这条预留里） */
 const CORNER_KEEP = 1.2;
+/** 凹龛后壁的预留：龛本身就是为这件作品开的，两端只留一点边 */
+const NICHE_KEEP = 0.15;
 const DOOR_KEEP = 0.9;
 /** 短于这个长度就不挂画 */
 const MIN_WALL = 2.6;
@@ -172,6 +174,8 @@ interface Surface {
   height: number;
   hero?: boolean;
   path?: Vec2[];
+  /** 凹龛的后壁：两端不扣墙角预留 */
+  niche?: boolean;
 }
 
 /** 两段墙首尾相接吗（弧墙拆出来的短段必须严丝合缝） */
@@ -215,6 +219,7 @@ function surfaces(walls: WallSegment[]): Surface[] {
         length,
         height: first.height,
         ...(first.hero ? { hero: true } : {}),
+        ...(first.niche ? { niche: true } : {}),
       });
       continue;
     }
@@ -237,6 +242,7 @@ function surfaces(walls: WallSegment[]): Surface[] {
       height: first.height,
       path: [first.a, ...run.items.map((piece) => piece.b)],
       ...(run.items.some((piece) => piece.hero) ? { hero: true } : {}),
+      ...(run.items.some((piece) => piece.niche) ? { niche: true } : {}),
     });
   }
   return out;
@@ -246,7 +252,11 @@ export function deriveArtWalls(walls: WallSegment[]): ArtWall[] {
   const out: ArtWall[] = [];
   for (const surface of surfaces(walls)) {
     const info = zone(surface.zone);
-    const reserve = Math.min(CORNER_KEEP, (surface.length - 1) / 2);
+    // 凹龛就是给作品留的：两端只让出一点点，不然 3.4 m 的龛扣掉 2.4 m 预留，
+    //  3 m 的主视觉会被压成 1 m
+    const reserve = surface.niche
+      ? NICHE_KEEP
+      : Math.min(CORNER_KEEP, (surface.length - 1) / 2);
     const usable = surface.length - reserve * 2;
     if (usable < 1) continue;
     const type: ArtWallType =

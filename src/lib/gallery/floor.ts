@@ -923,17 +923,29 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     let pieces = [room.rect];
     for (const taken of ceilingPieces) pieces = pieces.flatMap((piece) => subtract(piece, taken));
     ceilingPieces.push(room.rect);
+    // 有藻井就把井口那块挖掉（井底与井壁另外铺）
+    const coffer = room.coffer;
     for (const piece of pieces) {
-      addCeilingPolygon(
-        [
-          { x: piece.x1, z: piece.z1 },
-          { x: piece.x2, z: piece.z1 },
-          { x: piece.x2, z: piece.z2 },
-          { x: piece.x1, z: piece.z2 },
-        ],
-        zoneSpec(room.id).ceiling,
-        mats.ceiling,
-      );
+      const shapes = coffer
+        ? subtract(piece, {
+            x1: coffer.x1,
+            z1: coffer.z1,
+            x2: coffer.x2,
+            z2: coffer.z2,
+          })
+        : [piece];
+      for (const shape of shapes) {
+        addCeilingPolygon(
+          [
+            { x: shape.x1, z: shape.z1 },
+            { x: shape.x2, z: shape.z1 },
+            { x: shape.x2, z: shape.z2 },
+            { x: shape.x1, z: shape.z2 },
+          ],
+          zoneSpec(room.id).ceiling,
+          mats.ceiling,
+        );
+      }
     }
   }
 
@@ -944,7 +956,8 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   const entry = ROOMS.find((room) => room.id === 'entry');
   if (entry && (copy.title || copy.intro || copy.curator || copy.hint)) {
     const { x1, z1, x2, z2 } = entry.rect;
-    const midX = (x1 + x2) / 2;
+    // 北墙东边 x 5.6–9 被凹龛占着（主视觉在里面），展览标题让到西边那截
+    const midX = 4.1;
     /** 贴墙挂一块：离墙 2 cm，朝房间内 */
     const plate = (
       texture: THREE.Texture,
@@ -983,7 +996,7 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
       );
       glow.position.set(midX, 2.05, z2 - 0.015);
       glow.rotation.y = Math.PI;
-      glow.scale.set(5.2, 1.7, 1);
+      glow.scale.set(3.6, 1.7, 1);
       scene.add(glow);
 
       plate(
@@ -1001,7 +1014,7 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
         2.05,
         z2 - 0.02,
         Math.PI,
-        4.6,
+        3.2,
         1.15,
       );
     }
@@ -1105,15 +1118,18 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
   //  宽度与色温跟章节走：夜行 3000 K、城市 3200 K 两段错位、自然 3500 K、
   //  光影暖琥珀白、慢门 3700 K 且更窄、终章再暗一档。
   const slotGeo = track(new THREE.PlaneGeometry(1, 1));
-  const slotMats = new Map<ZoneId, THREE.MeshStandardMaterial>();
-  const slotMaterial = (zoneId: ZoneId): THREE.MeshStandardMaterial => {
-    const cached = slotMats.get(zoneId);
+  const slotMats = new Map<string, THREE.MeshStandardMaterial>();
+  const slotMaterial = (zoneId: ZoneId, kelvin?: number): THREE.MeshStandardMaterial => {
+    const key = `${zoneId}|${kelvin ?? ''}`;
+    const cached = slotMats.get(key);
     if (cached) return cached;
     const own = zoneSpec(zoneId).slot;
     const material = track(
       new THREE.MeshStandardMaterial({
         color: '#FFF8EC',
-        emissive: own?.color ? new THREE.Color(own.color) : kelvinColor(own?.kelvin ?? 3200),
+        emissive: own?.color
+          ? new THREE.Color(own.color)
+          : kelvinColor(kelvin ?? own?.kelvin ?? 3200),
         emissiveIntensity: own?.intensity ?? 1.8,
         roughness: 1,
         metalness: 0,
@@ -1121,7 +1137,7 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
         toneMapped: false,
       }),
     );
-    slotMats.set(zoneId, material);
+    slotMats.set(key, material);
     return material;
   };
 
@@ -1186,6 +1202,114 @@ export function createFloor({ canvas, plan, copy = {} }: CreateFloorOptions): Fl
     scene.add(slots);
     disposables.push(slots);
   }
+  /**
+   * 藻井：井口四周一圈竖向井壁 + 下沉的井底 + 井底与井壁之间那圈灯槽。
+   *  压暗的厅里，这圈灯槽几乎是唯一的光 —— 人一进门先看见它。
+   */
+  for (const room of ROOMS) {
+    const coffer = room.coffer;
+    if (!coffer) continue;
+    const mats = zoneMats.get(room.id) ?? fallback;
+    const ceiling = zoneSpec(room.id).ceiling;
+    const bottom = ceiling - coffer.drop;
+    const slot = coffer.slot;
+    const inner = {
+      x1: coffer.x1 + slot,
+      z1: coffer.z1 + slot,
+      x2: coffer.x2 - slot,
+      z2: coffer.z2 - slot,
+    };
+    /** 一块竖面：从 (x1,z1) 到 (x2,z2)，高度 from→to */
+    const riser = (
+      x1: number,
+      z1: number,
+      x2: number,
+      z2: number,
+      y: number,
+      h: number,
+      material: THREE.MeshStandardMaterial,
+    ): void => {
+      const mesh = new THREE.Mesh(wallGeo, material);
+      mesh.position.set((x1 + x2) / 2, y + h / 2, (z1 + z2) / 2);
+      mesh.rotation.y = Math.atan2(x2 - x1, z2 - z1) + Math.PI / 2;
+      mesh.scale.set(Math.hypot(x2 - x1, z2 - z1), h, 1);
+      scene.add(mesh);
+    };
+    const riserMat = wallMaterial(room.id);
+    // 四面井壁（南、北、东、西）
+    riser(coffer.x1, coffer.z2, coffer.x2, coffer.z2, bottom, coffer.drop, riserMat);
+    riser(coffer.x2, coffer.z1, coffer.x1, coffer.z1, bottom, coffer.drop, riserMat);
+    riser(coffer.x1, coffer.z1, coffer.x1, coffer.z2, bottom, coffer.drop, riserMat);
+    riser(coffer.x2, coffer.z2, coffer.x2, coffer.z1, bottom, coffer.drop, riserMat);
+    // 井底
+    addCeilingPolygon(
+      [
+        { x: inner.x1, z: inner.z1 },
+        { x: inner.x2, z: inner.z1 },
+        { x: inner.x2, z: inner.z2 },
+        { x: inner.x1, z: inner.z2 },
+      ],
+      bottom,
+      mats.ceiling,
+    );
+    // 灯槽：井底四周那一圈（比井底再低 1 cm，不与它共面）
+    const slotMat = slotMaterial(room.id, 2800);
+    const slotY = bottom - 0.01;
+    const bands: [number, number, number, number][] = [
+      [coffer.x1, inner.z2, coffer.x2, coffer.z2],
+      [coffer.x1, coffer.z1, coffer.x2, inner.z1],
+      [coffer.x1, inner.z1, inner.x1, inner.z2],
+      [inner.x2, inner.z1, coffer.x2, inner.z2],
+    ];
+    for (const [x1, z1, x2, z2] of bands) {
+      const mesh = new THREE.Mesh(unitPlane, slotMat);
+      mesh.rotation.x = Math.PI / 2;
+      mesh.scale.set(x2 - x1, z2 - z1, 1);
+      mesh.position.set((x1 + x2) / 2, slotY, (z1 + z2) / 2);
+      scene.add(mesh);
+    }
+  }
+
+  /**
+   * 凹龛的收口：洞口顶到天花那截补成墙（龛楣），
+   *  龛内两侧各一条 60 mm 竖向暗缝灯 —— 只洗龛的内壁，不照画。
+   */
+  for (const niche of plan.niches) {
+    const ceiling = zoneSpec(niche.zone).ceiling;
+    const width = Math.hypot(niche.x2 - niche.x1, niche.z2 - niche.z1);
+    // 沿洞口的方向：从 (x1,z1) 指向 (x2,z2)
+    const dx = (niche.x2 - niche.x1) / width;
+    const dz = (niche.z2 - niche.z1) / width;
+    const midX = (niche.x1 + niche.x2) / 2;
+    const midZ = (niche.z1 + niche.z2) / 2;
+
+    // 龛楣：朝房间那一面（法线 = -n）
+    const lintelHeight = Math.max(0.1, ceiling - niche.top);
+    const lintel = new THREE.Mesh(wallGeo, wallMaterial(niche.zone, niche.tint));
+    lintel.position.set(midX, niche.top + lintelHeight / 2, midZ);
+    lintel.rotation.y = Math.atan2(-niche.nx, -niche.nz);
+    lintel.scale.set(width, lintelHeight, 1);
+    scene.add(lintel);
+
+    // 两条暗缝灯：贴在门垛上、朝龛内
+    const stripMat = slotMaterial(niche.zone);
+    const stripH = Math.max(0.4, niche.top - 0.5);
+    for (const side of [-1, 1]) {
+      const at = side < 0 ? { x: niche.x1, z: niche.z1 } : { x: niche.x2, z: niche.z2 };
+      // 朝龛内的方向：从这一侧门垛看向龛心
+      const facing = side < 0 ? { x: dx, z: dz } : { x: -dx, z: -dz };
+      const strip = new THREE.Mesh(wallGeo, stripMat);
+      strip.position.set(
+        at.x + niche.nx * (niche.depth / 2) + facing.x * 0.02,
+        niche.top - 0.15 - stripH / 2,
+        at.z + niche.nz * (niche.depth / 2) + facing.z * 0.02,
+      );
+      strip.rotation.y = Math.atan2(facing.x, facing.z);
+      strip.scale.set(niche.depth * 0.8, stripH, 1);
+      scene.add(strip);
+    }
+  }
+
 
   // ---- 端景墙顶部的隐藏式洗墙灯槽（城市、慢门） ----
   //  贴着天花、离墙 0.95 m 的一条窄光带（规格：洗墙灯离墙 0.9–1.1 m），

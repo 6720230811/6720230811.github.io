@@ -209,6 +209,8 @@ export const ZONES: Zone[] = [
     floorColor: '#57534D',
     floorModule: [1.2, 1.2],
     kind: 'room',
+    // 凹龛里那两条竖向暗缝灯：3000 K，只洗龛的内壁，不照画
+    slot: { width: 0.18, kelvin: 3000 },
     // 环境光压到 0.3：进门先暗，往里走（城市长廊 / 中央大厅）才放开 ——
     //  实测整屏平均亮度 序厅 80 / 夜行长廊 93 / 城市长廊 137
     ambient: 0.3,
@@ -462,6 +464,33 @@ export type PropSpec =
   /** tint：隔断自己的颜色（不写就跟房间墙一个色） */
   | { kind: 'partition'; x1: number; z1: number; x2: number; z2: number; h: number; tint?: string };
 
+/**
+ * 墙上的凹龛：沿这面墙 at 处挖一个 width 宽的洞口，退进去 depth，
+ *  洞口高 top（top 到天花那截是龛楣）。主视觉就嵌在龛的后壁上。
+ */
+export interface NicheSpec {
+  wall: WallKey;
+  /** 洞口中心（沿墙坐标） */
+  at: number;
+  width: number;
+  depth: number;
+  /** 洞口高（米） */
+  top: number;
+}
+
+/** 藻井：房间天花中央这一块沉下去，四周留一圈灯槽 */
+export interface CofferSpec {
+  /** 井口（天花上开的洞） */
+  x1: number;
+  z1: number;
+  x2: number;
+  z2: number;
+  /** 下沉高度：天花 3.4、drop 0.35 → 井底 3.05 */
+  drop: number;
+  /** 四周灯槽宽（米） */
+  slot: number;
+}
+
 export interface RoomSpec {
   id: ZoneId;
   rect: Rect;
@@ -480,6 +509,15 @@ export interface RoomSpec {
    *  房间有一面明确的重点墙时写它 —— 最长那面不一定是该挂主视觉的那面。
    */
   heroWall?: WallKey;
+  /**
+   * 某面墙做成微弧：给矢高（弦就是这面墙的全长）。
+   *  正值朝房间外鼓（室内变宽），负值朝里凹。
+   */
+  arc?: Partial<Record<WallKey, number>>;
+  /** 墙上的凹龛 */
+  niches?: NicheSpec[];
+  /** 天花的藻井（下沉 + 四周灯槽） */
+  coffer?: CofferSpec;
 }
 
 /**
@@ -505,6 +543,14 @@ export const ROOMS: RoomSpec[] = [
     ],
     // 序厅四面：南（入口）深石墨、北（主视觉）深酒红、西（策展文字）浅米、东（平面图）青灰
     wallColors: { s: '#232726', n: '#4A202A', w: '#C7BFB3', e: '#3D4443' },
+    // 主视觉在北墙（深酒红），嵌进凹龛里
+    heroWall: 'n',
+    // 南墙（入口那面）朝外微鼓 0.35 m：弦 8 m，R≈23 —— 进门时墙往两侧退开
+    arc: { s: 0.35 },
+    // 北墙凹龛：3.4 宽、退 0.4 m，主视觉嵌进去；上面留 0.6 m 龛楣
+    niches: [{ wall: 'n', at: 7.3, width: 3.4, depth: 0.4, top: 2.8 }],
+    // 天花：中央 4.4 × 5.0 沉 0.35 m，四周 180 mm 灯槽 —— 压暗的厅里唯一的光
+    coffer: { x1: 3.8, z1: 1.2, x2: 8.2, z2: 6.2, drop: 0.35, slot: 0.18 },
   },
   {
     id: 'atrium',

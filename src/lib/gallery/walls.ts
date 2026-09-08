@@ -30,6 +30,7 @@ import {
   zone,
   type BranchSpec,
   type DoorSpec,
+  type NicheSpec,
   type RoomSpec,
   type Vec2,
   type WallKey,
@@ -56,6 +57,8 @@ export interface WallSegment {
    *  都短于最短挂画长度，整面弧墙一张都挂不上。
    */
   group?: string;
+  /** 凹龛的后壁：挂画时不扣墙角预留（龛就是给作品留的，两端不用让） */
+  niche?: boolean;
 }
 
 export interface DoorOpening {
@@ -78,6 +81,22 @@ export interface Obstacle {
   z1: number;
   x2: number;
   z2: number;
+}
+
+/** 凹龛的洞口（供场景做龛楣与龛内的暗缝灯）：(x1,z1)-(x2,z2) 是洞口这条线 */
+export interface NicheOpening {
+  zone: ZoneId;
+  x1: number;
+  z1: number;
+  x2: number;
+  z2: number;
+  /** 从洞口往墙里退的方向（单位向量） */
+  nx: number;
+  nz: number;
+  depth: number;
+  /** 洞口高（米），上面是龛楣 */
+  top: number;
+  tint?: string;
 }
 
 const HALF_T = CORRIDOR.wallT / 2;
@@ -196,6 +215,48 @@ function polylineWalls(
 }
 
 /**
+ * 一串点 → 墙段：法线取垂直于这一段、且与 hint 同侧的那一侧。
+ *  房间墙（微弧 / 凹龛）用这个：它们不像长廊那样有「左手/右手」的约定，
+ *  只知道墙芯该在房间的外面。
+ */
+function pathWalls(
+  path: Vec2[],
+  hint: Vec2,
+  meta: { height: number; zone: ZoneId; kind: WallSegment['kind']; tint?: string; group?: string; hero?: boolean; niche?: boolean },
+): WallSegment[] {
+  const out: WallSegment[] = [];
+  for (let i = 0; i + 1 < path.length; i += 1) {
+    const a = path[i];
+    const b = path[i + 1];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const length = Math.hypot(dx, dz);
+    if (length < 0.02) continue;
+    const d = norm(dx, dz);
+    let nx = -d.z;
+    let nz = d.x;
+    if (nx * hint.x + nz * hint.z < 0) {
+      nx = -nx;
+      nz = -nz;
+    }
+    out.push({
+      a,
+      b,
+      normal: { x: nx, z: nz },
+      length,
+      height: meta.height,
+      zone: meta.zone,
+      kind: meta.kind,
+      ...(meta.tint ? { tint: meta.tint } : {}),
+      ...(meta.group ? { group: meta.group } : {}),
+      ...(meta.hero ? { hero: true } : {}),
+      ...(meta.niche ? { niche: true } : {}),
+    });
+  }
+  return out;
+}
+
+/**
  * 弧墙：圆心 (cx, cz)、半径 r，从 from 扫到 to，拆成一串短墙段。
  *
  *  弧在引擎里没有真曲线 —— 拆成足够短的直段（默认每段约 0.6 m），墙还是
@@ -275,9 +336,98 @@ function roomWall(
 ): { a: Vec2; b: Vec2; normal: Vec2; axis: 'x' | 'z'; from: number; to: number } {
   const { x1, z1, x2, z2 } = room.rect;
   if (key === 'n') return { a: { x: x1, z: z2 }, b: { x: x2, z: z2 }, normal: { x: 0, z: 1 }, axis: 'x', from: x1, to: x2 };
-  if (key === 's') return { a: { x: x1, z: z1 }, b: { x: x2, z: z1 }, normal: { x: 0, z: -1 }, axis: 'x', from: x1, to: x2 };
+  if (key === 's') return { a: { x: x1, z: z1 }, b: { x: x2, z: z1 }, normal: { x: 0, z: -1 }, axis: 'z', from: x1, to: x2 };
   if (key === 'w') return { a: { x: x1, z: z1 }, b: { x: x1, z: z2 }, normal: { x: -1, z: 0 }, axis: 'z', from: z1, to: z2 };
   return { a: { x: x2, z: z1 }, b: { x: x2, z: z2 }, normal: { x: 1, z: 0 }, axis: 'z', from: z1, to: z2 };
+}
+
+/**
+ * 微弧：这面墙的全长是弦，矢高 bulge（正 = 朝房间外鼓）。
+ *  返回「沿墙坐标 s 处的点」—— 门洞与门廊的收头都靠它算（它们得跟着弧走）。
+ */
+function arcPointAt(
+  wall: { a: Vec2; b: Vec2; normal: Vec2; from: number; to: number },
+  bulge: number,
+  value: number,
+): Vec2 {
+  const straight = (s: number): Vec2 => {
+    const dx = wall.b.x - wall.a.x;
+    const dz = wall.b.z - wall.a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return { x: wall.a.x + (dx / len) * s, z: wall.a.z + (dz / len) * s };
+  };
+  const chord = wall.to - wall.from;
+  if (!bulge || chord <= 0) return straight(value - wall.from);
+  const f = Math.abs(bulge);
+  const r = (chord * chord) / (4 * f) / 2 + f / 2;
+  const x = value - wall.from - chord / 2;
+  // 离弦的距离：中点处正好是矢高 f，两端归零
+  const off = -(r - f) + Math.sqrt(Math.max(0, r * r - x * x));
+  const sign = bulge > 0 ? 1 : -1;
+  const point = straight(value - wall.from);
+  return { x: point.x + wall.normal.x * off * sign, z: point.z + wall.normal.z * off * sign };
+}
+
+/** 一面墙的 [from, to] 段（沿墙坐标）：不给 bulge 就是直墙，给了就用一串短段拼成微弧 */
+function wallStrip(
+  wall: { a: Vec2; b: Vec2; normal: Vec2; from: number; to: number },
+  from: number,
+  to: number,
+  meta: { height: number; zone: ZoneId; tint?: string; group?: string; hero?: boolean },
+): WallSegment[] {
+  const straight = { a: arcPointAt(wall, 0, from), b: arcPointAt(wall, 0, to) };
+  return pathWalls([straight.a, straight.b], wall.normal, {
+    ...meta,
+    kind: 'base',
+  });
+}
+
+/** 微弧版 wallStrip（只有 RoomSpec.arc 写了这面墙才走这里） */
+function arcStrip(
+  wall: { a: Vec2; b: Vec2; normal: Vec2; from: number; to: number },
+  bulge: number,
+  from: number,
+  to: number,
+  meta: { height: number; zone: ZoneId; tint?: string; group?: string; hero?: boolean },
+): WallSegment[] {
+  const step = 0.6;
+  const count = Math.max(2, Math.ceil((to - from) / step));
+  const path: Vec2[] = [];
+  for (let i = 0; i <= count; i += 1) {
+    path.push(arcPointAt(wall, bulge, from + ((to - from) * i) / count));
+  }
+  return pathWalls(path, wall.normal, { ...meta, kind: 'base' });
+}
+
+/** 凹龛：两侧的门垛 + 后壁（后壁挂主视觉，所以带 hero 与 niche 两个标记） */
+function nicheWalls(
+  room: RoomSpec,
+  wall: { a: Vec2; b: Vec2; normal: Vec2; from: number; to: number },
+  niche: NicheSpec,
+  height: number,
+  hero: boolean,
+): WallSegment[] {
+  const tint = room.wallColors?.[niche.wall];
+  const meta = { height, zone: room.id, tint, kind: 'base' as const };
+  const half = niche.width / 2;
+  const at = (value: number): Vec2 => arcPointAt(wall, room.arc?.[niche.wall] ?? 0, value);
+  const s1 = niche.at - half;
+  const s2 = niche.at + half;
+  const open1 = at(s1);
+  const open2 = at(s2);
+  const back1 = { x: open1.x + wall.normal.x * niche.depth, z: open1.z + wall.normal.z * niche.depth };
+  const back2 = { x: open2.x + wall.normal.x * niche.depth, z: open2.z + wall.normal.z * niche.depth };
+  // 门垛：法线朝龛外（即墙芯在龛的两侧），后壁：法线朝房间外
+  const sideHint1 = { x: -(open2.x - open1.x), z: -(open2.z - open1.z) };
+  return [
+    ...pathWalls([open1, back1], sideHint1, meta),
+    ...pathWalls([open2, back2], { x: -sideHint1.x, z: -sideHint1.z }, meta),
+    ...pathWalls([back1, back2], wall.normal, {
+      ...meta,
+      group: `${room.id}-niche-${niche.wall}`,
+      ...(hero ? { hero: true, niche: true } : { niche: true }),
+    }),
+  ];
 }
 
 function roomWalls(room: RoomSpec): WallSegment[] {
@@ -285,22 +435,29 @@ function roomWalls(room: RoomSpec): WallSegment[] {
   const info = zone(room.id);
   for (const key of ['n', 'e', 's', 'w'] as WallKey[]) {
     const wall = roomWall(room, key);
-    const gaps = room.doors.filter((door) => door.wall === key).map(doorGap);
+    const bulge = room.arc?.[key] ?? 0;
+    const niche = room.niches?.find((item) => item.wall === key);
+    const gaps = [
+      ...room.doors.filter((door) => door.wall === key).map(doorGap),
+      ...(niche ? [{ start: niche.at - niche.width / 2, end: niche.at + niche.width / 2 }] : []),
+    ];
+    // 主视觉墙上有凹龛时，主视觉挂龛的后壁上，不再挂墙上剩下的那两截
+    const heroHere = room.heroWall === key;
+    const heroOnStrip = heroHere && !niche;
+    const meta = {
+      height: info.ceiling,
+      zone: room.id,
+      tint: room.wallColors?.[key],
+      group: `${room.id}-${key}`,
+      ...(heroOnStrip ? { hero: true } : {}),
+    };
     for (const piece of splitByGaps(wall.from, wall.to, gaps)) {
-      const a = wall.axis === 'x' ? { x: piece.start, z: wall.a.z } : { x: wall.a.x, z: piece.start };
-      const b = wall.axis === 'x' ? { x: piece.end, z: wall.a.z } : { x: wall.a.x, z: piece.end };
-      out.push({
-        a,
-        b,
-        normal: wall.normal,
-        length: piece.end - piece.start,
-        height: info.ceiling,
-        zone: room.id,
-        kind: 'base',
-        tint: room.wallColors?.[key],
-        ...(room.heroWall === key ? { hero: true } : {}),
-      });
+      const built = bulge
+        ? arcStrip(wall, bulge, piece.start, piece.end, meta)
+        : wallStrip(wall, piece.start, piece.end, meta);
+      out.push(...built);
     }
+    if (niche) out.push(...nicheWalls(room, wall, niche, info.ceiling, heroHere));
   }
   return out;
 }
@@ -337,13 +494,22 @@ function branchWalls(branch: BranchSpec): WallSegment[] {
   ];
 }
 
-/** 门廊三面墙（朝北敞口，接房间门洞） */
+/**
+ * 门廊三面墙（朝北敞口，接房间门洞）。
+ *  侧墙的北端要收到「房间那面墙在它这个 x 处的弧线上」—— 序厅南墙是微弧，
+ *  侧墙要是还停在 z=0，就会从弧面里戳出来一截（或者留一道缝）。
+ */
 export function porchWalls(): WallSegment[] {
   const out: WallSegment[] = [];
+  const rooms = ROOMS;
   for (const rect of PORCHES) {
-    const near = PORCHES.indexOf(rect) === 0 ? 'entry' : 'overview';
+    const near: ZoneId = PORCHES.indexOf(rect) === 0 ? 'entry' : 'overview';
     const info = zone(near);
+    const room = rooms.find((item) => item.id === near);
+    const bulge = room?.arc?.s ?? 0;
+    const wall = room ? roomWall(room, 's') : undefined;
     const push = (a: Vec2, b: Vec2, normal: Vec2): void => {
+      if (Math.hypot(b.x - a.x, b.z - a.z) < 0.05) return;
       out.push({
         a,
         b,
@@ -354,9 +520,12 @@ export function porchWalls(): WallSegment[] {
         kind: 'base',
       });
     };
+    /** 侧墙在 x 处该收在哪个 z（跟着弧走） */
+    const endZ = (x: number): number =>
+      wall && bulge ? arcPointAt(wall, bulge, x).z : rect.z2;
     push({ x: rect.x1, z: rect.z1 }, { x: rect.x2, z: rect.z1 }, { x: 0, z: -1 });
-    push({ x: rect.x1, z: rect.z1 }, { x: rect.x1, z: rect.z2 }, { x: -1, z: 0 });
-    push({ x: rect.x2, z: rect.z1 }, { x: rect.x2, z: rect.z2 }, { x: 1, z: 0 });
+    push({ x: rect.x1, z: rect.z1 }, { x: rect.x1, z: endZ(rect.x1) }, { x: -1, z: 0 });
+    push({ x: rect.x2, z: rect.z1 }, { x: rect.x2, z: endZ(rect.x2) }, { x: 1, z: 0 });
   }
   return out;
 }
@@ -564,9 +733,14 @@ function doorOpenings(room: RoomSpec): DoorOpening[] {
     const horizontal = door.wall === 'n' || door.wall === 's';
     // +Z 是北：北墙在 z2、南墙在 z1
     const fixed = door.wall === 'n' ? z2 : door.wall === 's' ? z1 : door.wall === 'w' ? x1 : x2;
+    // 这面墙是微弧时，门洞得落在弧上（不然门套会浮在离墙 0.3 m 的地方）
+    const bulge = room.arc?.[door.wall] ?? 0;
+    const onArc = bulge
+      ? arcPointAt(roomWall(room, door.wall), bulge, horizontal ? door.at : door.at)
+      : null;
     return {
-      x: horizontal ? door.at : fixed,
-      z: horizontal ? fixed : door.at,
+      x: onArc ? onArc.x : horizontal ? door.at : fixed,
+      z: onArc ? onArc.z : horizontal ? fixed : door.at,
       width: door.width,
       height: door.height,
       ry: horizontal ? 0 : Math.PI / 2,
@@ -578,9 +752,32 @@ function doorOpenings(room: RoomSpec): DoorOpening[] {
   });
 }
 
+/** 房间的凹龛洞口：给场景做龛楣与龛内暗缝灯 */
+function nicheOpenings(room: RoomSpec): NicheOpening[] {
+  return (room.niches ?? []).map((niche) => {
+    const wall = roomWall(room, niche.wall);
+    const bulge = room.arc?.[niche.wall] ?? 0;
+    const a = arcPointAt(wall, bulge, niche.at - niche.width / 2);
+    const b = arcPointAt(wall, bulge, niche.at + niche.width / 2);
+    return {
+      zone: room.id,
+      x1: a.x,
+      z1: a.z,
+      x2: b.x,
+      z2: b.z,
+      nx: wall.normal.x,
+      nz: wall.normal.z,
+      depth: niche.depth,
+      top: niche.top,
+      ...(room.wallColors?.[niche.wall] ? { tint: room.wallColors[niche.wall] } : {}),
+    };
+  });
+}
+
 export interface BuildResult {
   walls: WallSegment[];
   doors: DoorOpening[];
+  niches: NicheOpening[];
   obstacles: Obstacle[];
 }
 
@@ -635,6 +832,7 @@ export function buildWalls(): BuildResult {
   return {
     walls,
     doors: ROOMS.flatMap(doorOpenings),
+    niches: ROOMS.flatMap(nicheOpenings),
     obstacles: walls.map(wallObstacle),
   };
 }

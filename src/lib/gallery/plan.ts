@@ -24,13 +24,14 @@ import {
   buildWalls,
   CLEARANCE,
   type DoorOpening,
+  type NicheOpening,
   type Obstacle,
   type WallSegment,
 } from './walls';
 import { deriveArtWalls, hang, type ArtWall, type HangItem, type Placement } from './hang';
 import type { Locale } from '../../i18n/ui';
 
-export type { ArtWall, DoorOpening, Obstacle, Placement, WallSegment };
+export type { ArtWall, DoorOpening, NicheOpening, Obstacle, Placement, WallSegment };
 export { EYE_HEIGHT };
 export type { Rect, ZoneId };
 
@@ -94,6 +95,8 @@ export interface FloorPlan {
   zones: ZoneSpec[];
   /** 每间厅的位置：地图上标「厅在哪儿」用 */
   spaces: Space[];
+  /** 墙上的凹龛洞口：场景拿它做龛楣与龛内的暗缝灯 */
+  niches: NicheOpening[];
   artWalls: ArtWall[];
   placements: Placement[];
   /**
@@ -135,6 +138,7 @@ function skeleton(): Skeleton {
       kind: item.kind,
       ...(item.span ? { span: item.span } : {}),
     })),
+    niches: built.niches,
     spaces: ROOMS.map((room) => ({
       id: room.id,
       rect: room.rect,
