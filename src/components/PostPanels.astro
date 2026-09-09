@@ -61,17 +61,43 @@ const tagGroups = groupByTerms(
     <PostList posts={posts} locale={locale} />
   </div>
 
-  <div class="post-panel" data-tab="archive" hidden={active !== 'archive'}>
-    <p class="list-summary">{posts.length} {t('archive.count')}</p>
-    <PostGroupList groups={yearGroups} locale={locale} />
+  {/* 只有当前这个面板跟着页面一起下来，其余留空：
+      点选项卡时抓对应页面的 HTML，把那块面板搬过来（见下面的脚本）。
+      抓不到就整页跳转 —— 无 JS 时选项卡本来也是普通链接。 */}
+  <div
+    class="post-panel"
+    data-tab="archive"
+    data-src={active === 'archive' ? undefined : tabs.find((tab) => tab.id === 'archive')?.href}
+    hidden={active !== 'archive'}
+  >
+    {
+      active === 'archive' && (
+        <>
+          <p class="list-summary">
+            {posts.length} {t('archive.count')}
+          </p>
+          <PostGroupList groups={yearGroups} locale={locale} />
+        </>
+      )
+    }
   </div>
 
-  <div class="post-panel" data-tab="categories" hidden={active !== 'categories'}>
-    <PostGroupList groups={categoryGroups} locale={locale} />
+  <div
+    class="post-panel"
+    data-tab="categories"
+    data-src={active === 'categories' ? undefined : tabs.find((tab) => tab.id === 'categories')?.href}
+    hidden={active !== 'categories'}
+  >
+    {active === 'categories' && <PostGroupList groups={categoryGroups} locale={locale} />}
   </div>
 
-  <div class="post-panel" data-tab="tags" hidden={active !== 'tags'}>
-    <PostGroupList groups={tagGroups} locale={locale} prefix="#" />
+  <div
+    class="post-panel"
+    data-tab="tags"
+    data-src={active === 'tags' ? undefined : tabs.find((tab) => tab.id === 'tags')?.href}
+    hidden={active !== 'tags'}
+  >
+    {active === 'tags' && <PostGroupList groups={tagGroups} locale={locale} prefix="#" />}
   </div>
 </div>
 
@@ -116,6 +142,34 @@ const tagGroups = groupByTerms(
       if (push) history.pushState({ ...history.state, browseTab: id }, '', tab.href);
     };
 
+    /**
+     * 面板内容按需取：目标是同源的另一篇静态页面（/archive/ 之类），
+     * 取出里面的 .post-panel 整块搬过来。这样标记只在服务端渲染一份，
+     * 不必在 JS 里重写一遍列表结构。取不到就返回 false，交给调用方整页跳转。
+     */
+    const fill = async (id: string): Promise<boolean> => {
+      const panel = panels.find((item) => item.dataset.tab === id);
+      if (!panel || panel.dataset.filled) return true;
+      const src = panel.dataset.src;
+      if (!src) return true;
+
+      panel.classList.add('post-panel--loading');
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error(String(res.status));
+        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        const found = doc.querySelector(`.post-panel[data-tab="${CSS.escape(id)}"]`);
+        if (!found) throw new Error('panel not found');
+        panel.innerHTML = found.innerHTML;
+        panel.dataset.filled = '1';
+        return true;
+      } catch {
+        return false;
+      } finally {
+        panel.classList.remove('post-panel--loading');
+      }
+    };
+
     const tabOfLocation = (): string | undefined => {
       const path = location.pathname;
       return tabs.find((item) => {
@@ -130,17 +184,30 @@ const tagGroups = groupByTerms(
     for (const tab of tabs) {
       tab.addEventListener(
         'click',
-        (e) => {
+        async (e) => {
           // 中键、修饰键、右键这一类是「在新标签打开」，交给浏览器
           if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           e.preventDefault();
-          show(tab.dataset.tab ?? '', true);
+          const id = tab.dataset.tab ?? '';
+          // 先换标题和地址，内容稍等一下；抓不到再整页跳过去，不至于停在空面板上
+          show(id, true);
+          if (!(await fill(id))) location.assign(tab.href);
         },
         { signal: on }
       );
     }
 
-    window.addEventListener('popstate', () => show(tabOfLocation() ?? '', false), { signal: on });
+    // 前进后退：地址变了就跟着换面板，同样按需取内容
+    window.addEventListener(
+      'popstate',
+      async () => {
+        const id = tabOfLocation();
+        if (!id) return;
+        show(id, false);
+        if (!(await fill(id))) location.reload();
+      },
+      { signal: on }
+    );
 
     cleanup = () => ac.abort();
   };

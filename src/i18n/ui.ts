@@ -166,6 +166,9 @@ const zh = {
   'widget.contents': '目录',
   'toc.aria': '页面目录导航',
 
+  // 换页载入提示
+  'nav.loading': '载入中…',
+
   // 主题切换
   'theme.toggle': '切换深浅色主题',
   'theme.light': '浅色模式',
@@ -356,9 +359,12 @@ const en: Record<keyof typeof zh, string> = {
   'search.devOnly': 'The search index is generated at build time and is unavailable in dev mode.',
   'search.failed': 'Failed to load the search index. Please try again later.',
 
-  // 卡片与目录
+  // Cards and table of contents
   'widget.contents': 'Contents',
   'toc.aria': 'Table of contents',
+
+  // 换页载入提示
+  'nav.loading': 'Loading…',
 
   // 主题切换
   'theme.toggle': 'Toggle color theme',

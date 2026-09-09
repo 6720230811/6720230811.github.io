@@ -3,6 +3,7 @@ import type { MarkdownHeading } from 'astro';
 import '../styles/global.css';
 import Navbar from '../components/Navbar.astro';
 import Backdrop from '../components/Backdrop.astro';
+import NavProgress from '../components/NavProgress.astro';
 import Sidebar from '../components/Sidebar.astro';
 import Toc from '../components/Toc.astro';
 import type { Profile } from '../data/profile';
@@ -29,9 +30,14 @@ interface Props {
    * 其它页面不需要它 —— 关掉之后主体是单列，横向更宽（画廊画布也跟着变大）。
    */
   showSidebar?: boolean;
+  /**
+   * canonical 地址：同一批内容有几种翻法时（如归档 / 分类 / 标签），
+   * 指向最通用的那个页面，免得被当成几篇重复内容。传站内路径即可。
+   */
+  canonical?: string;
 }
 
-const { profile, locale, title, description, toc, showSidebar = false } = Astro.props;
+const { profile, locale, title, description, toc, showSidebar = false, canonical } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const t = useTranslations(locale);
 
@@ -52,9 +58,13 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+    {/* canonical 尽量给绝对地址；没有配 site 时退回站内路径 */}
+    {canonical && <link rel="canonical" href={siteOrigin ? new URL(canonical, siteOrigin).toString() : base + canonical.replace(/^\//, '')} />}
 
-    {/* 站内跳转走 View Transitions：换掉 body 而不是整页刷新，不再白屏一下 */}
-    <ClientRouter />
+    {/* 站内跳转走 View Transitions：换掉 body 而不是整页刷新，不再白屏一下。
+        fallback="none"：不要 Astro 自带的淡入淡出，方向由下面这段脚本定，
+        动画交给 CSS（见 global.css 的 nav-enter），各浏览器表现一致。 */}
+    <ClientRouter fallback="none" />
 
     {/* 必须在样式生效前定好 data-theme，否则会闪一下亮色。
         localStorage 里没有选择时跟随系统；禁用 JS 时固定亮色。
@@ -86,6 +96,25 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
     <Backdrop />
 
     <Navbar locale={locale} />
+    <NavProgress locale={locale} />
+
+    <script>
+      /**
+       * 换页方向：Astro 自己会标 data-astro-transition，但 push 跳转一律算 forward，
+       * 从文章退回列表也照样「往前」，看着别扭。这里按地址深浅再判一次，
+       * 写进新文档的 <html>（换页时 <html> 的属性会被新文档覆盖，只有写在
+       * newDocument 上才留得下来），CSS 据此选动画：
+       * 进更深的页面（列表 → 正文）从下方浮上来，退回浅的从上方落下来，深度相同只淡入。
+       */
+      document.addEventListener('astro:before-swap', (e) => {
+        const depth = (url: URL) => url.pathname.split('/').filter(Boolean).length;
+        const from = depth(e.from);
+        const to = depth(e.to);
+        const nav =
+          e.direction === 'back' || to < from ? 'back' : to > from ? 'forward' : 'fade';
+        e.newDocument.documentElement.dataset.nav = nav;
+      });
+    </script>
 
     {/* 装饰性横幅，下方 .page 会盖住它的底部 --banner-overlap */}
     <div class="hero" aria-hidden="true" style={`--banner-img: url('${base}banner.jpg')`}></div>

@@ -1,0 +1,72 @@
+---
+import { useTranslations, type Locale } from '../i18n/ui';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+---
+
+{/*
+  换页进度：站内跳转现在不刷新页面，快的时候几乎察觉不到，
+  慢的时候（比如进画廊）得让人知道在动。
+  顶部一条细进度条从换页开始就出现；超过 600ms 还没换完，再补一句「载入中」。
+  transition:persist：这条进度条跨换页留在原处，否则新页面一插入它就重置了。
+*/}
+<div
+  class="nav-progress"
+  id="nav-progress"
+  transition:persist="nav-progress"
+  data-slow-after="600"
+>
+  <span class="nav-progress__bar" aria-hidden="true"></span>
+  <span class="nav-progress__hint" role="status" aria-live="polite" hidden>{t('nav.loading')}</span>
+</div>
+
+<script>
+  declare global {
+    interface Window {
+      __navProgressBound?: boolean;
+    }
+  }
+
+  /**
+   * 监听挂在 document 上、元素又跨换页留着，所以只需要绑一次。
+   * 用 window 上的标记挡住重复绑定：换页时这段脚本可能被再执行一次，
+   * 模块内的变量会重新来过，只有 window 上的标记还在。
+   * 元素每次临时查：万一它没被留住（persist 失效）也能接着用新的那个。
+   */
+  const current = () => document.querySelector<HTMLElement>('.nav-progress');
+
+  // 换页开始：进度条出现，慢的话再挂出提示
+  const start = () => {
+    const root = current();
+    if (!root) return;
+    root.classList.add('nav-progress--on');
+    const hint = root.querySelector<HTMLElement>('.nav-progress__hint');
+    const slowAfter = Number(root.dataset.slowAfter ?? 600);
+    window.clearTimeout(Number(root.dataset.timer));
+    root.dataset.timer = String(
+      window.setTimeout(() => hint?.removeAttribute('hidden'), slowAfter)
+    );
+  };
+
+  // 换页结束（新页面已就位）：收起，提示也回到隐藏
+  const done = () => {
+    const root = current();
+    if (!root) return;
+    window.clearTimeout(Number(root.dataset.timer));
+    root.classList.remove('nav-progress--on');
+    root.querySelector<HTMLElement>('.nav-progress__hint')?.setAttribute('hidden', '');
+  };
+
+  if (!window.__navProgressBound) {
+    window.__navProgressBound = true;
+    document.addEventListener('astro:before-preparation', start);
+    document.addEventListener('astro:page-load', done);
+    // 出错时走不到 page-load，兜一下免得进度条一直转
+    document.addEventListener('astro:after-swap', () => window.setTimeout(done, 1000));
+  }
+</script>

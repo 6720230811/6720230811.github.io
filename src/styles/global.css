@@ -186,6 +186,63 @@ h4 {
 }
 
 /* ============================================================
+   换页进度（src/components/NavProgress.astro）
+   站内跳转不刷新页面，快的几乎察觉不到，慢的得让人知道在动：
+   顶部一条细进度条（z-index 40，压在顶栏 30 之上），
+   超过 data-slow-after 毫秒还没换完，右下角再补一句「载入中」。
+   ============================================================ */
+.nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.nav-progress--on {
+  opacity: 1;
+}
+
+/* 不确定进度：先冲到七成，剩下的等换完再说，不假装知道还要多久 */
+.nav-progress__bar {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--c-accent);
+  box-shadow: 0 0 8px var(--c-accent);
+}
+
+.nav-progress--on .nav-progress__bar {
+  animation: nav-progress 1.2s ease-out forwards;
+}
+
+@keyframes nav-progress {
+  from {
+    width: 0;
+  }
+  to {
+    width: 70%;
+  }
+}
+
+.nav-progress__hint {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--c-text);
+  background: var(--c-card);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 10px -2px var(--c-shadow-md);
+}
+
+/* ============================================================
    卡片（对应 Fuwari 的 card-base）
    主内容的每个 .section 也是一张卡片，样式与 .card 共用
    ============================================================ */
@@ -760,6 +817,43 @@ h4 {
 /* ---------- 主内容 ---------- */
 .main {
   min-width: 0;
+}
+
+/* 换页方向：data-nav 由 BaseLayout 在 astro:before-swap 里写进 <html>。
+   只动 .main —— 侧栏、顶栏、背景是跨页留着的，不该跟着晃。
+   不给 fill-mode：动画结束后不留下 transform，免得影响内部的 fixed 定位。 */
+@media (prefers-reduced-motion: no-preference) {
+  .main {
+    animation: nav-enter 0.28s ease;
+  }
+
+  html[data-nav='back'] .main {
+    animation-name: nav-enter-back;
+  }
+
+  html[data-nav='fade'] .main {
+    animation-name: nav-enter-fade;
+  }
+}
+
+@keyframes nav-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes nav-enter-back {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes nav-enter-fade {
+  from {
+    opacity: 0;
+  }
 }
 
 /* ============================================================
@@ -1536,6 +1630,11 @@ h4 {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1.1rem;
+}
+
+/* 面板内容还没取回来：先占住高度，避免页面往上跳一下 */
+.post-panel--loading {
+  min-height: 30vh;
 }
 
 .term {

@@ -48,3 +48,11 @@ export function browseTab(locale: Locale, id: BrowseTab): BrowseTabMeta {
   if (!found) throw new Error(`未知的浏览方式：${id}`);
   return found;
 }
+
+/**
+ * 归档 / 分类 / 标签页的 canonical：它们只是同一批文章的另一种翻法，
+ * 内容高度重合，统一指向「全部」，免得被当成几篇重复页面。
+ */
+export function browseCanonical(locale: Locale): string {
+  return browseTab(locale, 'all').href;
+}
