@@ -51,80 +51,68 @@ const { id = 'post-preview' } = Astro.props;
     </aside>
 
     <div class="admin-post__main">
-      <div class="grid">
-      <label class="field">
-        <span class="field__label">
-          <code>title</code>
-          <span class="field__hint">标题</span>
-        </span>
-        <input id="post-title" class="input" type="text" spellcheck="false" />
-      </label>
+<div class="grid">
+    <label class="field field--row">
+      <span class="field__label"><code>title</code></span>
+      <input id="post-title" class="input" type="text" spellcheck="false" />
+      <span class="field__hint">标题</span>
+    </label>
 
-      <label class="field">
-        <span class="field__label">
-          <code>slug</code>
-          <span class="field__hint">文件名，只能用小写字母/数字/连字符；新建时必填</span>
-        </span>
-        <input id="post-slug" class="input" type="text" spellcheck="false" placeholder="my-new-post" />
-      </label>
+    <label class="field field--row">
+      <span class="field__label"><code>slug</code></span>
+      <input id="post-slug" class="input" type="text" spellcheck="false" placeholder="my-new-post" />
+      <span class="field__hint">文件名，只能用小写字母/数字/连字符；新建时必填</span>
+    </label>
 
-      <label class="field">
-        <span class="field__label">
-          <code>date</code>
-          <span class="field__hint">YYYY-MM-DD</span>
-        </span>
-        <input id="post-date" class="input" type="date" />
-      </label>
+    <label class="field field--row">
+      <span class="field__label"><code>date</code></span>
+      <input id="post-date" class="input" type="date" />
+      <span class="field__hint">YYYY-MM-DD</span>
+    </label>
 
-      <label class="field">
-        <span class="field__label">
-          <code>category</code>
-          <span class="field__hint">单个分类</span>
-        </span>
-        <input id="post-category" class="input" type="text" spellcheck="false" />
-      </label>
+    <label class="field field--row">
+      <span class="field__label"><code>category</code></span>
+      <input id="post-category" class="input" type="text" spellcheck="false" />
+      <span class="field__hint">单个分类</span>
+    </label>
 
-      <label class="field">
-        <span class="field__label">
-          <code>tags</code>
-          <span class="field__hint">逗号分隔</span>
-        </span>
-        <input id="post-tags" class="input" type="text" spellcheck="false" />
-      </label>
-
-      <label class="field">
-        <span class="field__label">
-          <code>cover</code>
-          <span class="field__hint">封面图，站内绝对路径或外链；留空则用正文第一张图</span>
-        </span>
-        <div class="cover-field">
-          <input
-            id="post-cover"
-            class="input"
-            type="text"
-            spellcheck="false"
-            placeholder="/illustrations/xxx.png"
-          />
-          <div class="cover-field__preview">
-            <img id="cover-thumb" class="cover-field__img" alt="" hidden />
-            <p id="cover-hint" class="cover-field__hint" hidden></p>
-          </div>
-        </div>
-      </label>
-
-      <label class="field field--check">
-        <input id="post-draft" type="checkbox" />
-        <span><code>draft</code> 草稿（线上不显示）</span>
-      </label>
-    </div>
+    <label class="field field--row">
+      <span class="field__label"><code>tags</code></span>
+      <input id="post-tags" class="input" type="text" spellcheck="false" />
+      <span class="field__hint">逗号分隔</span>
+    </label>
 
     <label class="field">
       <span class="field__label">
-        <code>description</code>
-        <span class="field__hint">列表页与搜索结果里显示的摘要</span>
+        <code>cover</code>
+        <span class="field__hint">封面图，站内绝对路径或外链；留空则用正文第一张图</span>
       </span>
-      <input id="post-desc" class="input" type="text" spellcheck="false" />
+      <div class="cover-field">
+        <input
+          id="post-cover"
+          class="input"
+          type="text"
+          spellcheck="false"
+          placeholder="/illustrations/xxx.png"
+        />
+        <div class="cover-field__preview">
+          <img id="cover-thumb" class="cover-field__img" alt="" hidden />
+          <p id="cover-hint" class="cover-field__hint" hidden></p>
+        </div>
+      </div>
     </label>
+
+    <label class="field field--check">
+      <input id="post-draft" type="checkbox" />
+      <span><code>draft</code> 草稿（线上不显示）</span>
+    </label>
+  </div>
+
+  <label class="field field--row">
+    <span class="field__label"><code>description</code></span>
+    <input id="post-desc" class="input" type="text" spellcheck="false" />
+    <span class="field__hint">列表页与搜索结果里显示的摘要</span>
+  </label>
 
     <div class="editor" data-view="body">
       <div class="editor__pane">
@@ -134,18 +122,21 @@ const { id = 'post-preview' } = Astro.props;
         </div>
         <p class="editor__tip">图片可以直接拖进来，或 Ctrl/Cmd+V 粘贴：会压到长边 1600px 转 WebP 后写进 public/illustrations/</p>
 
-        {/* 工具栏按钮用文字符号，不新增图标：后台的 Icon 是 24×24 描边，做成小按钮并不清楚 */}
-        <div class="md-tools" role="toolbar" aria-label="Markdown 工具">
-          <button class="md-tools__btn" type="button" data-md="bold" title="加粗"><b>B</b></button>
-          <button class="md-tools__btn" type="button" data-md="italic" title="斜体"><i>I</i></button>
-          <button class="md-tools__btn" type="button" data-md="h2" title="标题">H</button>
-          <button class="md-tools__btn" type="button" data-md="quote" title="引用">❝</button>
-          <button class="md-tools__btn" type="button" data-md="ul" title="无序列表">•</button>
-          <button class="md-tools__btn" type="button" data-md="ol" title="有序列表">1.</button>
-          <button class="md-tools__btn" type="button" data-md="code" title="代码块">‹›</button>
-          <button class="md-tools__btn" type="button" data-md="link" title="链接">🔗</button>
-          <button class="md-tools__btn" type="button" data-md="image" title="图片">▣</button>
-        </div>
+{/* 工具栏按钮用文字符号，不新增图标：后台的 Icon 是 24×24 描边，做成小按钮并不清楚 */}
+      <div class="md-tools" role="toolbar" aria-label="Markdown">
+        <button class="md-tools__btn" type="button" data-md="bold" title="加粗 (Ctrl/Cmd+B)"><b>B</b></button>
+        <button class="md-tools__btn" type="button" data-md="italic" title="斜体 (Ctrl/Cmd+I)"><i>I</i></button>
+        <span class="md-tools__sep" aria-hidden="true"></span>
+        <button class="md-tools__btn" type="button" data-md="h2" title="二级标题">H2</button>
+        <button class="md-tools__btn" type="button" data-md="quote" title="引用">❝</button>
+        <button class="md-tools__btn" type="button" data-md="ul" title="无序列表">•</button>
+        <button class="md-tools__btn" type="button" data-md="ol" title="有序列表">1.</button>
+        <span class="md-tools__sep" aria-hidden="true"></span>
+        <button class="md-tools__btn" type="button" data-md="code" title="代码块">‹›</button>
+        <span class="md-tools__sep" aria-hidden="true"></span>
+        <button class="md-tools__btn" type="button" data-md="link" title="链接">🔗</button>
+        <button class="md-tools__btn" type="button" data-md="image" title="图片">▣</button>
+      </div>
 
         <textarea
           id="post-body"

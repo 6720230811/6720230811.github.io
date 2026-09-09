@@ -44,7 +44,7 @@ body {
   justify-content: space-between;
   gap: 0.75rem;
   height: 4.25rem;
-  max-width: 72rem;
+  max-width: 76rem;
   margin: 0 auto;
   padding: 0 1rem;
   background: var(--c-float-panel);
@@ -114,12 +114,12 @@ body {
 }
 
 .admin-wrap {
-  max-width: 72rem;
+  max-width: 76rem;
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 5rem;
+  padding: 2rem 1.5rem 5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
 /* ---------- 分区切换：胶囊式 segmented control ---------- */
@@ -166,7 +166,7 @@ body {
 
 /* ---------- 面板 ---------- */
 .panel {
-  padding: 1.5rem 1.75rem 1.75rem;
+  padding: 1.75rem 2rem 2rem;
   background: var(--c-card);
   border: 1px solid var(--c-border-soft);
   border-radius: var(--radius-lg);
@@ -187,8 +187,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin: -1.5rem -1.75rem 1.5rem;
-  padding: 1.15rem 1.75rem 0.9rem;
+  margin: -1.75rem -2rem 1.5rem;
+  padding: 1.15rem 2rem 1rem;
   background: var(--c-card);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--c-border-soft);
@@ -242,14 +242,14 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.3rem;
-  margin: 0 0 1.4rem;
-  padding: 0.7rem 0.9rem;
+  gap: 0.4rem;
+  margin: 0 0 1.6rem;
+  padding: 0.55rem 0.85rem;
   border-radius: var(--radius-sm);
   background: var(--c-bg-soft);
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   color: var(--c-text-muted);
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
 .panel__hint code,
@@ -279,31 +279,62 @@ body {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
   min-width: 0;
+}
+
+/* 标签在左、输入框在右、说明在输入框下方 —— 短字段（title/slug/date/...）
+   走这一套，比「标签在上」每行省下一截高度，整体密度降下来 */
+.field--row {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.85rem;
+  row-gap: 0.3rem;
+}
+
+.field--row .field__label {
+  display: block;
+  margin: 0;
+}
+
+.field--row .field__hint {
+  grid-column: 2;
 }
 
 .field__label {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
-  font-size: 0.88rem;
+  gap: 0.55rem;
+  font-size: 0.84rem;
   font-weight: 600;
+  color: var(--c-text-muted);
 }
 
-/* 字段名用小胶囊标出来，跟后面的说明一眼分开 */
+/* 字段名：等宽字 + 弱分隔点，丢掉满屏亮蓝药丸 */
 .field__label code {
-  padding: 0.08rem 0.45rem;
-  border-radius: 4px;
-  background: var(--c-bg-soft);
-  font-size: 0.8rem;
-  color: var(--c-accent);
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.field__label code::after {
+  content: '·';
+  margin: 0 0.05rem 0 0.1rem;
+  color: var(--c-text-faint);
+  font-weight: 400;
+}
+
+/* 行内标签时「code 后面的点」多余，去掉 */
+.field--row .field__label code::after {
+  content: none;
 }
 
 .field__hint {
   font-weight: 400;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--c-text-faint);
 }
 
@@ -496,15 +527,18 @@ select.input--sm {
 }
 
 .grid {
+  /* 单列：短字段走行内标签（标签在左、输入框在右、说明在下方），
+     标签宽度 7rem 固定，每行一个字段最整齐，
+     多列会因为各字段说明长短不一而上下错位，反而难看 */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem 1.25rem;
+  grid-template-columns: 1fr;
+  gap: 1.1rem;
 }
 
 .json-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 1rem 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 1.1rem 1.5rem;
 }
 
 .inline {
@@ -568,10 +602,11 @@ select.input--sm {
   color: var(--c-text-faint);
 }
 
-/* Markdown 工具栏：贴在正文编辑框上方，一行小方按钮 */
+/* Markdown 工具栏：贴在正文编辑框上方，分组用细分隔，避免一长串 */
 .md-tools {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.25rem;
   padding: 0.4rem 0.5rem;
   border-bottom: 1px solid var(--c-border-soft);
@@ -579,11 +614,11 @@ select.input--sm {
 }
 
 .md-tools__btn {
-  min-width: 1.9rem;
-  height: 1.9rem;
-  padding: 0 0.4rem;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.45rem;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   line-height: 1;
   color: var(--c-text-muted);
   background: none;
@@ -602,6 +637,14 @@ select.input--sm {
   transform: translateY(1px);
 }
 
+/* 分组之间的细竖线：用一个空 ::after 占位的 div 当分隔 */
+.md-tools__sep {
+  width: 1px;
+  height: 1.1rem;
+  margin: 0 0.2rem;
+  background: var(--c-border-soft);
+}
+
 /* 封面：地址与缩略图并排，填了地址当场看一眼，不用等发布 */
 .cover-field {
   display: grid;
@@ -610,8 +653,9 @@ select.input--sm {
   align-items: start;
 }
 
-.cover-field__preview {
-  width: 4.5rem;
+.cover-field__preview:empty,
+.cover-field__preview:not(:has(img:not([hidden]))):not(:has(p:not([hidden]))) {
+  display: none;
 }
 
 .cover-field__img {
