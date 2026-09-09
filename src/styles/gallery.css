@@ -122,8 +122,10 @@ button.gal-view[aria-pressed='true'] {
   margin-top: 1.1rem;
   border: 1px solid var(--c-border-soft);
   border-radius: var(--radius-lg);
-  /* 纹理没加载完之前，先露出房间地板色，避免一片黑 */
-  background: var(--gal-floor, var(--c-bg-soft));
+  /* 纹理没加载完之前，先露出房间地板色，避免一片黑
+     （原来是 var(--gal-floor, var(--c-bg-soft))，但 --gal-floor 从没人设过，
+      留着只是个永不生效的钩子，直接用底色） */
+  background: var(--c-bg-soft);
   overflow: hidden;
 }
 

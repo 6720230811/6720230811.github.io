@@ -62,9 +62,10 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
     {canonical && <link rel="canonical" href={siteOrigin ? new URL(canonical, siteOrigin).toString() : base + canonical.replace(/^\//, '')} />}
 
     {/* 站内跳转走 View Transitions：换掉 body 而不是整页刷新，不再白屏一下。
-        fallback="none"：不要 Astro 自带的淡入淡出，方向由下面这段脚本定，
-        动画交给 CSS（见 global.css 的 nav-enter），各浏览器表现一致。 */}
-    <ClientRouter fallback="none" />
+        fallback="swap"：不要 Astro 自带的淡入淡出（方向由下面这段脚本定，动画交给
+        CSS 的 nav-enter / nav-leave）。不用 "none" 是因为那样不支持 View Transitions
+        的浏览器会彻底不做站内跳转、退回整页刷新。 */}
+    <ClientRouter fallback="swap" />
 
     {/* 必须在样式生效前定好 data-theme，否则会闪一下亮色。
         localStorage 里没有选择时跟随系统；禁用 JS 时固定亮色。
@@ -101,18 +102,45 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
     <script>
       /**
        * 换页方向：Astro 自己会标 data-astro-transition，但 push 跳转一律算 forward，
-       * 从文章退回列表也照样「往前」，看着别扭。这里按地址深浅再判一次，
-       * 写进新文档的 <html>（换页时 <html> 的属性会被新文档覆盖，只有写在
-       * newDocument 上才留得下来），CSS 据此选动画：
-       * 进更深的页面（列表 → 正文）从下方浮上来，退回浅的从上方落下来，深度相同只淡入。
+       * 从文章退回列表也照样「往前」，看着别扭。这里按地址深浅再判一次。
        */
+      const depth = (url: URL) => url.pathname.split('/').filter(Boolean).length;
+      const directionOf = (from: URL, to: URL, given: string) =>
+        given === 'back' || depth(to) < depth(from)
+          ? 'back'
+          : depth(to) > depth(from)
+            ? 'forward'
+            : 'fade';
+
+      // 旧页面退场：给 <html> 打上 nav-leaving，由 CSS 放退场动画（见 global.css）。
+      // 取新页面和放动画是同时进行的，等两份都好了再换，站着干等没必要。
+      document.addEventListener('astro:before-preparation', (e) => {
+        const root = document.documentElement;
+        root.dataset.nav = directionOf(e.from, e.to, e.direction);
+        root.classList.add('nav-leaving');
+
+        const main = document.querySelector('.main');
+        const leaving = main
+          ? Promise.race([
+              // getAnimations() 会先算一次样式，所以这里已经能拿到刚挂上的退场动画；
+              // 关了动画偏好时拿不到动画，立刻放行
+              Promise.all(main.getAnimations().map((a) => a.finished.catch(() => {}))),
+              new Promise((resolve) => setTimeout(resolve, 400)),
+            ])
+          : Promise.resolve();
+
+        // 跳转被打断（比如连着点了两个链接）时把标记撤掉，
+        // 否则 .main 会停在退场动画的最后一帧，整页看不见
+        e.signal.addEventListener('abort', () => root.classList.remove('nav-leaving'));
+
+        const load = e.loader;
+        e.loader = () => Promise.all([load(), leaving]).then(() => {});
+      });
+
+      // 新页面进场：方向要写进 newDocument 的 <html> —— 换页时当前 <html> 的
+      // 属性会被新文档整个盖掉，只有写在新文档上才留得下来
       document.addEventListener('astro:before-swap', (e) => {
-        const depth = (url: URL) => url.pathname.split('/').filter(Boolean).length;
-        const from = depth(e.from);
-        const to = depth(e.to);
-        const nav =
-          e.direction === 'back' || to < from ? 'back' : to > from ? 'forward' : 'fade';
-        e.newDocument.documentElement.dataset.nav = nav;
+        e.newDocument.documentElement.dataset.nav = directionOf(e.from, e.to, e.direction);
       });
     </script>
 

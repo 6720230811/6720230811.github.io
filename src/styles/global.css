@@ -856,6 +856,52 @@ h4 {
   }
 }
 
+/* 旧页面退场：nav-leaving 由 BaseLayout 在 astro:before-preparation 里加，
+   换页时 <html> 的属性被新文档盖掉，标记自然就清了，不用手动收。
+   方向与进场相反：往深处走时旧页面往上退出去，退回浅处时往下沉。 */
+@media (prefers-reduced-motion: no-preference) {
+  html.nav-leaving .main {
+    animation: nav-leave-fade 0.16s ease-in forwards;
+  }
+
+  html.nav-leaving[data-nav='forward'] .main {
+    animation-name: nav-leave-forward;
+  }
+
+  html.nav-leaving[data-nav='back'] .main {
+    animation-name: nav-leave-back;
+  }
+}
+
+@keyframes nav-leave-forward {
+  to {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes nav-leave-back {
+  to {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes nav-leave-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+/* 支持 View Transitions 的浏览器会自己加一次整页交叉淡化，
+   和上面这一进一出叠在一起就成了「淡一次再淡一次」。关掉它，
+   进出都由我们自己这组动画负责，各浏览器看起来才一致。 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 /* ============================================================
    板块：每个板块一张卡片
    ============================================================ */
