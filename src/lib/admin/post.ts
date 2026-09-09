@@ -11,8 +11,9 @@ import {
 import { buildPostFile, parsePostFile, isValidSlug, today, toSlug } from './serialize';
 import type { PostFrontmatter } from './serialize';
 import { saveDraft, loadDraft, clearDraft, isFallback } from './drafts';
-import { updatePreview, autoHeight } from './preview';
+import { updatePreview, autoHeight, watchTheme, type PreviewView } from './preview';
 import { requireToken } from './token';
+import type { Locale } from '../../i18n/ui';
 
 /**
  * 「文章」这一栏：载入、编辑、本地草稿、发布。
@@ -56,6 +57,20 @@ function collectPost(): PostFrontmatter {
   };
 }
 
+const editorEl = document.querySelector<HTMLElement>('.editor');
+
+/** 当前预览视图：正文 / 列表卡片 / 文章页 */
+let view: PreviewView = 'body';
+
+function renderNow(): void {
+  updatePreview(previewFrame, {
+    view,
+    data: collectPost(),
+    body: bodyInput.value,
+    locale: postLang.value as Locale,
+  });
+}
+
 function fillPost(data: PostFrontmatter, body: string): void {
   titleInput.value = data.title;
   descInput.value = data.description;
@@ -65,7 +80,7 @@ function fillPost(data: PostFrontmatter, body: string): void {
   coverInput.value = data.cover ?? '';
   draftInput.checked = data.draft;
   bodyInput.value = body;
-  updatePreview(previewFrame, body);
+  renderNow();
 }
 
 function resetPost(): void {
@@ -163,15 +178,29 @@ export function initPost(): void {
     slugInput.value = toSlug(titleInput.value) || `post-${today()}`;
   });
 
-  // 预览 + 草稿自动保存
+  // 预览：正文改动 200ms 防抖后重渲染（下一步会把其它字段也接进来）
   let previewTimer: number | undefined;
-  let draftTimer: number | undefined;
 
   bodyInput.addEventListener('input', () => {
     window.clearTimeout(previewTimer);
-    previewTimer = window.setTimeout(() => updatePreview(previewFrame, bodyInput.value), 200);
+    previewTimer = window.setTimeout(renderNow, 200);
   });
 
+  // 视图切换：正文 / 列表卡片 / 文章页
+  const viewBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-switch__btn'));
+  for (const btn of viewBtns) {
+    btn.addEventListener('click', () => {
+      view = (btn.dataset.view ?? 'body') as PreviewView;
+      for (const other of viewBtns) other.setAttribute('aria-pressed', String(other === btn));
+      if (editorEl) editorEl.dataset.view = view;
+      renderNow();
+    });
+  }
+
+  // 主题变了要重渲染：iframe 拿不到父页面的 data-theme
+  watchTheme(renderNow);
+
+  let draftTimer: number | undefined;
   for (const el of [titleInput, descInput, dateInput, categoryInput, tagsInput, draftInput, bodyInput, slugInput]) {
     el.addEventListener('input', () => {
       window.clearTimeout(draftTimer);
@@ -229,7 +258,6 @@ export function initPost(): void {
   });
 
   autoHeight(previewFrame);
-  updatePreview(previewFrame, '');
   resetPost();
 
   // 启动时也试着恢复草稿：没有 token 也能接着写，等填了 token 再发布

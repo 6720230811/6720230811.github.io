@@ -104,9 +104,12 @@ const { id = 'post-preview' } = Astro.props;
     <input id="post-desc" class="input" type="text" spellcheck="false" />
   </label>
 
-  <div class="editor">
+  <div class="editor" data-view="body">
     <div class="editor__pane">
-      <div class="editor__label">Markdown 正文</div>
+      <div class="editor__head">
+        <div class="editor__label">Markdown 正文</div>
+        <div id="post-stats" class="editor__stats"></div>
+      </div>
       <textarea
         id="post-body"
         class="input input--code editor__area"
@@ -115,7 +118,14 @@ const { id = 'post-preview' } = Astro.props;
     </div>
 
     <div class="editor__pane">
-      <div class="editor__label">预览（不含代码高亮）</div>
+      <div class="editor__head">
+        <div class="editor__label">预览</div>
+        <div class="view-switch" role="group" aria-label="预览视图">
+          <button class="view-switch__btn" type="button" data-view="body" aria-pressed="true">正文</button>
+          <button class="view-switch__btn" type="button" data-view="card" aria-pressed="false">列表卡片</button>
+          <button class="view-switch__btn" type="button" data-view="head" aria-pressed="false">文章页</button>
+        </div>
+      </div>
       <iframe id={id} class="editor__preview" title="预览" sandbox="allow-same-origin"></iframe>
     </div>
   </div>

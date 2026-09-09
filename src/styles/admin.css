@@ -443,6 +443,68 @@ select.input--sm {
   color: var(--c-text-faint);
 }
 
+/* 窗格顶栏：左边标题，右边是工具（正文栏放统计，预览栏放视图切换） */
+.editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.85rem;
+  border-bottom: 1px solid var(--c-border-soft);
+  background: var(--c-card);
+}
+
+.editor__head .editor__label {
+  padding: 0;
+  border-bottom: none;
+  background: none;
+}
+
+.editor__stats {
+  font-size: 0.76rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 预览视图切换：胶囊 segmented control，与顶栏分区切换同一套观感 */
+.view-switch {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.25rem;
+  background: var(--c-bg-soft);
+  border-radius: 999px;
+}
+
+.view-switch__btn {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--c-text-faint);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.view-switch__btn:hover {
+  color: var(--c-text);
+}
+
+.view-switch__btn[aria-pressed='true'] {
+  color: var(--c-accent);
+  background: var(--c-card);
+  box-shadow: 0 1px 3px var(--c-shadow-sm);
+}
+
+/* 卡片 / 文章页视图里右侧有封面栏，预览那半边给宽一点 */
+.editor[data-view='card'],
+.editor[data-view='head'] {
+  grid-template-columns: 1fr 1.35fr;
+}
+
 /* 内容区贴着窗格边，所以去掉自己的边框与圆角；
    focus 环改用 inset，否则会被窗格的 overflow: hidden 裁掉 */
 .editor__area,
@@ -470,7 +532,9 @@ select.input--sm {
 }
 
 @media (max-width: 900px) {
-  .editor {
+  .editor,
+  .editor[data-view='card'],
+  .editor[data-view='head'] {
     grid-template-columns: 1fr;
   }
 }
