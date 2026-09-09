@@ -443,6 +443,35 @@ select.input--sm {
   color: var(--c-text-faint);
 }
 
+/* 封面：地址与缩略图并排，填了地址当场看一眼，不用等发布 */
+.cover-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.cover-field__preview {
+  width: 4.5rem;
+}
+
+.cover-field__img {
+  display: block;
+  width: 4.5rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg-soft);
+}
+
+.cover-field__hint {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--c-text-faint);
+}
+
 /* 窗格顶栏：左边标题，右边是工具（正文栏放统计，预览栏放视图切换） */
 .editor__head {
   display: flex;

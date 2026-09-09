@@ -1,4 +1,4 @@
-import { $, setStatus, setNotice, setFieldError, run } from './dom';
+import { $, setStatus, setNotice, setFieldError, run, debounce } from './dom';
 import { repo, paths } from '../../data/admin';
 import {
   readFile,
@@ -12,7 +12,9 @@ import { buildPostFile, parsePostFile, isValidSlug, today, toSlug } from './seri
 import type { PostFrontmatter } from './serialize';
 import { saveDraft, loadDraft, clearDraft, isFallback } from './drafts';
 import { updatePreview, autoHeight, watchTheme, type PreviewView } from './preview';
+import { renderStats } from './stats';
 import { requireToken } from './token';
+import { resolveCoverFields } from '../cover';
 import type { Locale } from '../../i18n/ui';
 
 /**
@@ -32,6 +34,9 @@ const coverInput = $<HTMLInputElement>('post-cover');
 const draftInput = $<HTMLInputElement>('post-draft');
 const bodyInput = $<HTMLTextAreaElement>('post-body');
 const previewFrame = $<HTMLIFrameElement>('post-preview');
+const statsEl = $('post-stats');
+const coverThumb = $<HTMLImageElement>('cover-thumb');
+const coverHint = $('cover-hint');
 
 let currentSlug = ''; // 空串表示新建
 
@@ -62,6 +67,26 @@ const editorEl = document.querySelector<HTMLElement>('.editor');
 /** 当前预览视图：正文 / 列表卡片 / 文章页 */
 let view: PreviewView = 'body';
 
+/** 封面缩略图：填了地址就看一眼，免得发布后才发现图是坏的 */
+function updateCoverThumb(): void {
+  const raw = coverInput.value.trim();
+  const lifted = resolveCoverFields(undefined, bodyInput.value);
+
+  if (!raw) {
+    coverThumb.hidden = true;
+    coverThumb.removeAttribute('src');
+    // 留空时说明会退回正文第一张图，这一点不写出来的话很容易以为没配图
+    coverHint.hidden = !lifted;
+    coverHint.className = 'cover-field__hint';
+    coverHint.textContent = lifted ? `留空 → 用正文第一张图：${lifted.src}` : '';
+    return;
+  }
+
+  coverHint.hidden = true;
+  coverThumb.hidden = false;
+  coverThumb.src = raw;
+}
+
 function renderNow(): void {
   updatePreview(previewFrame, {
     view,
@@ -69,6 +94,8 @@ function renderNow(): void {
     body: bodyInput.value,
     locale: postLang.value as Locale,
   });
+  renderStats(statsEl, bodyInput.value, postLang.value as Locale);
+  updateCoverThumb();
 }
 
 function fillPost(data: PostFrontmatter, body: string): void {
@@ -178,13 +205,37 @@ export function initPost(): void {
     slugInput.value = toSlug(titleInput.value) || `post-${today()}`;
   });
 
-  // 预览：正文改动 200ms 防抖后重渲染（下一步会把其它字段也接进来）
-  let previewTimer: number | undefined;
+  /**
+   * 所有字段走同一条总线：改任何一个都同时驱动预览、统计、草稿。
+   * 之前只有正文会刷新预览，改标题/标签/封面看不到变化，预览等于半残。
+   * input 之外也听 change：日期选择器选值、checkbox 在某些浏览器只发 change。
+   */
+  const schedulePreview = debounce(renderNow, 250);
+  const scheduleDraft = debounce(() => {
+    void saveDraft(draftKey(), { data: collectPost(), body: bodyInput.value });
+  }, 800);
 
-  bodyInput.addEventListener('input', () => {
-    window.clearTimeout(previewTimer);
-    previewTimer = window.setTimeout(renderNow, 200);
-  });
+  const fields = [
+    slugInput,
+    titleInput,
+    descInput,
+    dateInput,
+    categoryInput,
+    tagsInput,
+    coverInput,
+    draftInput,
+    bodyInput,
+  ];
+
+  const onChange = () => {
+    schedulePreview();
+    scheduleDraft();
+  };
+
+  for (const el of fields) {
+    el.addEventListener('input', onChange);
+    el.addEventListener('change', onChange);
+  }
 
   // 视图切换：正文 / 列表卡片 / 文章页
   const viewBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-switch__btn'));
@@ -200,15 +251,12 @@ export function initPost(): void {
   // 主题变了要重渲染：iframe 拿不到父页面的 data-theme
   watchTheme(renderNow);
 
-  let draftTimer: number | undefined;
-  for (const el of [titleInput, descInput, dateInput, categoryInput, tagsInput, draftInput, bodyInput, slugInput]) {
-    el.addEventListener('input', () => {
-      window.clearTimeout(draftTimer);
-      draftTimer = window.setTimeout(() => {
-        void saveDraft(draftKey(), { data: collectPost(), body: bodyInput.value });
-      }, 800);
-    });
-  }
+  // 封面缩略图在父页面，加载失败才有 onerror 可用
+  coverThumb.addEventListener('error', () => {
+    coverHint.hidden = false;
+    coverHint.className = 'field__error';
+    coverHint.textContent = '封面加载不出来：检查地址，或新上传的图要等 Actions 部署完（约 1 分钟）才在线。';
+  });
 
   $('post-save').addEventListener('click', () => {
     void (async () => {

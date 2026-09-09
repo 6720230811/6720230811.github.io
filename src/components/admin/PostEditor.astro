@@ -81,13 +81,19 @@ const { id = 'post-preview' } = Astro.props;
         <code>cover</code>
         <span class="field__hint">封面图，站内绝对路径或外链；留空则用正文第一张图</span>
       </span>
-      <input
-        id="post-cover"
-        class="input"
-        type="text"
-        spellcheck="false"
-        placeholder="/illustrations/xxx.png"
-      />
+      <div class="cover-field">
+        <input
+          id="post-cover"
+          class="input"
+          type="text"
+          spellcheck="false"
+          placeholder="/illustrations/xxx.png"
+        />
+        <div class="cover-field__preview">
+          <img id="cover-thumb" class="cover-field__img" alt="" hidden />
+          <p id="cover-hint" class="cover-field__hint" hidden></p>
+        </div>
+      </div>
     </label>
 
     <label class="field field--check">
