@@ -443,6 +443,40 @@ select.input--sm {
   color: var(--c-text-faint);
 }
 
+/* Markdown 工具栏：贴在正文编辑框上方，一行小方按钮 */
+.md-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--c-border-soft);
+  background: var(--c-card);
+}
+
+.md-tools__btn {
+  min-width: 1.9rem;
+  height: 1.9rem;
+  padding: 0 0.4rem;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--c-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.md-tools__btn:hover {
+  color: var(--c-accent);
+  background: var(--c-bg-soft);
+  border-color: var(--c-border-soft);
+}
+
+.md-tools__btn:active {
+  transform: translateY(1px);
+}
+
 /* 封面：地址与缩略图并排，填了地址当场看一眼，不用等发布 */
 .cover-field {
   display: grid;

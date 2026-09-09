@@ -13,6 +13,7 @@ import type { PostFrontmatter } from './serialize';
 import { saveDraft, loadDraft, clearDraft, isFallback } from './drafts';
 import { updatePreview, autoHeight, watchTheme, type PreviewView } from './preview';
 import { renderStats } from './stats';
+import { initMdToolbar, initTabIndent, initSaveShortcut } from './toolbar';
 import { requireToken } from './token';
 import { resolveCoverFields } from '../cover';
 import type { Locale } from '../../i18n/ui';
@@ -237,6 +238,9 @@ export function initPost(): void {
     el.addEventListener('change', onChange);
   }
 
+  initMdToolbar(document, bodyInput);
+  initTabIndent(bodyInput);
+
   // 视图切换：正文 / 列表卡片 / 文章页
   const viewBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-switch__btn'));
   for (const btn of viewBtns) {
@@ -258,52 +262,57 @@ export function initPost(): void {
     coverHint.textContent = '封面加载不出来：检查地址，或新上传的图要等 Actions 部署完（约 1 分钟）才在线。';
   });
 
-  $('post-save').addEventListener('click', () => {
-    void (async () => {
-      const token = requireToken();
-      if (!token) return;
+  const publish = async (): Promise<void> => {
+    const token = requireToken();
+    if (!token) return;
 
-      const slug = currentSlug || slugInput.value.trim();
-      if (!isValidSlug(slug)) {
-        showPostError('slug 只能用小写字母、数字和连字符，例如 my-new-post。文件名必须是 ASCII。');
-        return;
-      }
-      const data = collectPost();
-      if (!data.title) {
-        showPostError('title 不能为空。');
-        return;
-      }
-      if (!data.category) {
-        showPostError('category 不能为空（schema 里是必填）。');
-        return;
-      }
-      showPostError('');
+    const slug = currentSlug || slugInput.value.trim();
+    if (!isValidSlug(slug)) {
+      showPostError('slug 只能用小写字母、数字和连字符，例如 my-new-post。文件名必须是 ASCII。');
+      return;
+    }
+    const data = collectPost();
+    if (!data.title) {
+      showPostError('title 不能为空。');
+      return;
+    }
+    if (!data.category) {
+      showPostError('category 不能为空（schema 里是必填）。');
+      return;
+    }
+    showPostError('');
 
-      const text = buildPostFile({ data, body: bodyInput.value.trimEnd() });
-      try {
-        setStatus('正在写入仓库…', 'busy');
-        await saveFile(
-          repo as Repo,
-          paths.post(postLang.value, slug),
-          token,
-          text,
-          `${currentSlug ? 'update' : 'add'} post: ${data.title}`
-        );
-        await clearDraft(draftKey());
-        setNotice('');
-        currentSlug = slug;
-        slugInput.disabled = true;
-        setStatus(
-          `已发布 ${slug}。Actions 大约 1 分钟后上线，可以去 ${actionsUrl(repo as Repo)} 看进度。`,
-          'ok'
-        );
-        await refreshPostList();
-        postSelect.value = slug;
-      } catch (e) {
-        setStatus(e instanceof GhError ? e.hint : String(e), 'error');
-      }
-    })();
-  });
+    const text = buildPostFile({ data, body: bodyInput.value.trimEnd() });
+    try {
+      setStatus('正在写入仓库…', 'busy');
+      await saveFile(
+        repo as Repo,
+        paths.post(postLang.value, slug),
+        token,
+        text,
+        `${currentSlug ? 'update' : 'add'} post: ${data.title}`
+      );
+      await clearDraft(draftKey());
+      setNotice('');
+      currentSlug = slug;
+      slugInput.disabled = true;
+      setStatus(
+        `已发布 ${slug}。Actions 大约 1 分钟后上线，可以去 ${actionsUrl(repo as Repo)} 看进度。`,
+        'ok'
+      );
+      await refreshPostList();
+      postSelect.value = slug;
+    } catch (e) {
+      setStatus(e instanceof GhError ? e.hint : String(e), 'error');
+    }
+  };
+
+  $('post-save').addEventListener('click', () => void publish());
+  // Cmd/Ctrl+S 发布：只在文章栏拦这个键，别在友链栏也拦
+  initSaveShortcut(
+    () => void publish(),
+    () => document.querySelector('.tab[aria-current="page"]')?.getAttribute('data-tab') === 'post'
+  );
 
   autoHeight(previewFrame);
   resetPost();
