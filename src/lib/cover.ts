@@ -7,6 +7,10 @@ import type { Post } from './posts';
  * 1. frontmatter 的 cover（自己指定的最准）
  * 2. 正文里第一张 Markdown 图 / <img>，此时 lifted = true
  * 3. 都没有 → undefined，页面保持单栏
+ *
+ * 注意：这里只能 import type { Post }（类型导入会被擦除），
+ * /admin 后台要在浏览器里复用本文件的取图逻辑，改成值导入会把
+ * astro:content 拖进浏览器包、直接构建失败。
  */
 export interface CoverImage {
   /** 可直接在 src 里用的地址 */
@@ -29,10 +33,17 @@ const HTML_ALT = /\balt\s*=\s*["']([^"']*)["']/i;
 const ABSOLUTE = /^(?:https?:\/\/|\/\/|\/)/i;
 
 export function resolveCover(post: Post): CoverImage | undefined {
-  const cover = post.data.cover?.trim();
-  if (cover) return { src: toUrl(cover), alt: '', lifted: false };
+  return resolveCoverFields(post.data.cover, post.body ?? '');
+}
 
-  const body = post.body ?? '';
+/**
+ * 上面那个的「裸字段」版本：后台预览只有表单里的 frontmatter 与正文字符串，
+ * 没有 Post 对象。两边共用同一段逻辑，才不会出现「预览有图、线上没图」。
+ */
+export function resolveCoverFields(cover: string | undefined, body: string): CoverImage | undefined {
+  const own = cover?.trim();
+  if (own) return { src: toUrl(own), alt: '', lifted: false };
+
   const md = MD_IMAGE.exec(body);
   const html = HTML_IMAGE.exec(body);
 

@@ -1,5 +1,6 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { getRelativeLocaleUrl } from 'astro:i18n';
+import { countReading } from './format';
 import type { Locale } from '../i18n/ui';
 
 /** 语言目录 + slug 拆分后的文章类型 */
@@ -117,25 +118,15 @@ function collect(names: readonly string[]): Term[] {
 }
 
 /**
- * 粗略的阅读时长（分钟）。
+ * 粗略的阅读时长（分钟）：实现在 ../format 里，前后台共用（后台预览要用同一套算法）。
  * 中文按 400 字/分钟、西文按 220 词/分钟估，够用即可，不必精确。
  */
 export function readingMinutes(post: Post): number {
-  const text = post.body ?? '';
-  const cjk = (text.match(/[㐀-鿿぀-ヿ]/g) ?? []).length;
-  const words = (text.replace(/[㐀-鿿぀-ヿ]/g, ' ').match(/[A-Za-z0-9']+/g) ?? []).length;
-  return Math.max(1, Math.round(cjk / 400 + words / 220));
+  return countReading(post.body ?? '');
 }
 
-/** 日期格式化：中文 2026年9月1日，英文 Sep 1, 2026 */
-export function formatDate(date: Date, locale: Locale): string {
-  return date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', {
-    year: 'numeric',
-    month: locale === 'zh' ? 'long' : 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
+// 下面三个从 format.ts 转出来，前台其它文件 import 自 posts 的地方不用改
+export { countReading, countWords, formatDate, parseIsoDate } from './format';
 
 /** 短日期（归档页按年份分组后，组内只需月日） */
 export function formatShortDate(date: Date, locale: Locale): string {
