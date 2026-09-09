@@ -63,6 +63,36 @@ export function groupByYear(posts: readonly Post[]): { year: number; posts: Post
     .sort((a, b) => b.year - a.year);
 }
 
+/**
+ * 按词条分组（分类 / 标签）：一篇文章只有一个分类，但可以有多个标签，
+ * 所以取词函数返回数组。组的顺序跟 collectCategories 一致（篇数降序、同篇数按名称），
+ * 保证构建结果稳定。
+ */
+export interface PostGroup {
+  name: string;
+  posts: Post[];
+  /** 该词条的独立页面（/tags/… 、/categories/…）；归档年份这类没有落地页的组不填 */
+  href?: string;
+}
+
+export function groupByTerms(
+  posts: readonly Post[],
+  termsOf: (post: Post) => readonly string[],
+  hrefOf?: (name: string) => string
+): PostGroup[] {
+  const buckets = new Map<string, Post[]>();
+  for (const post of posts) {
+    for (const name of termsOf(post)) {
+      const bucket = buckets.get(name);
+      if (bucket) bucket.push(post);
+      else buckets.set(name, [post]);
+    }
+  }
+  return [...buckets.entries()]
+    .map(([name, items]) => ({ name, posts: items, href: hrefOf?.(name) }))
+    .sort((a, b) => b.posts.length - a.posts.length || a.name.localeCompare(b.name));
+}
+
 export interface Term {
   name: string;
   count: number;

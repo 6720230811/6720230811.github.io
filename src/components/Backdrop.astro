@@ -12,8 +12,10 @@
  */
 ---
 
-{/* 纯装饰：对读屏器隐藏，也不接收鼠标事件 */}
-<canvas id="backdrop" class="backdrop" aria-hidden="true"></canvas>
+{/* 纯装饰：对读屏器隐藏，也不接收鼠标事件。
+    transition:persist：换页时不重建画布，动画循环和光标监听都留在原处，
+    否则每次跳转背景都要重新淡入一遍。 */}
+<canvas id="backdrop" class="backdrop" aria-hidden="true" transition:persist="backdrop"></canvas>
 <div class="backdrop-grain" aria-hidden="true"></div>
 
 <script>

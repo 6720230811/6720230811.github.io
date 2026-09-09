@@ -1,0 +1,151 @@
+---
+import PostList from './PostList.astro';
+import PostGroupList from './PostGroupList.astro';
+import { browseTabs, type BrowseTab } from '../lib/browse';
+import { categoryHref, groupByTerms, groupByYear, postsOf, tagHref } from '../lib/posts';
+import { useTranslations, type Locale } from '../i18n/ui';
+import { profile } from '../data/profile';
+
+interface Props {
+  locale: Locale;
+  /** 当前地址对应的面板：直接打开 /archive/ 时默认展开归档 */
+  active: BrowseTab;
+  /** 板块标题与图标的 id：切换选项卡时脚本要改它们，跟上面的标题保持一致 */
+  titleId: string;
+  iconId: string;
+}
+
+const { locale, active, titleId, iconId } = Astro.props;
+const t = useTranslations(locale);
+const tabs = browseTabs(locale);
+const posts = await postsOf(locale);
+const siteName = profile[locale].name;
+
+const yearGroups = groupByYear(posts).map((group) => ({
+  name: String(group.year),
+  posts: group.posts,
+}));
+// 分组标题保留旧版词云的落地页：分类 / 标签能点进去看单独一页
+const categoryGroups = groupByTerms(
+  posts,
+  (post) => [post.data.category],
+  (name) => categoryHref(locale, name)
+);
+const tagGroups = groupByTerms(
+  posts,
+  (post) => post.data.tags,
+  (name) => tagHref(locale, name)
+);
+---
+
+<div class="post-panels" data-title-id={titleId} data-icon-id={iconId}>
+  <nav class="post-browse" aria-label={t('browse.aria')}>
+    {
+      tabs.map((tab) => (
+        <a
+          class:list={['term', { 'term--on': tab.id === active }]}
+          href={tab.href}
+          data-tab={tab.id}
+          data-label={tab.label}
+          data-icon={tab.icon}
+          data-doc-title={`${tab.label} · ${siteName}`}
+          aria-current={tab.id === active ? 'page' : undefined}
+        >
+          {tab.label}
+        </a>
+      ))
+    }
+  </nav>
+
+  <div class="post-panel" data-tab="all" hidden={active !== 'all'}>
+    <PostList posts={posts} locale={locale} />
+  </div>
+
+  <div class="post-panel" data-tab="archive" hidden={active !== 'archive'}>
+    <p class="list-summary">{posts.length} {t('archive.count')}</p>
+    <PostGroupList groups={yearGroups} locale={locale} />
+  </div>
+
+  <div class="post-panel" data-tab="categories" hidden={active !== 'categories'}>
+    <PostGroupList groups={categoryGroups} locale={locale} />
+  </div>
+
+  <div class="post-panel" data-tab="tags" hidden={active !== 'tags'}>
+    <PostGroupList groups={tagGroups} locale={locale} prefix="#" />
+  </div>
+</div>
+
+<script>
+  /**
+   * 只切换面板，不跳转页面：四个视图的 HTML 都在这一页里，隐藏的用 hidden 收起。
+   * 选项卡仍然是真的 <a href>，禁用 JS（或修饰键点击）时照常跳转，不会变成死链。
+   */
+  let cleanup: () => void = () => {};
+
+  const init = () => {
+    // 先撤掉上一轮的监听：astro:page-load 每次切页都会再触发一次，不撤就会越叠越多
+    cleanup();
+    const ac = new AbortController();
+    const on = ac.signal;
+
+    const root = document.querySelector<HTMLElement>('.post-panels');
+    if (!root) return;
+
+    const tabs = Array.from(root.querySelectorAll<HTMLAnchorElement>('a[data-tab]'));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('.post-panel[data-tab]'));
+    const titleEl = document.getElementById(root.dataset.titleId ?? '');
+    const iconEl = document.getElementById(root.dataset.iconId ?? '');
+
+    const show = (id: string, push: boolean) => {
+      const tab = tabs.find((item) => item.dataset.tab === id);
+      if (!tab) return;
+
+      for (const item of tabs) {
+        const on = item === tab;
+        item.classList.toggle('term--on', on);
+        if (on) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
+      }
+      for (const panel of panels) panel.hidden = panel.dataset.tab !== id;
+
+      // 板块标题、图标、浏览器标签跟着换，否则会出现「标题是归档、内容是分类」
+      if (titleEl && tab.dataset.label) titleEl.textContent = tab.dataset.label;
+      if (iconEl && tab.dataset.icon) iconEl.textContent = tab.dataset.icon;
+      if (tab.dataset.docTitle) document.title = tab.dataset.docTitle;
+      // 带上 history.state 里原有的内容：Astro 的路由在里面存了 index，丢掉会影响前进后退
+      if (push) history.pushState({ ...history.state, browseTab: id }, '', tab.href);
+    };
+
+    const tabOfLocation = (): string | undefined => {
+      const path = location.pathname;
+      return tabs.find((item) => {
+        try {
+          return new URL(item.href, location.origin).pathname === path;
+        } catch {
+          return false;
+        }
+      })?.dataset.tab;
+    };
+
+    for (const tab of tabs) {
+      tab.addEventListener(
+        'click',
+        (e) => {
+          // 中键、修饰键、右键这一类是「在新标签打开」，交给浏览器
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          show(tab.dataset.tab ?? '', true);
+        },
+        { signal: on }
+      );
+    }
+
+    window.addEventListener('popstate', () => show(tabOfLocation() ?? '', false), { signal: on });
+
+    cleanup = () => ac.abort();
+  };
+
+  init();
+  // 开了 View Transitions 后，切页会重新挂载一次 DOM，这里跟着重新绑定
+  document.addEventListener('astro:page-load', init);
+</script>

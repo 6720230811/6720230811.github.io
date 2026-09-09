@@ -26,16 +26,21 @@ const t = useTranslations(locale);
 </button>
 
 <script>
-  const btn = document.getElementById('theme-toggle');
+  // 换页后按钮是新元素，每次 astro:page-load 重新绑一次
+  const initThemeToggle = () => {
+    const btn = document.getElementById('theme-toggle');
+    btn?.addEventListener('click', () => {
+      const root = document.documentElement;
+      const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      try {
+        localStorage.setItem('theme', next);
+      } catch (e) {
+        // 隐私模式下 localStorage 会抛异常，忽略即可，本次切换仍生效
+      }
+    });
+  };
 
-  btn?.addEventListener('click', () => {
-    const root = document.documentElement;
-    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
-    root.dataset.theme = next;
-    try {
-      localStorage.setItem('theme', next);
-    } catch (e) {
-      // 隐私模式下 localStorage 会抛异常，忽略即可，本次切换仍生效
-    }
-  });
+  initThemeToggle();
+  document.addEventListener('astro:page-load', initThemeToggle);
 </script>

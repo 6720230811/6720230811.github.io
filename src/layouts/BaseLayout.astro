@@ -7,6 +7,7 @@ import Sidebar from '../components/Sidebar.astro';
 import Toc from '../components/Toc.astro';
 import type { Profile } from '../data/profile';
 import type { Locale } from '../i18n/ui';
+import { ClientRouter } from 'astro:transitions';
 import { visibleSections } from '../data/sections';
 import { useTranslations } from '../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
@@ -52,9 +53,13 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
 
+    {/* 站内跳转走 View Transitions：换掉 body 而不是整页刷新，不再白屏一下 */}
+    <ClientRouter />
+
     {/* 必须在样式生效前定好 data-theme，否则会闪一下亮色。
-        localStorage 里没有选择时跟随系统；禁用 JS 时固定亮色。 */}
-    <script is:inline>
+        localStorage 里没有选择时跟随系统；禁用 JS 时固定亮色。
+        data-astro-rerun：换页时 <html> 的属性会被新文档覆盖，主题得重新贴一次。 */}
+    <script is:inline data-astro-rerun>
       try {
         var saved = localStorage.getItem('theme');
         if (saved !== 'dark' && saved !== 'light') {

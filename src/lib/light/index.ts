@@ -131,9 +131,16 @@ export function mountLight(root: HTMLElement | null): void {
     let last = performance.now();
     let hudClock = 0;
 
+    let stopped = false;
+    const stop = (): void => {
+      stopped = true;
+      observer.disconnect();
+      study?.dispose();
+    };
+
     const frame = (now: number): void => {
+      if (stopped) return;
       const dt = now - last;
-      last = now;
       if (dt > 0) {
         samples.push(dt);
         if (samples.length > 30) samples.shift();
@@ -157,10 +164,10 @@ export function mountLight(root: HTMLElement | null): void {
     };
     requestAnimationFrame(frame);
 
-    window.addEventListener('pagehide', () => {
-      observer.disconnect();
-      study?.dispose();
-    });
+    window.addEventListener('pagehide', stop);
+    // 站内跳转现在不刷新页面，pagehide 不会自己来：换页前手动收一次，
+    // 否则渲染循环会一直空转，WebGL 上下文也不释放
+    window.addEventListener('astro:before-swap', stop);
   }
 }
 

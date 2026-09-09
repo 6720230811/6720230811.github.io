@@ -856,6 +856,9 @@ export function mountGallery(rootEl: HTMLElement | null): void {
 
     // WebGL 上下文是有限的，离开页面时收干净
     window.addEventListener('pagehide', stop);
+    // 站内跳转不再刷新页面，pagehide 不会自己来：换页前手动收一次，
+    // 否则渲染循环会一直空转，WebGL 上下文也不释放
+    window.addEventListener('astro:before-swap', stop);
 
     function stop(): void {
       stopped = true;

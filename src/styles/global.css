@@ -1530,18 +1530,12 @@ h4 {
   font-variant-numeric: tabular-nums;
 }
 
-/* 博客列表页顶部：归档 / 分类 / 标签的入口（它们不占顶栏位置） */
+/* 博客页顶部：全部 / 归档 / 分类 / 标签四个浏览方式的选项卡（它们不占顶栏位置） */
 .post-browse {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1.1rem;
-}
-
-.term-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 
 .term {
@@ -1563,10 +1557,33 @@ h4 {
   text-decoration: none;
 }
 
+/* 当前展开的那个浏览方式 */
+.term--on {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+}
+
 .term__count {
   font-size: 0.75rem;
   color: var(--c-text-faint);
   font-variant-numeric: tabular-nums;
+}
+
+/* 分组标题后面的篇数（归档年份 / 分类 / 标签共用一套标题样式） */
+.archive-year .term__count {
+  margin-left: 0.5rem;
+  font-weight: 400;
+}
+
+/* 有落地页的分组（分类 / 标签）：标题本身就是链接，但不要看起来像正文链接 */
+.archive-year a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.archive-year a:hover {
+  text-decoration: underline;
 }
 
 .friend-list {

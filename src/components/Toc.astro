@@ -52,38 +52,52 @@ const links: readonly TocLink[] =
 }
 
 <script>
-  // 滚动高亮：视口上部的窄带内、文档顺序最靠前的标题即为当前标题。
-  const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.nav-anchor'));
-  // 标题按 DOM 顺序独立取，不从 links 反推
-  const targets = Array.from(
-    document.querySelectorAll<HTMLElement>('.section[id], .prose [id]')
-  );
+  /**
+   * 滚动高亮：视口上部的窄带内、文档顺序最靠前的标题即为当前标题。
+   * 换页后 DOM 整批换掉，旧的 observer 观察的是已被移除的节点，
+   * 所以每次 astro:page-load 都要重来一遍，并在重来前断开上一个。
+   */
+  let cleanup: () => void = () => {};
 
-  const setActive = (id: string) => {
+  const init = () => {
+    cleanup();
+
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.nav-anchor'));
+    // 标题按 DOM 顺序独立取，不从 links 反推
+    const targets = Array.from(
+      document.querySelectorAll<HTMLElement>('.section[id], .prose [id]')
+    );
+
+    const setActive = (id: string) => {
+      for (const link of links) {
+        if (link.hash.slice(1) === id) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      }
+    };
+
+    // 点击后立刻高亮，不等平滑滚动结束
     for (const link of links) {
-      if (link.hash.slice(1) === id) link.setAttribute('aria-current', 'location');
-      else link.removeAttribute('aria-current');
+      link.addEventListener('click', () => setActive(link.hash.slice(1)));
     }
+
+    const inBand = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) inBand.add(entry.target.id);
+          else inBand.delete(entry.target.id);
+        }
+        const current = targets.find((el) => inBand.has(el.id));
+        // 都不在带内时保留上一次结果，避免高亮闪断
+        if (current) setActive(current.id);
+      },
+      { rootMargin: '-20% 0px -60% 0px' }
+    );
+
+    for (const target of targets) observer.observe(target);
+    cleanup = () => observer.disconnect();
   };
 
-  // 点击后立刻高亮，不等平滑滚动结束
-  for (const link of links) {
-    link.addEventListener('click', () => setActive(link.hash.slice(1)));
-  }
-
-  const inBand = new Set<string>();
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) inBand.add(entry.target.id);
-        else inBand.delete(entry.target.id);
-      }
-      const current = targets.find((el) => inBand.has(el.id));
-      // 都不在带内时保留上一次结果，避免高亮闪断
-      if (current) setActive(current.id);
-    },
-    { rootMargin: '-20% 0px -60% 0px' }
-  );
-
-  for (const target of targets) observer.observe(target);
+  init();
+  document.addEventListener('astro:page-load', init);
 </script>

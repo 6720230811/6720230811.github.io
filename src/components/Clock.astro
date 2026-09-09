@@ -18,12 +18,14 @@ const { locale } = Astro.props;
 const t = useTranslations(locale);
 ---
 
-{/* hidden 由脚本在拿到时区后移除；CSS 里另有 .clock[hidden] 兜底 */}
+{/* hidden 由脚本在拿到时区后移除；CSS 里另有 .clock[hidden] 兜底。
+    transition:persist：换页时整块留着，定位只做一次、秒表也不断。 */}
 <div
   class="clock"
   data-lang={locale}
   data-label-fallback={t('clock.labelLocal')}
   title={t('clock.label')}
+  transition:persist="clock"
   hidden
 >
   <Icon name="location" />

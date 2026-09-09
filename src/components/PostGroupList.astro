@@ -1,0 +1,44 @@
+---
+import type { Post, PostGroup } from '../lib/posts';
+import { formatShortDate, postHref } from '../lib/posts';
+import type { Locale } from '../i18n/ui';
+
+interface Props {
+  groups: readonly PostGroup[];
+  locale: Locale;
+  /** 组名前缀：标签视图用 '#' */
+  prefix?: string;
+}
+
+const { groups, locale, prefix = '' } = Astro.props;
+---
+
+{
+  groups.map((group) => (
+    <div class="archive-group">
+      <h3 class="archive-year">
+        {
+          group.href ? (
+            <a href={group.href}>
+              {prefix}{group.name}
+            </a>
+          ) : (
+            <>
+              {prefix}
+              {group.name}
+            </>
+          )
+        }
+        <span class="term__count">{group.posts.length}</span>
+      </h3>
+      <ul class="archive-list">
+        {group.posts.map((post: Post) => (
+          <li>
+            <span class="archive-list__date">{formatShortDate(post.data.date, locale)}</span>
+            <a href={postHref(locale, post.slug)}>{post.data.title}</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ))
+}

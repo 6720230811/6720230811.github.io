@@ -61,121 +61,144 @@ const t = useTranslations(locale);
 */}
 <script is:inline>
   (() => {
-    const btn = document.getElementById('search-switch');
-    const panel = document.getElementById('search-panel');
-    const input = document.getElementById('search-input');
-    const status = document.getElementById('search-status');
-    const list = document.getElementById('search-results');
-    if (!btn || !panel || !input || !status || !list) return;
-
-    const str = (name) => panel.getAttribute(name) || '';
-    const isProd = str('data-prod') === 'true';
+    // 索引只加载一次，换页后仍然复用
     let loading;
+    // 上一次绑定的 document 级监听：换页前撤掉，否则会越叠越多
+    let cleanup = () => {};
 
-    const load = () => {
-      // 必须是绝对路径：页面在 /blog/ 之类的子路径下，相对路径会被解析到
-      // /blog/pagefind/pagefind.js 而 404。
-      // 另外 BASE_URL 在无子路径时是 '/'，不去掉结尾斜杠会拼成 '//pagefind/…'，
-      // 浏览器会当成协议相对 URL、去解析 host 为 pagefind 的地址。
-      const base = str('data-base').replace(/\/$/, '');
-      loading =
-        loading ||
-        (async () => {
-          const mod = await import(base + '/pagefind/pagefind.js');
-          await mod.init();
-          return mod;
-        })();
-      return loading;
-    };
+    const init = () => {
+      cleanup();
+      const ac = new AbortController();
 
-    const setOpen = (open) => {
-      panel.classList.toggle('float-panel--closed', !open);
-      btn.setAttribute('aria-expanded', String(open));
-      if (open) input.focus();
-      else input.value = '';
-    };
+      const btn = document.getElementById('search-switch');
+      const panel = document.getElementById('search-panel');
+      const input = document.getElementById('search-input');
+      const status = document.getElementById('search-status');
+      const list = document.getElementById('search-results');
+      if (!btn || !panel || !input || !status || !list) return;
 
-    btn.addEventListener('click', () => {
-      const willOpen = panel.classList.contains('float-panel--closed');
-      setOpen(willOpen);
-      // 面板一打开就预热索引，输入时不必再等
-      if (willOpen) load().catch(() => {});
-    });
+      const str = (name) => panel.getAttribute(name) || '';
+      const isProd = str('data-prod') === 'true';
 
-    // Esc 关闭；点击面板之外也关闭
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !panel.classList.contains('float-panel--closed')) {
-        setOpen(false);
-        btn.focus();
-      }
-    });
+      const load = () => {
+        // 必须是绝对路径：页面在 /blog/ 之类的子路径下，相对路径会被解析到
+        // /blog/pagefind/pagefind.js 而 404。
+        // 另外 BASE_URL 在无子路径时是 '/'，不去掉结尾斜杠会拼成 '//pagefind/…'，
+        // 浏览器会当成协议相对 URL、去解析 host 为 pagefind 的地址。
+        const base = str('data-base').replace(/\/$/, '');
+        loading =
+          loading ||
+          (async () => {
+            const mod = await import(base + '/pagefind/pagefind.js');
+            await mod.init();
+            return mod;
+          })();
+        return loading;
+      };
 
-    document.addEventListener('click', (e) => {
-      if (panel.classList.contains('float-panel--closed')) return;
-      if (!panel.contains(e.target) && !btn.contains(e.target)) setOpen(false);
-    });
+      const setOpen = (open) => {
+        panel.classList.toggle('float-panel--closed', !open);
+        btn.setAttribute('aria-expanded', String(open));
+        if (open) input.focus();
+        else input.value = '';
+      };
 
-    const render = (items) => {
-      list.textContent = '';
-      for (const item of items) {
-        const li = document.createElement('li');
-        const a = document.createElement('a');
-        a.className = 'search-result';
-        a.href = item.url;
+      btn.addEventListener('click', () => {
+        const willOpen = panel.classList.contains('float-panel--closed');
+        setOpen(willOpen);
+        // 面板一打开就预热索引，输入时不必再等
+        if (willOpen) load().catch(() => {});
+      });
 
-        const title = document.createElement('div');
-        title.className = 'search-result__title';
-        title.textContent = item.title;
+      // Esc 关闭；点击面板之外也关闭。
+      // 这两个挂在 document 上，而 document 在换页后还是同一个，所以要用 signal 撤掉旧的
+      document.addEventListener(
+        'keydown',
+        (e) => {
+          if (e.key === 'Escape' && !panel.classList.contains('float-panel--closed')) {
+            setOpen(false);
+            btn.focus();
+          }
+        },
+        { signal: ac.signal }
+      );
 
-        const excerpt = document.createElement('div');
-        excerpt.className = 'search-result__excerpt';
-        // pagefind 返回的摘要已转义，只含用于高亮的 <mark>
-        excerpt.innerHTML = item.excerpt;
+      document.addEventListener(
+        'click',
+        (e) => {
+          if (panel.classList.contains('float-panel--closed')) return;
+          if (!panel.contains(e.target) && !btn.contains(e.target)) setOpen(false);
+        },
+        { signal: ac.signal }
+      );
 
-        a.append(title, excerpt);
-        li.append(a);
-        list.append(li);
-      }
-    };
+      const render = (items) => {
+        list.textContent = '';
+        for (const item of items) {
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.className = 'search-result';
+          a.href = item.url;
 
-    const search = async (term) => {
-      const q = term.trim();
-      if (!q) {
-        status.textContent = str('data-hint');
-        render([]);
-        return;
-      }
+          const title = document.createElement('div');
+          title.className = 'search-result__title';
+          title.textContent = item.title;
 
-      status.textContent = '';
-      try {
-        const pf = await load();
-        // 不传 filters：pagefind 已按 <html lang> 选中对应语言的索引，
-        // 再按 lang 过滤只会与索引语言冲突、反而搜不到东西
-        const res = await pf.debouncedSearch(q, {}, 220);
-        // 被后续输入取代时返回 null，交给最后一次请求
-        if (!res) return;
-        if (res.results.length === 0) {
-          status.textContent = str('data-empty');
+          const excerpt = document.createElement('div');
+          excerpt.className = 'search-result__excerpt';
+          // pagefind 返回的摘要已转义，只含用于高亮的 <mark>
+          excerpt.innerHTML = item.excerpt;
+
+          a.append(title, excerpt);
+          li.append(a);
+          list.append(li);
+        }
+      };
+
+      const search = async (term) => {
+        const q = term.trim();
+        if (!q) {
+          status.textContent = str('data-hint');
           render([]);
           return;
         }
-        status.textContent = str('data-results').replace('{n}', String(res.results.length));
-        const items = await Promise.all(res.results.map((r) => r.data()));
-        render(
-          items.map((d) => ({
-            url: d.url,
-            title: d.meta.title || d.url,
-            excerpt: d.excerpt,
-          }))
-        );
-      } catch (e) {
-        // 索引缺失（例如 dev 下 /pagefind/ 404）时允许重试，清掉缓存的 Promise
-        loading = undefined;
-        status.textContent = isProd ? str('data-failed') : str('data-dev-only');
-        render([]);
-      }
+
+        status.textContent = '';
+        try {
+          const pf = await load();
+          // 不传 filters：pagefind 已按 <html lang> 选中对应语言的索引，
+          // 再按 lang 过滤只会与索引语言冲突、反而搜不到东西
+          const res = await pf.debouncedSearch(q, {}, 220);
+          // 被后续输入取代时返回 null，交给最后一次请求
+          if (!res) return;
+          if (res.results.length === 0) {
+            status.textContent = str('data-empty');
+            render([]);
+            return;
+          }
+          status.textContent = str('data-results').replace('{n}', String(res.results.length));
+          const items = await Promise.all(res.results.map((r) => r.data()));
+          render(
+            items.map((d) => ({
+              url: d.url,
+              title: d.meta.title || d.url,
+              excerpt: d.excerpt,
+            }))
+          );
+        } catch (e) {
+          // 索引缺失（例如 dev 下 /pagefind/ 404）时允许重试，清掉缓存的 Promise
+          loading = undefined;
+          status.textContent = isProd ? str('data-failed') : str('data-dev-only');
+          render([]);
+        }
+      };
+
+      input.addEventListener('input', () => search(input.value));
+
+      cleanup = () => ac.abort();
     };
 
-    input.addEventListener('input', () => search(input.value));
+    init();
+    document.addEventListener('astro:page-load', init);
   })();
 </script>

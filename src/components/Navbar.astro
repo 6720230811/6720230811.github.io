@@ -85,21 +85,27 @@ const isCurrent = (path: string) => current === path;
 </header>
 
 <script>
-  // 窄屏导航菜单的开合
-  const menuBtn = document.getElementById('nav-menu-switch');
-  const menuPanel = document.getElementById('nav-menu-panel');
+  // 窄屏导航菜单的开合。
+  // 换页后 DOM 是新的，所以每次 astro:page-load 都要重新按 id 绑一次
+  const initMenu = () => {
+    const menuBtn = document.getElementById('nav-menu-switch');
+    const menuPanel = document.getElementById('nav-menu-panel');
 
-  const setMenu = (open: boolean) => {
-    menuPanel?.classList.toggle('float-panel--closed', !open);
-    menuBtn?.setAttribute('aria-expanded', String(open));
+    const setMenu = (open: boolean) => {
+      menuPanel?.classList.toggle('float-panel--closed', !open);
+      menuBtn?.setAttribute('aria-expanded', String(open));
+    };
+
+    menuBtn?.addEventListener('click', () => {
+      setMenu(menuPanel?.classList.contains('float-panel--closed') ?? false);
+    });
+
+    // 选中某一项后收起菜单
+    for (const link of menuPanel?.querySelectorAll('a') ?? []) {
+      link.addEventListener('click', () => setMenu(false));
+    }
   };
 
-  menuBtn?.addEventListener('click', () => {
-    setMenu(menuPanel?.classList.contains('float-panel--closed') ?? false);
-  });
-
-  // 选中某一项后收起菜单
-  for (const link of menuPanel?.querySelectorAll('a') ?? []) {
-    link.addEventListener('click', () => setMenu(false));
-  }
+  initMenu();
+  document.addEventListener('astro:page-load', initMenu);
 </script>

@@ -6,14 +6,16 @@ interface Props {
   titleId?: string;
   /** 可选的 emoji / 图标字符，如 '📝' */
   icon?: string;
+  /** 图标的 id：切换浏览方式时标题和图标要一起换 */
+  iconId?: string;
 }
 
-const { id, title, titleId, icon } = Astro.props;
+const { id, title, titleId, icon, iconId } = Astro.props;
 ---
 
 <section class="section" id={id}>
   <h2 class="section__title">
-    {icon && <span class="icon">{icon}</span>}
+    {icon && <span class="icon" id={iconId}>{icon}</span>}
     <span id={titleId}>{title}</span>
   </h2>
   <slot />

@@ -1,37 +1,21 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Section from '../../components/Section.astro';
+import PostPanels from '../../components/PostPanels.astro';
+import { browseTab } from '../../lib/browse';
 import { profile } from '../../data/profile';
-import { formatShortDate, groupByYear, postHref, postsOf } from '../../lib/posts';
 import { toLocale, useTranslations } from '../../i18n/ui';
 
 const locale = toLocale('en');
 const t = useTranslations(locale);
 const p = profile[locale];
-const posts = await postsOf(locale);
-const groups = groupByYear(posts);
+const tab = browseTab(locale, 'archive');
 
-const title = `${t('archive.title')} · ${p.name}`;
+const title = `${tab.label} · ${p.name}`;
 ---
 
 <BaseLayout profile={p} locale={locale} title={title} description={t('archive.title')}>
-  <Section title={t('archive.title')} icon="🗂">
-    <p class="list-summary">{posts.length} {t('archive.count')}</p>
-
-    {
-      groups.map((group) => (
-        <div class="archive-group">
-          <h3 class="archive-year">{group.year}</h3>
-          <ul class="archive-list">
-            {group.posts.map((post) => (
-              <li>
-                <span class="archive-list__date">{formatShortDate(post.data.date, locale)}</span>
-                <a href={postHref(locale, post.slug)}>{post.data.title}</a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))
-    }
+  <Section title={tab.label} icon={tab.icon} titleId="browse-title" iconId="browse-icon">
+    <PostPanels locale={locale} active="archive" titleId="browse-title" iconId="browse-icon" />
   </Section>
 </BaseLayout>
