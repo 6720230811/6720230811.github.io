@@ -2,7 +2,6 @@ import { $, setStatus, setNotice, setFieldError, run, debounce } from './dom';
 import { repo, paths } from '../../data/admin';
 import {
   readFile,
-  listDir,
   saveFile,
   actionsUrl,
   GhError,
@@ -15,6 +14,7 @@ import { updatePreview, autoHeight, watchTheme, type PreviewView } from './previ
 import { renderStats } from './stats';
 import { initMdToolbar, initTabIndent, initSaveShortcut } from './toolbar';
 import { initImageDrop } from './upload';
+import { initPostList } from './postlist';
 import { validatePost, showIssues } from './validate';
 import { requireToken } from './token';
 import { resolveCoverFields } from '../cover';
@@ -26,7 +26,6 @@ import type { Locale } from '../../i18n/ui';
  */
 
 const postLang = $<HTMLSelectElement>('post-lang');
-const postSelect = $<HTMLSelectElement>('post-file');
 const slugInput = $<HTMLInputElement>('post-slug');
 const titleInput = $<HTMLInputElement>('post-title');
 const descInput = $<HTMLInputElement>('post-desc');
@@ -48,6 +47,9 @@ const knownSlugs = new Set<string>();
 
 /** 用户动过表单才做实时校验，否则刚载入一篇文章就一片红 */
 let touched = false;
+
+/** 左边的文章列表，initPost 里建好 */
+let list: ReturnType<typeof initPostList> | null = null;
 
 const draftKey = () => `post:${postLang.value}/${currentSlug || '__new__'}`;
 
@@ -127,20 +129,11 @@ function resetPost(): void {
 
 export async function refreshPostList(): Promise<void> {
   const token = requireToken();
-  if (!token) return;
+  if (!token || !list) return;
 
-  const entries = await listDir(repo as Repo, paths.postsDir(postLang.value), token);
-  const slugs = entries
-    .filter((e) => e.type === 'file' && e.name.endsWith('.md'))
-    .map((e) => e.name.replace(/\.md$/, ''))
-    .sort();
-
+  await list.rebuild(postLang.value, token);
   knownSlugs.clear();
-  for (const slug of slugs) knownSlugs.add(slug);
-
-  postSelect.textContent = '';
-  postSelect.append(new Option('＋ 新建文章', ''));
-  for (const slug of slugs) postSelect.append(new Option(slug, slug));
+  for (const slug of list.slugs()) knownSlugs.add(slug);
 }
 
 export async function loadPost(slug: string): Promise<void> {
@@ -149,6 +142,7 @@ export async function loadPost(slug: string): Promise<void> {
 
   currentSlug = slug;
   slugInput.value = slug;
+  list?.setActive(slug);
   // 已有文章的 slug 就是文件名，改了等于新建一篇，所以直接锁住
   slugInput.disabled = slug !== '';
   $('post-path').textContent = slug
@@ -192,10 +186,13 @@ async function restoreDraft(): Promise<void> {
 }
 
 export function initPost(): void {
+  // 左边列表：点一篇就载入它，点「新建」就清空
+  list = initPostList((slug) => run(() => loadPost(slug)));
+
   $('post-reload').addEventListener('click', () => {
     run(async () => {
       await refreshPostList();
-      await loadPost(postSelect.value);
+      await loadPost(currentSlug);
     });
   });
 
@@ -205,8 +202,6 @@ export function initPost(): void {
       await loadPost('');
     });
   });
-
-  postSelect.addEventListener('change', () => run(() => loadPost(postSelect.value)));
 
   // 标题变 slug：只在新建时自动填，用户改过就不再覆盖
   let slugTouched = false;
@@ -324,7 +319,7 @@ export function initPost(): void {
         'ok'
       );
       await refreshPostList();
-      postSelect.value = slug;
+      list?.setActive(slug);
     } catch (e) {
       setStatus(e instanceof GhError ? e.hint : String(e), 'error');
     }
