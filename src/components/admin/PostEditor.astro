@@ -116,6 +116,7 @@ const { id = 'post-preview' } = Astro.props;
         <div class="editor__label">Markdown 正文</div>
         <div id="post-stats" class="editor__stats"></div>
       </div>
+      <p class="editor__tip">图片可以直接拖进来，或 Ctrl/Cmd+V 粘贴：会压到长边 1600px 转 WebP 后写进 public/illustrations/</p>
 
       {/* 工具栏按钮用文字符号，不新增图标：后台的 Icon 是 24×24 描边，做成小按钮并不清楚 */}
       <div class="md-tools" role="toolbar" aria-label="Markdown 工具">

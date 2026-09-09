@@ -145,6 +145,17 @@ export async function readFile(
   }
 }
 
+/** 只取文件的 sha，不解码内容：对二进制解码毫无意义，还白费内存 */
+export async function statFile(r: Repo, path: string, token: string): Promise<string | null> {
+  try {
+    const res = await request<{ sha: string }>(fileUrl(r, path), token);
+    return res.sha ?? null;
+  } catch (e) {
+    if (e instanceof GhError && e.status === 404) return null;
+    throw e;
+  }
+}
+
 /** 列出目录下的文件名（只取 .md） */
 export async function listDir(r: Repo, path: string, token: string): Promise<DirectoryEntry[]> {
   try {
@@ -156,15 +167,26 @@ export async function listDir(r: Repo, path: string, token: string): Promise<Dir
   }
 }
 
-const put = (r: Repo, path: string, token: string, text: string, message: string, sha?: string) =>
+/** 二进制转 base64：同 encodeBase64 的分块写法，避免 String.fromCharCode 参数过多抛 RangeError */
+export function encodeBase64Bytes(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+// put 收「已经编好的 base64」，文本与二进制共用一条写入路径
+const put = (r: Repo, path: string, token: string, b64: string, message: string, sha?: string) =>
   request(fileUrl(r, path), token, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message,
-      content: encodeBase64(text),
+      content: b64,
       branch: r.branch,
-      // 新建时必须不带 sha，带了反而会 422
+      // 新建时必须不带 sha，带了反而会 422；覆盖时必须带 sha，否则也是 422
       ...(sha ? { sha } : {}),
     }),
   });
@@ -191,12 +213,41 @@ export async function saveFile(
   return enqueue(async () => {
     const current = await readFile(r, path, token);
     try {
-      await put(r, path, token, text, message, current?.sha);
+      await put(r, path, token, encodeBase64(text), message, current?.sha);
     } catch (e) {
       if (e instanceof GhError && e.status === 409) {
         const fresh = await readFile(r, path, token);
         if (fresh) {
-          await put(r, path, token, text, message, fresh.sha);
+          await put(r, path, token, encodeBase64(text), message, fresh.sha);
+          return;
+        }
+      }
+      throw e;
+    }
+  });
+}
+
+/**
+ * 写二进制文件（配图）。与 saveFile 同一套：串行队列 + 409 重试。
+ * 权限还是 Contents: Read and write，不用额外申请。
+ */
+export async function saveBinaryFile(
+  r: Repo,
+  path: string,
+  token: string,
+  bytes: Uint8Array,
+  message: string
+): Promise<void> {
+  return enqueue(async () => {
+    const sha = await statFile(r, path, token);
+    const b64 = encodeBase64Bytes(bytes);
+    try {
+      await put(r, path, token, b64, message, sha ?? undefined);
+    } catch (e) {
+      if (e instanceof GhError && e.status === 409) {
+        const fresh = await statFile(r, path, token);
+        if (fresh) {
+          await put(r, path, token, b64, message, fresh);
           return;
         }
       }

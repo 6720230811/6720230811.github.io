@@ -14,6 +14,7 @@ import { saveDraft, loadDraft, clearDraft, isFallback } from './drafts';
 import { updatePreview, autoHeight, watchTheme, type PreviewView } from './preview';
 import { renderStats } from './stats';
 import { initMdToolbar, initTabIndent, initSaveShortcut } from './toolbar';
+import { initImageDrop } from './upload';
 import { validatePost, showIssues } from './validate';
 import { requireToken } from './token';
 import { resolveCoverFields } from '../cover';
@@ -270,6 +271,8 @@ export function initPost(): void {
 
   initMdToolbar(document, bodyInput);
   initTabIndent(bodyInput);
+  // 配图：拖进正文或粘贴即上传，文件名用当前 slug 当前缀
+  initImageDrop(bodyInput, () => slugInput.value.trim() || toSlug(titleInput.value) || 'image');
 
   // 视图切换：正文 / 列表卡片 / 文章页
   const viewBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-switch__btn'));

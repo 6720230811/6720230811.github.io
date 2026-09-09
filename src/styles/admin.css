@@ -450,6 +450,22 @@ select.input--sm {
   box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.12);
 }
 
+/* 拖入图片时给个落点提示 */
+.editor__area.is-dropping {
+  outline: 2px dashed var(--c-accent);
+  outline-offset: -4px;
+  background: var(--c-accent-soft);
+}
+
+.editor__tip {
+  margin: 0;
+  padding: 0.35rem 0.85rem;
+  border-bottom: 1px solid var(--c-border-soft);
+  background: var(--c-card);
+  font-size: 0.74rem;
+  color: var(--c-text-faint);
+}
+
 /* Markdown 工具栏：贴在正文编辑框上方，一行小方按钮 */
 .md-tools {
   display: flex;

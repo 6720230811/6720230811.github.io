@@ -16,4 +16,8 @@ export const paths = {
   post: (lang: string, slug: string) => `src/content/posts/${lang}/${slug}.md`,
   profile: (lang: string) => `src/data/profile.${lang}.json`,
   friends: () => 'src/data/friends.json',
+  // 静态目录下的配图目录：public/ 里的东西按原样发布，
+  // 所以 public/illustrations/x.png ↔ /illustrations/x.png
+  illustrationsDir: () => 'public/illustrations',
+  illustration: (name: string) => `public/illustrations/${name}`,
 };
