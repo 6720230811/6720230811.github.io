@@ -4,6 +4,7 @@ description: Content collection ids, dynamic routes under i18n, and light/dark c
 date: 2026-09-01
 category: Tech
 tags: [Astro, frontend, meta]
+cover: /illustrations/blog-astro-notes.webp
 ---
 
 Turning a single-page homepage into a blog, the layout was the easy part. These three things were not.

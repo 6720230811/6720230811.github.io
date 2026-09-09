@@ -4,6 +4,7 @@ description: This site went from a single résumé page to a blog plus an about 
 date: 2026-08-28
 category: Notes
 tags: [notes, meta]
+cover: /illustrations/blog-hello-world.webp
 ---
 
 This site used to be a single page: bio, publications, skills, projects, and education stacked vertically, navigated by anchor links. As it grew, one page stopped being enough for the things I actually want to *write* — paper notes, project postmortems, that sort of thing.
