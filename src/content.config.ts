@@ -20,6 +20,8 @@ const posts = defineCollection({
     updated: z.coerce.date().optional(),
     category: z.string(),
     tags: z.array(z.string()).default([]),
+    // 封面/插画：文章页右侧一栏展示。留空则退回正文第一张图，都没有就不显示这一栏
+    cover: z.string().optional(),
     // 草稿：生产构建不输出，dev 下仍可见
     draft: z.boolean().default(false),
   }),

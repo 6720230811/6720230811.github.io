@@ -5,6 +5,7 @@ import type { Post } from '../lib/posts';
 import { categoryHref, formatDate, postHref, readingMinutes, tagHref } from '../lib/posts';
 import { useTranslations, type Locale } from '../i18n/ui';
 import type { Profile } from '../data/profile';
+import { liftedImageCss, resolveCover } from '../lib/cover';
 
 interface Props {
   entry: Post;
@@ -20,6 +21,10 @@ const t = useTranslations(locale);
 const { title, description, date, updated, category, tags } = entry.data;
 
 const pageTitle = `${title} · ${profile.name}`;
+
+// 有配图才在右侧开一栏；图来自正文时，正文里那张要隐掉，避免同一张图出现两次
+const cover = resolveCover(entry);
+const hideLiftedCss = liftedImageCss(cover);
 ---
 
 <BaseLayout
@@ -31,6 +36,10 @@ const pageTitle = `${title} · ${profile.name}`;
 >
   {/* data-pagefind-body：只有文章页带这个标记，pagefind 便只索引文章 */}
   <article class="section post" data-pagefind-body>
+    {/* 图是从正文里提出来的：正文那张隐掉，只在右栏出现一次。
+        选择器带 src，所以是逐页生成的一段 <style>，不走 Astro 的样式打包。 */}
+    {hideLiftedCss && <Fragment set:html={`<style>${hideLiftedCss}</style>`} />}
+
     <header class="post__head">
       <h1 class="post__title">{title}</h1>
       <div class="post__meta">
@@ -58,8 +67,18 @@ const pageTitle = `${title} · ${profile.name}`;
       }
     </header>
 
-    <div class="prose">
-      <slot />
+    <div class:list={['post__body', { 'post__body--split': !!cover }]}>
+      <div class="prose">
+        <slot />
+      </div>
+
+      {cover && (
+        <aside class="post__aside">
+          <figure class="post__figure">
+            <img src={cover.src} alt={cover.alt} loading="lazy" decoding="async" />
+          </figure>
+        </aside>
+      )}
     </div>
 
     {

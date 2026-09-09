@@ -12,6 +12,8 @@ export interface PostFrontmatter {
   updated?: string;
   category: string;
   tags: string[];
+  /** 封面图：/illustrations/x.png 这样的站内绝对路径，或完整外链；留空则用正文第一张图 */
+  cover?: string;
   draft: boolean;
 }
 
@@ -54,6 +56,7 @@ export function buildPostFile(post: PostFile): string {
   if (data.updated) lines.push(`updated: ${data.updated}`);
   lines.push(`category: ${quote(data.category)}`);
   lines.push(`tags: [${data.tags.map((t) => quote(t)).join(', ')}]`);
+  if (data.cover) lines.push(`cover: ${quote(data.cover)}`);
   if (data.draft) lines.push('draft: true');
   lines.push('---', '');
 
@@ -97,6 +100,7 @@ export function parsePostFile(text: string): PostFile {
       updated: parsed.updated ? unquote(parsed.updated) : undefined,
       category: unquote(parsed.category ?? ''),
       tags: list(parsed.tags),
+      cover: parsed.cover ? unquote(parsed.cover) : undefined,
       draft: parsed.draft === 'true',
     },
     body: body ?? '',

@@ -122,6 +122,7 @@ const descInput = $<HTMLInputElement>('post-desc');
 const dateInput = $<HTMLInputElement>('post-date');
 const categoryInput = $<HTMLInputElement>('post-category');
 const tagsInput = $<HTMLInputElement>('post-tags');
+const coverInput = $<HTMLInputElement>('post-cover');
 const draftInput = $<HTMLInputElement>('post-draft');
 const bodyInput = $<HTMLTextAreaElement>('post-body');
 const previewFrame = $<HTMLIFrameElement>('post-preview');
@@ -146,6 +147,8 @@ function collectPost(): PostFrontmatter {
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean),
+    // 留空就不写进 frontmatter：文章页会自动退回正文第一张图
+    cover: coverInput.value.trim() || undefined,
     draft: draftInput.checked,
   };
 }
@@ -156,6 +159,7 @@ function fillPost(data: PostFrontmatter, body: string): void {
   dateInput.value = data.date;
   categoryInput.value = data.category;
   tagsInput.value = data.tags.join(', ');
+  coverInput.value = data.cover ?? '';
   draftInput.checked = data.draft;
   bodyInput.value = body;
   updatePreview(previewFrame, body);

@@ -76,6 +76,20 @@ const { id = 'post-preview' } = Astro.props;
       <input id="post-tags" class="input" type="text" spellcheck="false" />
     </label>
 
+    <label class="field">
+      <span class="field__label">
+        <code>cover</code>
+        <span class="field__hint">封面图，站内绝对路径或外链；留空则用正文第一张图</span>
+      </span>
+      <input
+        id="post-cover"
+        class="input"
+        type="text"
+        spellcheck="false"
+        placeholder="/illustrations/xxx.png"
+      />
+    </label>
+
     <label class="field field--check">
       <input id="post-draft" type="checkbox" />
       <span><code>draft</code> 草稿（线上不显示）</span>
