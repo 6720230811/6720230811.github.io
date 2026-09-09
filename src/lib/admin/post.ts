@@ -15,6 +15,7 @@ import { renderStats } from './stats';
 import { initMdToolbar, initTabIndent, initSaveShortcut } from './toolbar';
 import { initImageDrop } from './upload';
 import { initPostList } from './postlist';
+import { markDirty, markClean } from './unsaved';
 import { validatePost, showIssues } from './validate';
 import { requireToken } from './token';
 import { resolveCoverFields } from '../cover';
@@ -111,6 +112,7 @@ function renderNow(): void {
 
 function fillPost(data: PostFrontmatter, body: string): void {
   touched = false;
+  markClean();
   showPostError('');
   titleInput.value = data.title;
   descInput.value = data.description;
@@ -254,6 +256,7 @@ export function initPost(): void {
 
   const onChange = () => {
     touched = true;
+    markDirty();
     schedulePreview();
     scheduleDraft();
     scheduleValidate();
@@ -310,9 +313,10 @@ export function initPost(): void {
         text,
         `${currentSlug ? 'update' : 'add'} post: ${data.title}`
       );
-      await clearDraft(draftKey());
-      setNotice('');
-      currentSlug = slug;
+        await clearDraft(draftKey());
+        setNotice('');
+        markClean();
+        currentSlug = slug;
       slugInput.disabled = true;
       setStatus(
         `已发布 ${slug}。Actions 大约 1 分钟后上线，可以去 ${actionsUrl(repo as Repo)} 看进度。`,
