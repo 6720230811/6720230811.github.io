@@ -8,12 +8,13 @@ import {
   GhError,
   type Repo,
 } from './github';
-import { buildPostFile, parsePostFile, isValidSlug, today, toSlug } from './serialize';
+import { buildPostFile, parsePostFile, today, toSlug } from './serialize';
 import type { PostFrontmatter } from './serialize';
 import { saveDraft, loadDraft, clearDraft, isFallback } from './drafts';
 import { updatePreview, autoHeight, watchTheme, type PreviewView } from './preview';
 import { renderStats } from './stats';
 import { initMdToolbar, initTabIndent, initSaveShortcut } from './toolbar';
+import { validatePost, showIssues } from './validate';
 import { requireToken } from './token';
 import { resolveCoverFields } from '../cover';
 import type { Locale } from '../../i18n/ui';
@@ -40,6 +41,12 @@ const coverThumb = $<HTMLImageElement>('cover-thumb');
 const coverHint = $('cover-hint');
 
 let currentSlug = ''; // 空串表示新建
+
+/** 仓库里已有的 slug：发布前查重用（改过语言或重新载入时刷新） */
+const knownSlugs = new Set<string>();
+
+/** 用户动过表单才做实时校验，否则刚载入一篇文章就一片红 */
+let touched = false;
 
 const draftKey = () => `post:${postLang.value}/${currentSlug || '__new__'}`;
 
@@ -100,6 +107,8 @@ function renderNow(): void {
 }
 
 function fillPost(data: PostFrontmatter, body: string): void {
+  touched = false;
+  showPostError('');
   titleInput.value = data.title;
   descInput.value = data.description;
   dateInput.value = data.date;
@@ -124,6 +133,9 @@ export async function refreshPostList(): Promise<void> {
     .filter((e) => e.type === 'file' && e.name.endsWith('.md'))
     .map((e) => e.name.replace(/\.md$/, ''))
     .sort();
+
+  knownSlugs.clear();
+  for (const slug of slugs) knownSlugs.add(slug);
 
   postSelect.textContent = '';
   postSelect.append(new Option('＋ 新建文章', ''));
@@ -215,6 +227,22 @@ export function initPost(): void {
   const scheduleDraft = debounce(() => {
     void saveDraft(draftKey(), { data: collectPost(), body: bodyInput.value });
   }, 800);
+  const scheduleValidate = debounce(() => {
+    if (touched) checkNow();
+  }, 400);
+
+  /** 校验并显示在第一个出错的字段上 */
+  function checkNow(): boolean {
+    return showIssues(
+      validatePost({
+        slug: slugInput.value.trim(),
+        currentSlug,
+        data: collectPost(),
+        known: knownSlugs,
+      }),
+      showPostError
+    );
+  }
 
   const fields = [
     slugInput,
@@ -229,8 +257,10 @@ export function initPost(): void {
   ];
 
   const onChange = () => {
+    touched = true;
     schedulePreview();
     scheduleDraft();
+    scheduleValidate();
   };
 
   for (const el of fields) {
@@ -263,25 +293,15 @@ export function initPost(): void {
   });
 
   const publish = async (): Promise<void> => {
+    // 先校验：字段的问题当场指出来，比「没 token」这种环境问题更该先看到
+    touched = true;
+    if (!checkNow()) return;
+
     const token = requireToken();
     if (!token) return;
 
     const slug = currentSlug || slugInput.value.trim();
-    if (!isValidSlug(slug)) {
-      showPostError('slug 只能用小写字母、数字和连字符，例如 my-new-post。文件名必须是 ASCII。');
-      return;
-    }
     const data = collectPost();
-    if (!data.title) {
-      showPostError('title 不能为空。');
-      return;
-    }
-    if (!data.category) {
-      showPostError('category 不能为空（schema 里是必填）。');
-      return;
-    }
-    showPostError('');
-
     const text = buildPostFile({ data, body: bodyInput.value.trimEnd() });
     try {
       setStatus('正在写入仓库…', 'busy');

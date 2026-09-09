@@ -443,6 +443,13 @@ select.input--sm {
   color: var(--c-text-faint);
 }
 
+/* 校验没过的输入框：一圈红边，比只在下面写一行红字更容易找到 */
+.input--invalid,
+.input--invalid:focus {
+  border-color: #d92d20;
+  box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.12);
+}
+
 /* Markdown 工具栏：贴在正文编辑框上方，一行小方按钮 */
 .md-tools {
   display: flex;
