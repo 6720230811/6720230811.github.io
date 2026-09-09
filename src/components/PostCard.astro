@@ -19,6 +19,15 @@ const cover = resolveCover(post);
   class:list={['post-card', { 'post-card--with-cover': !!cover }]}
   href={postHref(locale, post.slug)}
 >
+  {/* 缩略图在左、文字在右：阅读顺序上先看到图，再读标题 */}
+  {
+    cover && (
+      <div class="post-card__thumb">
+        <img src={cover.src} alt="" loading="lazy" decoding="async" />
+      </div>
+    )
+  }
+
   <div class="post-card__main">
     <div class="post-card__head">
       <h3 class="post-card__title">{title}</h3>
@@ -46,13 +55,4 @@ const cover = resolveCover(post);
       <span class="post-card__time">{readingMinutes(post)} {t('post.minRead')}</span>
     </div>
   </div>
-
-  {/* 缩略图是装饰：标题就在旁边，alt 留空免得读屏重复一遍 */}
-  {
-    cover && (
-      <div class="post-card__thumb">
-        <img src={cover.src} alt="" loading="lazy" decoding="async" />
-      </div>
-    )
-  }
 </a>

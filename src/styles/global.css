@@ -1263,10 +1263,10 @@ h4 {
   text-decoration: none;
 }
 
-/* 有配图时卡片变成「文字 + 右侧缩略图」两列 */
+/* 有配图时卡片变成「缩略图 + 文字」两列 */
 .post-card--with-cover {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 5.5rem;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -1283,7 +1283,7 @@ h4 {
 
 @media (max-width: 520px) {
   .post-card--with-cover {
-    grid-template-columns: minmax(0, 1fr) 4.25rem;
+    grid-template-columns: 4.25rem minmax(0, 1fr);
     gap: 0.75rem;
   }
 }
