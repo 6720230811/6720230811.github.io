@@ -14,7 +14,8 @@ export type PubState = 'idle' | 'commit' | 'poll' | 'done' | 'fail' | 'note';
 export interface PublishPanel {
   commit: (text?: string) => void;
   poll: () => void;
-  done: (url?: string) => void;
+  /** opts.draft：草稿不会生成线上页面，这时不给直达链接（给了就是 404）也不说"已生效" */
+  done: (url?: string, opts?: { draft?: boolean }) => void;
   fail: (message: string, detail?: { steps?: string[]; logUrl?: string; retry?: () => void }) => void;
   note: (message: string) => void;
   reset: () => void;
@@ -86,9 +87,10 @@ export function createPublishPanel(): PublishPanel {
       }, 1000);
     },
 
-    done(url?: string) {
-      setState('done');
-      if (url) {
+    done(url?: string, opts?: { draft?: boolean }) {
+      setState('done', opts?.draft ? '✓ 已写入仓库（草稿：线上不生成这一页）' : undefined);
+      // 草稿没有线上地址：链接给了也只会点出一个 404
+      if (url && !opts?.draft) {
         link.href = url;
         link.hidden = false;
       }

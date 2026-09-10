@@ -146,6 +146,15 @@ function renderNow(): void {
   if (sync.isEnabled()) sync.align();
 }
 
+/**
+ * 「草稿模式」开着时，这个按钮做的不是"上线"，而是"把草稿存进仓库"。
+ * 文案跟着变——否则人点了「发布到 GitHub」就去线上找这篇，找到的是 404。
+ */
+function paintPublishLabel(): void {
+  const btn = document.getElementById('publish-btn');
+  if (btn) btn.textContent = draftInput.checked ? '存入仓库（草稿）' : '发布到 GitHub';
+}
+
 function fillPost(data: PostFrontmatter, body: string): void {
   touched = false;
   markClean();
@@ -159,6 +168,7 @@ function fillPost(data: PostFrontmatter, body: string): void {
   aliasChips?.set(data.aliases ?? []);
   coverInput.value = data.cover ?? '';
   draftInput.checked = data.draft;
+  paintPublishLabel();
   bodyInput.value = body;
   cover?.refresh();
   renderNow();
@@ -656,6 +666,9 @@ export function initPost(): void {
     el.addEventListener('change', onChange);
   }
 
+  draftInput.addEventListener('change', paintPublishLabel);
+  paintPublishLabel();
+
   // 视图切换：正文 / 列表卡片 / 文章页
   const viewBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-switch__btn'));
   for (const btn of viewBtns) {
@@ -777,8 +790,14 @@ export function initPost(): void {
       const result = await waitForBuild(commitSha);
 
       if (result.phase === 'success') {
-        panel.done(site.post(postLang.value, slug));
-        setStatus(`已发布 ${slug}，线上已生效。`, 'ok');
+        // 草稿不生成页面：别再说「线上已生效」，也别给出那个必然 404 的直达链接
+        panel.done(site.post(postLang.value, slug), { draft: data.draft });
+        setStatus(
+          data.draft
+            ? `已提交 ${slug}（草稿：线上不会生成这一页）。`
+            : `已发布 ${slug}，线上已生效。`,
+          'ok'
+        );
         return;
       }
       if (result.phase === 'failure') {
@@ -857,7 +876,14 @@ export function initPost(): void {
       const result = await waitForBuild(outcome.commit);
       if (result.phase === 'success') {
         panel.done(site.blog(postLang.value));
-        setStatus(`${summary}线上已生效。`, 'ok');
+        // 批量转草稿的效果是"从线上撤下"，转正才是"上线"：都不该笼统说成「已生效」
+        const effect =
+          action.kind === 'draft'
+            ? action.value
+              ? '已从线上撤下。'
+              : '已上线。'
+            : '线上已生效。';
+        setStatus(`${summary}${effect}`, 'ok');
         return;
       }
       if (result.phase === 'failure') {
