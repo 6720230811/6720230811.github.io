@@ -21,3 +21,14 @@ export const paths = {
   illustrationsDir: () => 'public/illustrations',
   illustration: (name: string) => `public/illustrations/${name}`,
 };
+
+/**
+ * 线上站点地址：发布成功后给「点击直达线上文章」用。
+ * 与 astro.config.mjs 里的 SITE 保持一致（那边是构建期常量，这里要跑在浏览器里）。
+ */
+export const site = {
+  url: 'https://6720230811.github.io',
+  /** 文章线上地址：中文站 /blog/<slug>，英文站 /en/blog/<slug> */
+  post: (lang: string, slug: string) => `${site.url}${lang === 'zh' ? '' : `/${lang}`}/blog/${slug}`,
+  actions: () => `https://github.com/${repo.owner}/${repo.repo}/actions`,
+};

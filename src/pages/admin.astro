@@ -1,11 +1,10 @@
 ---
 import '../styles/global.css';
 import '../styles/admin.css';
-import TokenBar from '../components/admin/TokenBar.astro';
-import PostEditor from '../components/admin/PostEditor.astro';
-import ProfileEditor from '../components/admin/ProfileEditor.astro';
-import FriendsEditor from '../components/admin/FriendsEditor.astro';
-import ThemeToggle from '../components/ThemeToggle.astro';
+import AdminSidebar from '../components/admin/AdminSidebar.astro';
+import AdminCanvas from '../components/admin/AdminCanvas.astro';
+import AdminInspector from '../components/admin/AdminInspector.astro';
+import TokenDrawer from '../components/admin/TokenDrawer.astro';
 import Icon from '../components/Icon.astro';
 
 // 后台不进导航、不进站点地图，也不要被 pagefind 索引
@@ -35,50 +34,77 @@ const base = import.meta.env.BASE_URL;
     </script>
   </head>
 
-  <body>
-    <header class="admin-top">
-      <div class="admin-top__card">
-        <div class="admin-top__brand">
-          <span class="admin-top__dot" aria-hidden="true"></span>
-          <h1>后台</h1>
-          <code class="admin-top__path">/{'admin'}</code>
-        </div>
+  <body class="admin-shell">
+    {/* 环境级问题（token 失效等）静默淡入，不占文档流 */}
+    <div id="banner" class="banner" role="alert" hidden>
+      <span class="banner__text" id="banner-text"></span>
+      <button id="banner-action" class="banner__action" type="button" hidden></button>
+    </div>
 
-        <div class="admin-top__tools">
-          <a class="admin-top__link" href={base}>
-            <Icon name="external" />
-            <span>查看站点</span>
-          </a>
-          <ThemeToggle locale="zh" />
+    <header class="topbar">
+      <div class="topbar__left">
+        <button
+          id="sidebar-toggle"
+          class="icon-btn"
+          type="button"
+          aria-expanded="true"
+          aria-controls="sidebar"
+          title="折叠 / 展开左栏"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M9 4v16" />
+          </svg>
+        </button>
+
+        <a class="brand" href={`${base}admin`}>
+          <span class="brand__mark" aria-hidden="true">A</span>
+          Blog Studio
+        </a>
+
+        <span class="topbar__sep" aria-hidden="true">/</span>
+        <span id="autosave-pill" class="autosave" data-state="idle">草稿已就绪</span>
+      </div>
+
+      <div class="topbar__center">
+        <div class="seg" role="group" aria-label="视图模式">
+          <button class="seg__btn" type="button" data-mode="write" aria-pressed="false">纯编辑</button>
+          <button class="seg__btn" type="button" data-mode="split" aria-pressed="true">双栏预览</button>
+          <button class="seg__btn" type="button" data-mode="render" aria-pressed="false">全真渲染</button>
         </div>
+      </div>
+
+      <div class="topbar__right">
+        <a class="admin-top__link" href={base} target="_blank" rel="noreferrer">
+          <Icon name="external" />
+          <span>查看线上</span>
+        </a>
+        <button
+          id="inspector-toggle"
+          class="icon-btn"
+          type="button"
+          aria-expanded="true"
+          aria-controls="inspector"
+          title="收起 / 展开右栏"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M15 4v16" />
+          </svg>
+        </button>
       </div>
     </header>
 
-    <div class="admin-wrap">
-      <TokenBar />
-
-      <p id="status" class="status" role="status" hidden></p>
-      <p id="draft-notice" class="status status--info admin-notice" hidden></p>
-
-      <nav class="tabs" aria-label="后台分区">
-        <button class="tab" type="button" data-tab="post" aria-current="page">
-          <Icon name="doc" />
-          文章
-        </button>
-        <button class="tab" type="button" data-tab="profile">
-          <Icon name="user" />
-          个人信息
-        </button>
-        <button class="tab" type="button" data-tab="friends">
-          <Icon name="link" />
-          友链
-        </button>
-      </nav>
-
-      <div class="tab-panel" data-panel="post"><PostEditor /></div>
-      <div class="tab-panel" data-panel="profile" hidden><ProfileEditor /></div>
-      <div class="tab-panel" data-panel="friends" hidden><FriendsEditor /></div>
+    <div class="workbench" data-sidebar="open" data-inspector="open" data-section="post">
+      <AdminSidebar />
+      <AdminCanvas />
+      <AdminInspector />
     </div>
+
+    <TokenDrawer />
+
+    <p id="status" class="status" role="status" hidden></p>
+    <p id="draft-notice" class="status status--info admin-notice" hidden></p>
 
     <script>
       import '../lib/admin/main';

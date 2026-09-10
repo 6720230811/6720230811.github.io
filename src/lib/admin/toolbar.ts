@@ -1,11 +1,8 @@
 /**
  * 正文编辑框的几个写作辅助：Markdown 工具栏、Tab 缩进、Cmd/Ctrl+S 发布。
  *
- * 所有改动都通过 setRangeText + 派发 input 事件完成：
+ * 所有改动都通过 replace() 完成：它插入文本后会派发 input 事件，
  * 预览、草稿、统计都挂在 input 上，不派发的话改了正文界面却没反应。
- *
- * 取舍：setRangeText 会清掉浏览器的原生 undo 栈（Ctrl+Z 回不到上一步）。
- * 保住 undo 要用已废弃的 document.execCommand('insertText')，先不引。
  */
 
 interface MdAction {
@@ -23,6 +20,7 @@ export const MD_ACTIONS: Record<string, MdAction> = {
   bold: { wrap: ['**', '**'], placeholder: '粗体' },
   italic: { wrap: ['*', '*'], placeholder: '斜体' },
   h2: { line: '## ', placeholder: '标题' },
+  h3: { line: '### ', placeholder: '标题' },
   quote: { line: '> ', placeholder: '引用' },
   ul: { line: '- ', placeholder: '列表项' },
   ol: { line: '1. ', placeholder: '列表项' },
@@ -31,7 +29,13 @@ export const MD_ACTIONS: Record<string, MdAction> = {
   image: { wrap: ['![', '](/illustrations/)'], placeholder: 'alt' },
 };
 
-/** 统一出口：改完派发 input，让预览/草稿/统计都知道内容变了 */
+/**
+ * 统一出口：改完派发 input，让预览/草稿/统计都知道内容变了。
+ *
+ * 走 execCommand('insertText') 而不是 setRangeText：后者会清空浏览器原生的
+ * undo 栈，Ctrl/Cmd+Z 就撤不回上一步了。insertText 虽然已废弃，
+ * 但目前所有浏览器都支持，失败时再退回 setRangeText。
+ */
 function replace(
   ta: HTMLTextAreaElement,
   start: number,
@@ -41,7 +45,16 @@ function replace(
   selEnd: number
 ): void {
   ta.focus();
-  ta.setRangeText(text, start, end, 'end');
+  ta.setSelectionRange(start, end);
+
+  let inserted = false;
+  try {
+    inserted = document.execCommand('insertText', false, text);
+  } catch {
+    inserted = false;
+  }
+  if (!inserted) ta.setRangeText(text, start, end, 'end');
+
   ta.setSelectionRange(selStart, selEnd);
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
@@ -94,6 +107,16 @@ export function insertAtCaret(ta: HTMLTextAreaElement, text: string): void {
   const start = ta.selectionStart;
   const end = ta.selectionEnd;
   replace(ta, start, end, text, start + text.length, start + text.length);
+}
+
+/** 把正文里第一次出现的 from 换成 to：图片上传完成后替换占位符用 */
+export function replaceOnce(ta: HTMLTextAreaElement, from: string, to: string): boolean {
+  const at = ta.value.indexOf(from);
+  if (at < 0) return false;
+  const keepStart = ta.selectionStart;
+  const keepEnd = ta.selectionEnd;
+  replace(ta, at, at + from.length, to, keepStart, keepEnd);
+  return true;
 }
 
 export function initMdToolbar(root: ParentNode, ta: HTMLTextAreaElement): void {

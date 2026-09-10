@@ -1,4 +1,3 @@
-import { marked } from 'marked';
 import { resolveCoverFields, liftedImageCss } from '../cover';
 import { countReading, formatDate, parseIsoDate } from '../format';
 import type { Locale } from '../../i18n/ui';
@@ -23,6 +22,8 @@ export interface PreviewState {
   view: PreviewView;
   data: PostFrontmatter;
   body: string;
+  /** 正文渲染结果（带 data-line 行号，同步滚动用）。由调用方算好传进来 */
+  bodyHtml: string;
   locale: Locale;
 }
 
@@ -39,9 +40,7 @@ function e(value: string): string {
   return value.replace(/[&<>"']/g, (c) => ESC[c]);
 }
 
-const md = (source: string) => marked.parse(source, { async: false }) as string;
-
-const EMPTY = '<p class="admin-preview__empty">正文还是空的。</p>';
+export const EMPTY_BODY = '<p class="admin-preview__empty">正文还是空的。</p>';
 
 function minRead(locale: Locale, minutes: number): string {
   return locale === 'zh' ? `${minutes} 分钟阅读` : `${minutes} min read`;
@@ -60,8 +59,7 @@ function srcOf(src: string): string {
 
 /** 正文：只有渲染结果，跟线上文章页的 .prose 一致 */
 export function bodyView(state: PreviewState): string {
-  const html = state.body.trim() ? md(state.body) : EMPTY;
-  return `<div class="prose">${html}</div>`;
+  return `<div class="prose">${state.bodyHtml || EMPTY_BODY}</div>`;
 }
 
 /** 列表卡片：照抄 PostCard.astro */
@@ -96,7 +94,6 @@ export function headView(state: PreviewState): string {
   const cover = resolveCoverFields(state.data.cover, state.body);
   // 封面是从正文里提出来的话，正文那张要藏掉，否则同一张图出现两次
   const hideLifted = cover?.lifted ? `<style>${liftedImageCss(cover)}</style>` : '';
-  const body = state.body.trim() ? md(state.body) : EMPTY;
 
   return `<article class="section post">${hideLifted}
   <header class="post__head">
@@ -113,7 +110,7 @@ export function headView(state: PreviewState): string {
     }
   </header>
   <div class="post__body${cover ? ' post__body--split' : ''}">
-    <div class="prose">${body}</div>
+    <div class="prose">${state.bodyHtml || EMPTY_BODY}</div>
     ${
       cover
         ? `<aside class="post__aside"><figure class="post__figure"><img src="${e(srcOf(cover.src))}" alt="${e(cover.alt)}" /></figure></aside>`

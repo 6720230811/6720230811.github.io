@@ -23,6 +23,8 @@ export interface ValidateInput {
   data: PostFrontmatter;
   /** 仓库里已有的 slug，用来查重 */
   known: ReadonlySet<string>;
+  /** 已经在 slug 旁确认过「覆盖同名文件」 */
+  overwrite?: boolean;
 }
 
 export function validatePost(input: ValidateInput): Issue[] {
@@ -38,7 +40,7 @@ export function validatePost(input: ValidateInput): Issue[] {
         field: 'post-slug',
         message: 'slug 只能用小写字母、数字和连字符，例如 my-new-post。文件名必须是 ASCII。',
       });
-    } else if (known.has(slug)) {
+    } else if (known.has(slug) && !input.overwrite) {
       issues.push({
         field: 'post-slug',
         message: `已经有一篇叫 ${slug} 的文章了，换一个名字，或者从左边列表里打开它。`,

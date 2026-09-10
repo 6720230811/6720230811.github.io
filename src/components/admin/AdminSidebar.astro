@@ -1,0 +1,82 @@
+---
+import Icon from '../Icon.astro';
+import ThemeToggle from '../ThemeToggle.astro';
+import { repo } from '../../data/admin';
+
+const base = import.meta.env.BASE_URL;
+---
+
+{/*
+  左栏：分区切换 + 筛选 + 文章列表 + 系统环境。
+  标了 data-only="post" 的块在个人信息 / 友链分区里会被整体藏掉（见 admin.css）。
+*/}
+<aside class="admin-sidebar" id="sidebar" aria-label="文章与分区">
+  <nav class="sidebar__menu">
+    <button class="sidebar__tab" type="button" data-tab="post" aria-current="page">
+      <Icon name="doc" />
+      <span>文章</span>
+      <span class="sidebar__count" id="post-count">0</span>
+    </button>
+    <button class="sidebar__tab" type="button" data-tab="profile">
+      <Icon name="user" />
+      <span>个人信息</span>
+    </button>
+    <button class="sidebar__tab" type="button" data-tab="friends">
+      <Icon name="link" />
+      <span>友链</span>
+    </button>
+  </nav>
+
+  <div class="sidebar__block" data-only="post">
+    <button id="post-new" class="btn btn--soft btn--block" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+      新建文章
+    </button>
+
+    <label class="search">
+      <Icon name="search" />
+      <input
+        id="post-filter"
+        class="search__input"
+        type="search"
+        placeholder="过滤标题 / 文件名"
+        spellcheck="false"
+      />
+    </label>
+
+    <div class="sidebar__filters">
+      <select id="filter-category" class="input input--xs" aria-label="按分类筛选"></select>
+      <select id="filter-tag" class="input input--xs" aria-label="按标签筛选"></select>
+      <select id="filter-status" class="input input--xs" aria-label="按状态筛选">
+        <option value="">全部状态</option>
+        <option value="published">已发布</option>
+        <option value="draft">草稿</option>
+      </select>
+    </div>
+  </div>
+
+  <ul id="post-items" class="sidebar__list" data-only="post"></ul>
+  <p id="post-list-meta" class="sidebar__meta" data-only="post"></p>
+
+  <footer class="sidebar__foot">
+    <button id="token-pill" class="pill" type="button" data-state="missing">
+      <span class="pill__dot" aria-hidden="true"></span>
+      <span class="pill__text" id="token-pill-text">未配置 GitHub Token</span>
+      <svg class="pill__gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.4-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+      </svg>
+    </button>
+
+    <div class="sidebar__sys">
+      <ThemeToggle locale="zh" />
+      <a class="admin-top__link" href={base} target="_blank" rel="noreferrer">
+        <Icon name="external" />
+        <span>查看线上</span>
+      </a>
+      <code class="sidebar__repo">{repo.owner}/{repo.repo}</code>
+    </div>
+  </footer>
+</aside>

@@ -1,56 +1,68 @@
 import { $, setStatus, setNotice, setFieldError, run, debounce } from './dom';
-import { repo, paths } from '../../data/admin';
-import {
-  readFile,
-  saveFile,
-  actionsUrl,
-  GhError,
-  type Repo,
-} from './github';
-import { buildPostFile, parsePostFile, today, toSlug } from './serialize';
+import { repo, paths, site } from '../../data/admin';
+import { readFile, saveFile, statFile, GhError, type Repo } from './github';
+import { buildPostFile, parsePostFile, today, toSlug, isValidSlug } from './serialize';
 import type { PostFrontmatter } from './serialize';
-import { saveDraft, loadDraft, clearDraft, isFallback } from './drafts';
-import { updatePreview, autoHeight, watchTheme, type PreviewView } from './preview';
+import { loadDraft, clearDraft, isFallback } from './drafts';
+import { updatePreview, onPreviewLoad, initPreviewLoad, watchTheme, type PreviewView } from './preview';
 import { renderStats } from './stats';
 import { initMdToolbar, initTabIndent, initSaveShortcut } from './toolbar';
 import { initImageDrop } from './upload';
-import { initPostList } from './postlist';
+import { initPostList, type PostList } from './postlist';
 import { markDirty, markClean } from './unsaved';
 import { validatePost, showIssues } from './validate';
-import { requireToken } from './token';
+import { requireToken, flagTokenProblem } from './token';
+import { initChips, rememberTags, type Chips } from './chips';
+import { quickSlug, suggestSlug } from './slugify';
+import { initCoverDrop } from './coverdrop';
+import { createAutosave } from './autosave';
+import { waitForBuild } from './actions';
+import { createPublishPanel } from './publish';
+import { Mirror } from './mirror';
+import { createSync, renderWithLines } from './sync';
+import { initBubble } from './bubble';
 import { resolveCoverFields } from '../cover';
 import type { Locale } from '../../i18n/ui';
 
 /**
- * 「文章」这一栏：载入、编辑、本地草稿、发布。
- * 只管这一栏，个人信息与友链在 profile.ts / friends.ts。
+ * 中间那一栏：标题、正文、预览，以及发布。
+ * Frontmatter 那堆字段在右侧检查器里，但取值与校验都在这里
+ * （两边是同一份状态，没必要拆成两个 store）。
  */
 
 const postLang = $<HTMLSelectElement>('post-lang');
-const slugInput = $<HTMLInputElement>('post-slug');
 const titleInput = $<HTMLInputElement>('post-title');
-const descInput = $<HTMLInputElement>('post-desc');
+const slugInput = $<HTMLInputElement>('post-slug');
+const slugLock = $<HTMLButtonElement>('slug-lock');
+const slugOverwrite = $<HTMLButtonElement>('slug-overwrite');
 const dateInput = $<HTMLInputElement>('post-date');
 const categoryInput = $<HTMLInputElement>('post-category');
-const tagsInput = $<HTMLInputElement>('post-tags');
+const tagBox = $('tag-chips');
+const tagInput = $<HTMLInputElement>('tag-input');
+const tagSuggest = $('tag-suggest');
 const coverInput = $<HTMLInputElement>('post-cover');
+const descInput = $<HTMLTextAreaElement>('post-desc');
 const draftInput = $<HTMLInputElement>('post-draft');
 const bodyInput = $<HTMLTextAreaElement>('post-body');
 const previewFrame = $<HTMLIFrameElement>('post-preview');
 const statsEl = $('post-stats');
-const coverThumb = $<HTMLImageElement>('cover-thumb');
-const coverHint = $('cover-hint');
+const editorEl = $<HTMLElement>('editor');
+const writePane = $<HTMLElement>('editor-write');
+const bubbleEl = $<HTMLElement>('md-bubble');
+
+const panel = createPublishPanel();
 
 let currentSlug = ''; // 空串表示新建
+let view: PreviewView = 'body';
+let slugLocked = true;
+let overwriteAck = false;
+let touched = false;
+let list: PostList | null = null;
+let chips: Chips | null = null;
+let cover: { refresh: () => void } | null = null;
 
 /** 仓库里已有的 slug：发布前查重用（改过语言或重新载入时刷新） */
 const knownSlugs = new Set<string>();
-
-/** 用户动过表单才做实时校验，否则刚载入一篇文章就一片红 */
-let touched = false;
-
-/** 左边的文章列表，initPost 里建好 */
-let list: ReturnType<typeof initPostList> | null = null;
 
 const draftKey = () => `post:${postLang.value}/${currentSlug || '__new__'}`;
 
@@ -64,50 +76,30 @@ function collectPost(): PostFrontmatter {
     description: descInput.value.trim(),
     date: dateInput.value || today(),
     category: categoryInput.value.trim(),
-    tags: tagsInput.value
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean),
+    tags: chips?.get() ?? [],
     // 留空就不写进 frontmatter：文章页会自动退回正文第一张图
     cover: coverInput.value.trim() || undefined,
     draft: draftInput.checked,
   };
 }
 
-const editorEl = document.querySelector<HTMLElement>('.editor');
-
-/** 当前预览视图：正文 / 列表卡片 / 文章页 */
-let view: PreviewView = 'body';
-
-/** 封面缩略图：填了地址就看一眼，免得发布后才发现图是坏的 */
-function updateCoverThumb(): void {
-  const raw = coverInput.value.trim();
-  const lifted = resolveCoverFields(undefined, bodyInput.value);
-
-  if (!raw) {
-    coverThumb.hidden = true;
-    coverThumb.removeAttribute('src');
-    // 留空时说明会退回正文第一张图，这一点不写出来的话很容易以为没配图
-    coverHint.hidden = !lifted;
-    coverHint.className = 'cover-field__hint';
-    coverHint.textContent = lifted ? `留空 → 用正文第一张图：${lifted.src}` : '';
-    return;
-  }
-
-  coverHint.hidden = true;
-  coverThumb.hidden = false;
-  coverThumb.src = raw;
-}
+// ---------------------------------------------------------------- 渲染
+const mirror = new Mirror(bodyInput, writePane);
+const sync = createSync(bodyInput, mirror, () => previewFrame.contentWindow);
+let syncOn = true;
 
 function renderNow(): void {
+  const body = bodyInput.value;
   updatePreview(previewFrame, {
     view,
     data: collectPost(),
-    body: bodyInput.value,
+    body,
+    bodyHtml: body.trim() ? renderWithLines(body) : '',
     locale: postLang.value as Locale,
   });
-  renderStats(statsEl, bodyInput.value, postLang.value as Locale);
-  updateCoverThumb();
+  renderStats(statsEl, body, postLang.value as Locale);
+  mirror.sync();
+  if (sync.isEnabled()) sync.align();
 }
 
 function fillPost(data: PostFrontmatter, body: string): void {
@@ -118,15 +110,16 @@ function fillPost(data: PostFrontmatter, body: string): void {
   descInput.value = data.description;
   dateInput.value = data.date;
   categoryInput.value = data.category;
-  tagsInput.value = data.tags.join(', ');
+  chips?.set(data.tags);
   coverInput.value = data.cover ?? '';
   draftInput.checked = data.draft;
   bodyInput.value = body;
+  cover?.refresh();
   renderNow();
 }
 
 function resetPost(): void {
-  fillPost({ title: '', description: '', date: today(), category: '', tags: [], draft: false }, '');
+  fillPost({ title: '', description: '', date: today(), category: '', tags: [], draft: true }, '');
 }
 
 export async function refreshPostList(): Promise<void> {
@@ -144,14 +137,18 @@ export async function loadPost(slug: string): Promise<void> {
 
   currentSlug = slug;
   slugInput.value = slug;
+  overwriteAck = false;
+  slugOverwrite.hidden = true;
   list?.setActive(slug);
   // 已有文章的 slug 就是文件名，改了等于新建一篇，所以直接锁住
   slugInput.disabled = slug !== '';
+  slugLock.disabled = slug !== '';
   $('post-path').textContent = slug
     ? paths.post(postLang.value, slug)
     : paths.postsDir(postLang.value);
   setNotice('');
   showPostError('');
+  panel.reset();
 
   if (!slug) {
     resetPost();
@@ -187,9 +184,111 @@ async function restoreDraft(): Promise<void> {
   setNotice(`已恢复 ${minutes} 分钟前的本地草稿，发布成功后会自动清除。`);
 }
 
+// ---------------------------------------------------------------- slug
+function paintLock(): void {
+  slugLock.setAttribute('aria-pressed', String(slugLocked));
+  slugLock.title = slugLocked ? '跟随标题自动更新（点一下解锁手改）' : '已解锁，可手动编辑';
+}
+
+/**
+ * 标题 → slug。
+ * 先同步填 ASCII 部分（拼音表是动态加载的，等它加载完再补中文那部分），
+ * 这样敲英文标题时 slug 是立刻跟着走的。
+ */
+const syncSlug = debounce(() => {
+  if (!slugLocked || currentSlug) return;
+  const title = titleInput.value;
+  const quick = quickSlug(title);
+  if (quick) slugInput.value = quick;
+
+  void suggestSlug(title).then((suggested) => {
+    // 异步回来时标题可能已经改了、或者用户已经解锁手改，这两种情况都不该覆盖
+    if (!slugLocked || currentSlug || title !== titleInput.value) return;
+    if (suggested) slugInput.value = suggested;
+  });
+}, 400);
+
+/** 失焦时预检同名文件：等 GitHub 报冲突再发现，白写的东西已经丢了 */
+async function checkConflict(): Promise<void> {
+  const slug = slugInput.value.trim();
+  overwriteAck = false;
+  slugOverwrite.hidden = true;
+
+  if (!slug || slug === currentSlug || !isValidSlug(slug)) {
+    setFieldError('slug-error', '');
+    return;
+  }
+  const token = requireToken();
+  if (!token) return;
+
+  try {
+    const exists = await statFile(repo as Repo, paths.post(postLang.value, slug), token);
+    if (exists) {
+      setFieldError('slug-error', '该文件名已被占用，覆盖会替掉原来的那篇。');
+      slugOverwrite.hidden = false;
+    } else {
+      setFieldError('slug-error', '');
+    }
+  } catch (e) {
+    // 查重只是提前预警，查不动就算了：发布时 saveFile 自己会带上 sha 处理冲突
+    if (!(e instanceof GhError && (e.status === 401 || e.status === 403))) {
+      setFieldError('slug-error', '');
+    }
+  }
+}
+
+// ---------------------------------------------------------------- 初始化
 export function initPost(): void {
-  // 左边列表：点一篇就载入它，点「新建」就清空
+  // 左侧列表：点一篇就载入它，点「新建」就清空
   list = initPostList((slug) => run(() => loadPost(slug)));
+
+  chips = initChips({
+    box: tagBox,
+    input: tagInput,
+    suggest: tagSuggest,
+    onChange: () => {
+      touched = true;
+      markDirty();
+      autosave.markDirty();
+      schedulePreview();
+    },
+  });
+
+  cover = initCoverDrop({
+    zone: $('cover-drop'),
+    file: $<HTMLInputElement>('cover-file'),
+    thumb: $<HTMLImageElement>('cover-thumb'),
+    badge: $('cover-badge'),
+    url: coverInput,
+    hint: $('cover-hint'),
+    onChange: () => {
+      touched = true;
+      markDirty();
+      autosave.markDirty();
+      schedulePreview();
+    },
+    emptyHint: () => {
+      const lifted = resolveCoverFields(undefined, bodyInput.value);
+      return lifted ? `留空 → 用正文第一张图：${lifted.src}` : '';
+    },
+  });
+
+  const autosave = createAutosave<PostDraft>({
+    key: draftKey,
+    collect: () => ({ data: collectPost(), body: bodyInput.value }),
+  });
+
+  initPreviewLoad(previewFrame);
+  onPreviewLoad(() => sync.attach());
+  initBubble(bodyInput, mirror, writePane, bubbleEl);
+  initMdToolbar(document, bodyInput);
+  initTabIndent(bodyInput);
+  // 配图：拖进正文或粘贴即上传，文件名用当前 slug 当前缀
+  initImageDrop(
+    bodyInput,
+    () => slugInput.value.trim() || toSlug(titleInput.value) || 'image',
+    writePane
+  );
 
   $('post-reload').addEventListener('click', () => {
     run(async () => {
@@ -205,15 +304,29 @@ export function initPost(): void {
     });
   });
 
-  // 标题变 slug：只在新建时自动填，用户改过就不再覆盖
-  let slugTouched = false;
+  titleInput.addEventListener('input', syncSlug);
   slugInput.addEventListener('input', () => {
-    slugTouched = true;
+    // 手改过就自动解锁：不然下一次敲标题又把人写的覆盖掉
+    if (slugLocked && !currentSlug) {
+      slugLocked = false;
+      paintLock();
+    }
   });
-  titleInput.addEventListener('input', () => {
-    if (slugTouched || currentSlug) return;
-    // 纯中文标题提不出 ASCII 字符，退化成 post-日期，用户再自己改
-    slugInput.value = toSlug(titleInput.value) || `post-${today()}`;
+  slugInput.addEventListener('blur', () => run(checkConflict));
+  slugLock.addEventListener('click', () => {
+    slugLocked = !slugLocked;
+    paintLock();
+    if (slugLocked) syncSlug();
+  });
+  $('slug-reset').addEventListener('click', () => {
+    slugLocked = true;
+    paintLock();
+    syncSlug();
+  });
+  slugOverwrite.addEventListener('click', () => {
+    overwriteAck = true;
+    setFieldError('slug-error', '已确认覆盖：发布时会替掉同名文件。');
+    slugOverwrite.hidden = true;
   });
 
   /**
@@ -222,12 +335,6 @@ export function initPost(): void {
    * input 之外也听 change：日期选择器选值、checkbox 在某些浏览器只发 change。
    */
   const schedulePreview = debounce(renderNow, 250);
-  const scheduleDraft = debounce(() => {
-    void saveDraft(draftKey(), { data: collectPost(), body: bodyInput.value });
-  }, 800);
-  const scheduleValidate = debounce(() => {
-    if (touched) checkNow();
-  }, 400);
 
   /** 校验并显示在第一个出错的字段上 */
   function checkNow(): boolean {
@@ -237,6 +344,7 @@ export function initPost(): void {
         currentSlug,
         data: collectPost(),
         known: knownSlugs,
+        overwrite: overwriteAck,
       }),
       showPostError
     );
@@ -248,7 +356,6 @@ export function initPost(): void {
     descInput,
     dateInput,
     categoryInput,
-    tagsInput,
     coverInput,
     draftInput,
     bodyInput,
@@ -257,20 +364,18 @@ export function initPost(): void {
   const onChange = () => {
     touched = true;
     markDirty();
+    autosave.markDirty();
     schedulePreview();
-    scheduleDraft();
     scheduleValidate();
   };
+  const scheduleValidate = debounce(() => {
+    if (touched) checkNow();
+  }, 400);
 
   for (const el of fields) {
     el.addEventListener('input', onChange);
     el.addEventListener('change', onChange);
   }
-
-  initMdToolbar(document, bodyInput);
-  initTabIndent(bodyInput);
-  // 配图：拖进正文或粘贴即上传，文件名用当前 slug 当前缀
-  initImageDrop(bodyInput, () => slugInput.value.trim() || toSlug(titleInput.value) || 'image');
 
   // 视图切换：正文 / 列表卡片 / 文章页
   const viewBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.view-switch__btn'));
@@ -278,20 +383,37 @@ export function initPost(): void {
     btn.addEventListener('click', () => {
       view = (btn.dataset.view ?? 'body') as PreviewView;
       for (const other of viewBtns) other.setAttribute('aria-pressed', String(other === btn));
-      if (editorEl) editorEl.dataset.view = view;
       renderNow();
     });
   }
 
+  // 布局模式：纯编辑 / 双栏预览 / 全真渲染
+  const modeBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-mode]'));
+  function setMode(mode: string): void {
+    editorEl.dataset.mode = mode;
+    for (const btn of modeBtns) btn.setAttribute('aria-pressed', String(btn.dataset.mode === mode));
+    // 只有两栏都在的时候谈得上同步滚动
+    sync.setEnabled(mode === 'split' && syncOn);
+    requestAnimationFrame(() => {
+      mirror.sync();
+      if (sync.isEnabled()) sync.align();
+    });
+  }
+  for (const btn of modeBtns) {
+    btn.addEventListener('click', () => setMode(btn.dataset.mode ?? 'split'));
+  }
+
+  const syncBtn = $<HTMLButtonElement>('sync-toggle');
+  syncBtn.addEventListener('click', () => {
+    syncOn = !syncOn;
+    syncBtn.setAttribute('aria-pressed', String(syncOn));
+    syncBtn.textContent = syncOn ? '同步滚动：开' : '同步滚动：关';
+    sync.setEnabled(syncOn && editorEl.dataset.mode === 'split');
+  });
+
   // 主题变了要重渲染：iframe 拿不到父页面的 data-theme
   watchTheme(renderNow);
-
-  // 封面缩略图在父页面，加载失败才有 onerror 可用
-  coverThumb.addEventListener('error', () => {
-    coverHint.hidden = false;
-    coverHint.className = 'field__error';
-    coverHint.textContent = '封面加载不出来：检查地址，或新上传的图要等 Actions 部署完（约 1 分钟）才在线。';
-  });
+  window.addEventListener('resize', debounce(() => mirror.sync(), 200));
 
   const publish = async (): Promise<void> => {
     // 先校验：字段的问题当场指出来，比「没 token」这种环境问题更该先看到
@@ -304,39 +426,87 @@ export function initPost(): void {
     const slug = currentSlug || slugInput.value.trim();
     const data = collectPost();
     const text = buildPostFile({ data, body: bodyInput.value.trimEnd() });
+
+    panel.busy(true);
+    panel.commit();
     try {
-      setStatus('正在写入仓库…', 'busy');
-      await saveFile(
+      const commitSha = await saveFile(
         repo as Repo,
         paths.post(postLang.value, slug),
         token,
         text,
         `${currentSlug ? 'update' : 'add'} post: ${data.title}`
       );
-        await clearDraft(draftKey());
-        setNotice('');
-        markClean();
-        currentSlug = slug;
+
+      await clearDraft(draftKey());
+      setNotice('');
+      markClean();
+      rememberTags(data.tags);
+      currentSlug = slug;
       slugInput.disabled = true;
-      setStatus(
-        `已发布 ${slug}。Actions 大约 1 分钟后上线，可以去 ${actionsUrl(repo as Repo)} 看进度。`,
-        'ok'
-      );
+      slugLock.disabled = true;
+      $('post-path').textContent = paths.post(postLang.value, slug);
       await refreshPostList();
       list?.setActive(slug);
+
+      // 内容没变时 GitHub 不产生提交，也就不会触发构建
+      if (!commitSha) {
+        panel.note('内容没有变化，没有产生新的提交。');
+        setStatus('内容没变，仓库这边没动。', 'info');
+        return;
+      }
+
+      panel.poll();
+      const result = await waitForBuild(commitSha);
+
+      if (result.phase === 'success') {
+        panel.done(site.post(postLang.value, slug));
+        setStatus(`已发布 ${slug}，线上已生效。`, 'ok');
+        return;
+      }
+      if (result.phase === 'failure') {
+        panel.fail(`构建在第 ${result.seconds} 秒失败`, {
+          steps: result.steps,
+          logUrl: result.run?.html_url,
+          retry: () => void publish(),
+        });
+        return;
+      }
+      if (result.phase === 'timeout') {
+        panel.note('构建 4 分钟还没结束，去 Actions 页面看进度。');
+        setStatus('提交成功了，构建还在排队。', 'info');
+        return;
+      }
+      panel.note('已提交，但读不到 Actions 状态（Token 缺 Actions 读权限）。');
+      setStatus('已提交；Actions 状态查不到，去 Actions 页面确认。', 'info');
     } catch (e) {
-      setStatus(e instanceof GhError ? e.hint : String(e), 'error');
+      const hint = e instanceof GhError ? e.hint : String(e);
+      if (e instanceof GhError && (e.status === 401 || e.status === 403)) {
+        flagTokenProblem(hint);
+        panel.reset();
+      } else {
+        panel.fail(hint, { logUrl: site.actions(), retry: () => void publish() });
+      }
+      setStatus(hint, 'error');
+    } finally {
+      panel.busy(false);
     }
   };
 
-  $('post-save').addEventListener('click', () => void publish());
+  $('publish-btn').addEventListener('click', () => void publish());
   // Cmd/Ctrl+S 发布：只在文章栏拦这个键，别在友链栏也拦
   initSaveShortcut(
     () => void publish(),
-    () => document.querySelector('.tab[aria-current="page"]')?.getAttribute('data-tab') === 'post'
+    () => document.querySelector('.sidebar__tab[aria-current="page"]')?.getAttribute('data-tab') === 'post'
   );
 
-  autoHeight(previewFrame);
+  $('post-save-local').addEventListener('click', () => {
+    void autosave.flush().then(() => setStatus('已存成本地草稿，换台机器看不到。', 'ok'));
+  });
+
+  paintLock();
+  setMode('split');
+  syncBtn.setAttribute('aria-pressed', 'true');
   resetPost();
 
   // 启动时也试着恢复草稿：没有 token 也能接着写，等填了 token 再发布
@@ -346,7 +516,5 @@ export function initPost(): void {
   }
   if (requireToken()) {
     run(() => refreshPostList());
-  } else {
-    setStatus('先保存 GitHub Token 才能读写仓库。', 'info');
   }
 }

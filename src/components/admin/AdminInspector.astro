@@ -1,0 +1,123 @@
+---
+import { repo } from '../../data/admin';
+
+/**
+ * 右栏：Frontmatter 检查器 + 发布。
+ * 所有字段都是同一份状态的入口（值由 lib/admin/post.ts 统一收集），
+ * 底部吸底的操作区带发布生命周期（写入 → 轮询 → 生效）。
+ */
+---
+
+<aside class="inspector" id="inspector" aria-label="文章属性与发布">
+  <header class="inspector__head">
+    <h2>文章属性</h2>
+    <span class="inspector__sub">Frontmatter</span>
+  </header>
+
+  <div class="inspector__body">
+    <div class="switch-row">
+      <span class="switch-row__text">
+        <span class="switch-row__title">草稿模式</span>
+        <span class="switch-row__hint">线上博客不会公开显示</span>
+      </span>
+      <input id="post-draft" class="switch" type="checkbox" />
+    </div>
+
+    <div class="field">
+      <div class="field__head">
+        <label class="field__label" for="post-slug">路径 Slug</label>
+        <button id="slug-reset" class="field__link" type="button">根据标题重置</button>
+      </div>
+      <div class="slug-field">
+        <span class="slug-field__prefix">/posts/</span>
+        <input id="post-slug" class="input slug-field__input" type="text" spellcheck="false" placeholder="my-new-post" />
+        <button id="slug-lock" class="lock" type="button" aria-pressed="true" title="跟随标题自动更新">
+          <svg class="lock__closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <rect x="4" y="11" width="16" height="10" rx="2" />
+            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+          </svg>
+          <svg class="lock__open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <rect x="4" y="11" width="16" height="10" rx="2" />
+            <path d="M8 11V7a4 4 0 0 1 7.5-2" />
+          </svg>
+        </button>
+      </div>
+      <p id="slug-error" class="field__error" hidden></p>
+      <button id="slug-overwrite" class="btn btn--xs btn--warn" type="button" hidden>确认覆盖同名文件</button>
+    </div>
+
+    <label class="field">
+      <span class="field__label">发布日期</span>
+      <input id="post-date" class="input" type="date" />
+    </label>
+
+    <label class="field">
+      <span class="field__label">分类 Category</span>
+      <input id="post-category" class="input" type="text" spellcheck="false" placeholder="前端开发" />
+    </label>
+
+    <div class="field">
+      <span class="field__label">标签 Tags</span>
+      <div class="chip-field">
+        <div id="tag-chips" class="chip-field__chips" hidden></div>
+        <input
+          id="tag-input"
+          class="chip-field__input"
+          type="text"
+          placeholder="输入后回车 / 空格成标签"
+          spellcheck="false"
+          autocomplete="off"
+        />
+      </div>
+      <div id="tag-suggest" class="suggest" hidden></div>
+    </div>
+
+    <div class="field">
+      <span class="field__label">文章封面</span>
+      <div id="cover-drop" class="cover">
+        <img id="cover-thumb" class="cover__img" alt="" hidden />
+        <p class="cover__placeholder" id="cover-placeholder">
+          点击上传 / 拖入图片 / 直接填外链
+          <span>自动压至长边 1600px WebP</span>
+        </p>
+        <span id="cover-badge" class="cover__badge" hidden></span>
+      </div>
+      <input id="cover-file" type="file" accept="image/*" hidden />
+      <input id="post-cover" class="input input--xs" type="text" spellcheck="false" placeholder="/illustrations/xxx.webp 或外链" />
+      <p id="cover-hint" class="cover__hint" hidden></p>
+    </div>
+
+    <label class="field">
+      <span class="field__label">SEO 摘要</span>
+      <textarea id="post-desc" class="input" rows="3" spellcheck="false" placeholder="用于列表卡片与搜索结果…"></textarea>
+    </label>
+  </div>
+
+  <footer class="inspector__foot">
+    <p id="post-error" class="field__error" hidden></p>
+
+    <div id="publish-stage" class="pubstate" data-state="idle" hidden>
+      <span class="pubstate__dot" aria-hidden="true"></span>
+      <span id="pub-text" class="pubstate__text"></span>
+      <span id="pub-timer" class="pubstate__timer" hidden>00:00</span>
+    </div>
+    <a id="publish-link" class="pubstate__link" target="_blank" rel="noreferrer" hidden>点击直达线上文章 ↗</a>
+
+    <div id="publish-detail" class="pubstate__detail" hidden>
+      <p id="pub-detail-text" class="pubstate__detail-text"></p>
+      <ul id="pub-detail-steps" class="pubstate__detail-steps" hidden></ul>
+      <div class="pubstate__detail-actions">
+        <button id="pub-retry" class="btn btn--xs" type="button" hidden>重新发布</button>
+        <a id="pub-log" class="btn btn--xs" target="_blank" rel="noreferrer" hidden>查看日志 ↗</a>
+      </div>
+    </div>
+
+    <div class="inspector__actions">
+      <button id="post-save-local" class="btn btn--soft" type="button" data-publish>仅存本地草稿</button>
+      <button id="publish-btn" class="btn btn--primary" type="button" data-publish>发布到 GitHub</button>
+    </div>
+    <p class="inspector__note">
+      推送到 <code>{repo.branch}</code> 分支，自动触发 Actions 部署
+    </p>
+  </footer>
+</aside>

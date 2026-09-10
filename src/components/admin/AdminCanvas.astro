@@ -1,0 +1,98 @@
+---
+import ProfileEditor from './ProfileEditor.astro';
+import FriendsEditor from './FriendsEditor.astro';
+
+/**
+ * 中间：沉浸式写作主控台。
+ * 顶上是无边框大标题与字数仪表，下面是 Markdown 编辑区 + 实时渲染区
+ * （两栏之间可以双向同步滚动，见 lib/admin/sync.ts）。
+ */
+---
+
+<main class="canvas">
+  <section class="canvas__panel" data-panel="post">
+    <div class="canvas__head">
+      <input
+        id="post-title"
+        class="canvas__title"
+        type="text"
+        placeholder="输入文章大标题…"
+        spellcheck="false"
+        autocomplete="off"
+      />
+      <div class="canvas__meta">
+        <span id="post-stats" class="canvas__stats"></span>
+        <code id="post-path" class="canvas__path"></code>
+        <label class="inline">
+          语言
+          <select id="post-lang" class="input input--xs">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <button id="post-reload" class="btn btn--sm btn--ghost" type="button">重新载入</button>
+      </div>
+    </div>
+
+    <div class="editor" id="editor" data-mode="split">
+      <section class="editor__pane editor__pane--write" id="editor-write">
+        <header class="editor__bar">
+          <span class="editor__label">Markdown</span>
+          {/* 工具栏按钮用文字符号：后台的 Icon 是 24×24 描边，做成小按钮并不清楚 */}
+          <div class="md-tools" role="toolbar" aria-label="Markdown 格式">
+            <button class="md-tools__btn" type="button" data-md="bold" title="加粗 (Ctrl/Cmd+B)"><b>B</b></button>
+            <button class="md-tools__btn" type="button" data-md="italic" title="斜体 (Ctrl/Cmd+I)"><i>I</i></button>
+            <span class="md-tools__sep" aria-hidden="true"></span>
+            <button class="md-tools__btn" type="button" data-md="h2" title="二级标题">H2</button>
+            <button class="md-tools__btn" type="button" data-md="h3" title="三级标题">H3</button>
+            <button class="md-tools__btn" type="button" data-md="quote" title="引用">❝</button>
+            <button class="md-tools__btn" type="button" data-md="ul" title="无序列表">•</button>
+            <button class="md-tools__btn" type="button" data-md="ol" title="有序列表">1.</button>
+            <span class="md-tools__sep" aria-hidden="true"></span>
+            <button class="md-tools__btn" type="button" data-md="code" title="代码块">‹›</button>
+            <span class="md-tools__sep" aria-hidden="true"></span>
+            <button class="md-tools__btn" type="button" data-md="link" title="链接">🔗</button>
+            <button class="md-tools__btn" type="button" data-md="image" title="图片">▣</button>
+          </div>
+          <span class="editor__tip">拖图 / Ctrl+V 粘贴自动压 WebP</span>
+        </header>
+
+        <textarea
+          id="post-body"
+          class="editor__area"
+          spellcheck="false"
+          placeholder="开始使用 Markdown 书写正文…"></textarea>
+
+        {/* 选中文字时浮在光标上方的格式浮岛 */}
+        <div id="md-bubble" class="bubble" role="toolbar" aria-label="选中格式" hidden>
+          <button class="bubble__btn" type="button" data-md="bold" title="加粗"><b>B</b></button>
+          <button class="bubble__btn" type="button" data-md="italic" title="斜体"><i>I</i></button>
+          <button class="bubble__btn" type="button" data-md="h2" title="二级标题">H2</button>
+          <button class="bubble__btn" type="button" data-md="code" title="行内代码">‹›</button>
+          <button class="bubble__btn" type="button" data-md="link" title="链接">🔗</button>
+        </div>
+      </section>
+
+      <section class="editor__pane editor__pane--read">
+        <header class="editor__bar">
+          <span class="editor__label">渲染预览</span>
+          <div class="view-switch" role="group" aria-label="预览形态">
+            <button class="view-switch__btn" type="button" data-view="body" aria-pressed="true">正文</button>
+            <button class="view-switch__btn" type="button" data-view="card" aria-pressed="false">卡片</button>
+            <button class="view-switch__btn" type="button" data-view="head" aria-pressed="false">文章页</button>
+          </div>
+          <button id="sync-toggle" class="chip-toggle" type="button" aria-pressed="true">同步滚动：开</button>
+        </header>
+        <iframe id="post-preview" class="editor__preview" title="预览" sandbox="allow-same-origin"></iframe>
+      </section>
+    </div>
+  </section>
+
+  <section class="canvas__panel canvas__panel--doc" data-panel="profile" hidden>
+    <ProfileEditor />
+  </section>
+
+  <section class="canvas__panel canvas__panel--doc" data-panel="friends" hidden>
+    <FriendsEditor />
+  </section>
+</main>

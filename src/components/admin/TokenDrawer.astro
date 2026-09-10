@@ -1,0 +1,68 @@
+---
+/**
+ * Token 配置抽屉。
+ * 默认不出现（界面上只有左下角那枚状态胶囊），点胶囊才从右侧滑出。
+ * 填完可以先用「测试连接」打一次 GitHub API 验权限，通过了自动保存。
+ */
+---
+
+<div id="token-drawer" class="drawer" hidden>
+  <div class="drawer__backdrop" data-drawer-close></div>
+
+  <div class="drawer__panel" role="dialog" aria-modal="true" aria-label="GitHub 连接">
+    <header class="drawer__head">
+      <h2>GitHub 连接</h2>
+      <button class="drawer__close" type="button" data-drawer-close aria-label="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+    </header>
+
+    <div class="drawer__body">
+      <p class="drawer__meta">
+        目标仓库 <code id="token-repo">—</code>（分支 <code id="token-branch">—</code>）·
+        Token 只存在这台浏览器的 localStorage 里，不会上传任何服务器。
+      </p>
+
+      <label class="field">
+        <span class="field__label">Fine-grained Personal Access Token</span>
+        <span class="field__hint">只给这一个仓库的 Contents 读写权限</span>
+        <div class="token-row">
+          <input
+            id="token-input"
+            class="input"
+            type="password"
+            placeholder="github_pat_…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="token-toggle" class="btn btn--sm" type="button">显示</button>
+          <button id="token-ping" class="btn btn--sm" type="button">测试连接</button>
+        </div>
+      </label>
+
+      <p id="ping-result" class="ping" hidden></p>
+
+      <div class="drawer__actions">
+        <button id="token-save" class="btn btn--primary" type="button">保存 Token</button>
+        <button id="token-clear" class="btn" type="button">清除</button>
+        <a id="token-actions-link" class="btn btn--ghost" href="https://github.com" target="_blank" rel="noreferrer">
+          Actions 页面 ↗
+        </a>
+      </div>
+
+      <details class="help">
+        <summary>怎么申请这个 Token？</summary>
+        <ol>
+          <li>打开 GitHub → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token</li>
+          <li>Resource owner 选自己，Repository access 选 <b>Only select repositories</b> → 只勾这一个仓库</li>
+          <li>Permissions → Repository permissions → <b>Contents</b> 设为 <b>Read and write</b>（其它都不要给）</li>
+          <li>想让后台自动轮询构建结果，再把 <b>Actions</b> 设成 <b>Read</b>（不给也能用，只是发布后要自己去 Actions 页面看）</li>
+          <li>生成后复制粘贴到上面。建议设 90 天过期，到期重新生成一个</li>
+        </ol>
+        <p class="help__warn">不要在公共电脑上使用：拿到这个 token 的人就能改这个仓库。</p>
+      </details>
+    </div>
+  </div>
+</div>

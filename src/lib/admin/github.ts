@@ -202,28 +202,39 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
-/** 保存文件。sha 冲突时自动取最新 sha 重试一次。 */
+/** PUT contents 的响应：commit.sha 是这次提交号，发布后拿它去对 Actions 的 run */
+interface PutResponse {
+  content?: { sha?: string };
+  commit?: { sha?: string };
+}
+
+/**
+ * 保存文件。sha 冲突时自动取最新 sha 重试一次。
+ * 返回这次提交的 commit sha（内容没变时 GitHub 不产生提交，返回 null）。
+ */
 export async function saveFile(
   r: Repo,
   path: string,
   token: string,
   text: string,
   message: string
-): Promise<void> {
+): Promise<string | null> {
   return enqueue(async () => {
     const current = await readFile(r, path, token);
+    let res: PutResponse;
     try {
-      await put(r, path, token, encodeBase64(text), message, current?.sha);
+      res = await put(r, path, token, encodeBase64(text), message, current?.sha) as PutResponse;
     } catch (e) {
       if (e instanceof GhError && e.status === 409) {
         const fresh = await readFile(r, path, token);
         if (fresh) {
-          await put(r, path, token, encodeBase64(text), message, fresh.sha);
-          return;
+          res = await put(r, path, token, encodeBase64(text), message, fresh.sha) as PutResponse;
+          return res?.commit?.sha ?? null;
         }
       }
       throw e;
     }
+    return res?.commit?.sha ?? null;
   });
 }
 
@@ -259,4 +270,121 @@ export async function saveBinaryFile(
 /** 保存后跳转去查看构建进度 */
 export function actionsUrl(r: Repo): string {
   return `https://github.com/${r.owner}/${r.repo}/actions`;
+}
+
+// ---------------------------------------------------------------- 连通性自检
+export type Permission = 'write' | 'read' | 'none' | 'unknown';
+
+export interface RepoAccess {
+  fullName: string;
+  branch: string;
+  /** Contents 权限：只有 write 才能发布 */
+  contents: Permission;
+  /** Actions 读取权限：没有就轮询不了构建状态，只能给链接 */
+  actions: Permission;
+  private: boolean;
+}
+
+interface RepoResponse {
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+  permissions?: { push?: boolean; pull?: boolean; admin?: boolean };
+}
+
+/**
+ * 「测试连接」用的自检：一次请求看清 token 对这个仓库到底能干什么。
+ * 分三步：读仓库 → 确认分支存在 → 试探 Actions 读权限（不影响结果，拿不到就降级）。
+ */
+export async function pingRepo(r: Repo, token: string): Promise<RepoAccess> {
+  const info = await request<RepoResponse>(`${API}/repos/${r.owner}/${r.repo}`, token);
+
+  let branch = r.branch;
+  try {
+    const b = await request<{ name: string }>(
+      `${API}/repos/${r.owner}/${r.repo}/branches/${encodeURIComponent(r.branch)}`,
+      token
+    );
+    branch = b.name;
+  } catch (e) {
+    if (e instanceof GhError && e.status === 404) {
+      throw new GhError(404, `仓库里有，但没有 ${r.branch} 分支`, undefined);
+    }
+    throw e;
+  }
+
+  // 细粒度 token 不给 permissions 时拿不到 push，就按 unknown 处理（写的时候才知道）
+  const perm = info.permissions;
+  const contents: Permission = perm?.push
+    ? 'write'
+    : perm?.pull
+      ? 'read'
+      : ('unknown' as Permission);
+
+  let actions: Permission = 'read';
+  try {
+    await request(`${API}/repos/${r.owner}/${r.repo}/actions/runs?per_page=1`, token);
+  } catch (e) {
+    // 只是没有 Actions 读权限，不影响写文章；让发布流程降级成「给链接」
+    if (e instanceof GhError && (e.status === 403 || e.status === 404)) actions = 'none';
+    else actions = 'unknown';
+  }
+
+  return {
+    fullName: info.full_name,
+    branch,
+    contents,
+    actions,
+    private: Boolean(info.private),
+  };
+}
+
+// ---------------------------------------------------------------- Actions 构建状态
+export interface WorkflowRun {
+  id: number;
+  name: string;
+  status: 'queued' | 'in_progress' | 'completed' | string;
+  conclusion: string | null;
+  html_url: string;
+  head_sha: string;
+  run_started_at?: string | null;
+}
+
+/** 找这次提交触发的那次 workflow run（刚提交时可能还没建出来，返回 null 让调用方再等一轮） */
+export async function findRun(r: Repo, token: string, commitSha: string): Promise<WorkflowRun | null> {
+  const res = await request<{ workflow_runs: WorkflowRun[] }>(
+    `${API}/repos/${r.owner}/${r.repo}/actions/runs?branch=${encodeURIComponent(r.branch)}&per_page=10`,
+    token
+  );
+  const runs = res.workflow_runs ?? [];
+  return runs.find((run) => run.head_sha === commitSha) ?? null;
+}
+
+/** 失败原因：把失败的步骤名列出来，省得去 GitHub 页面上翻 */
+export async function failedSteps(r: Repo, token: string, runId: number): Promise<string[]> {
+  try {
+    const res = await request<{
+      jobs: { conclusion: string | null; name: string; steps?: { name: string; conclusion: string | null }[] }[];
+    }>(`${API}/repos/${r.owner}/${r.repo}/actions/runs/${runId}/jobs?per_page=100`, token);
+
+    const out: string[] = [];
+    for (const job of res.jobs ?? []) {
+      const failed = (job.steps ?? []).filter((s) => s.conclusion === 'failure');
+      if (failed.length) out.push(...failed.map((s) => `${job.name} → ${s.name}`));
+      else if (job.conclusion === 'failure') out.push(job.name);
+    }
+    return out;
+  } catch {
+    // 拿不到 jobs 就不硬凑，面板里给 run 的链接就好
+    return [];
+  }
+}
+
+/** 重跑失败的任务：需要 Actions 写权限，没有会抛 403，调用方兜住 */
+export async function rerunFailed(r: Repo, token: string, runId: number): Promise<void> {
+  await request(
+    `${API}/repos/${r.owner}/${r.repo}/actions/runs/${runId}/rerun-failed-jobs`,
+    token,
+    { method: 'POST' }
+  );
 }

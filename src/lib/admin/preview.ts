@@ -5,7 +5,7 @@ import { VIEWS, type PreviewState, type PreviewView } from './postview';
  *
  * 渲染进 iframe，sandbox 只给 allow-same-origin（**不给 allow-scripts**）：
  * - marked 不做 sanitize，粘进来的 <script> / on* 属性不会执行
- * - 留着 allow-same-origin 是为了能量到内容高度、把 iframe 撑开
+ * - 留着 allow-same-origin 是为了能量内容高度、做双向同步滚动
  * - 千万别同时给 allow-scripts：那等于把 sandbox 取消，iframe 里的脚本
  *   能读父页面的 localStorage，GitHub token 直接被盗
  *
@@ -26,7 +26,8 @@ const EXTRA_CSS = `
   --shiki-dark-bg: #24292e;
 }
 html { background: transparent; }
-body { margin: 0; padding: 1.25rem 1.5rem; background: var(--c-bg-soft); }
+/* 预览窗格自己滚动（同步滚动要用到 scrollY），不再靠撑高 iframe */
+body { margin: 0; padding: 1.25rem 1.5rem; background: var(--c-bg-soft); min-height: 100%; }
 .admin-preview__empty { color: var(--c-text-faint); font-size: 0.9rem; }
 `;
 
@@ -67,17 +68,19 @@ export function updatePreview(iframe: HTMLIFrameElement, state: PreviewState): v
   iframe.srcdoc = buildPreviewDoc(state, theme);
 }
 
-/** srcdoc 每次重写都会触发 load，用它同步高度 */
-export function autoHeight(iframe: HTMLIFrameElement): void {
+/**
+ * srcdoc 每次重写都会触发 load。
+ * 需要「新文档就绪」的模块（同步滚动要重新挂滚动监听）在这里登记。
+ */
+const loadListeners: (() => void)[] = [];
+
+export function onPreviewLoad(cb: () => void): void {
+  loadListeners.push(cb);
+}
+
+export function initPreviewLoad(iframe: HTMLIFrameElement): void {
   iframe.addEventListener('load', () => {
-    try {
-      const doc = iframe.contentDocument;
-      if (!doc) return;
-      // 给个下限：内容变短时页面不至于跟着跳一下
-      iframe.style.height = `${Math.max(416, doc.documentElement.scrollHeight)}px`;
-    } catch {
-      // 拿不到高度就保持 CSS 里的默认高度，不影响使用
-    }
+    for (const cb of loadListeners) cb();
   });
 }
 
