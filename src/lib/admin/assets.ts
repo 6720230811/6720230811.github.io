@@ -1,4 +1,4 @@
-import { $, setStatus, activeSection } from './dom';
+import { $, setStatus, activeSection, setTopbarPath, confirmDialog } from './dom';
 import { repo, paths, rawUrl } from '../../data/admin';
 import { listDir, readFile, readBase64, deletePathsBatch, GhError, type Repo } from './github';
 import { uploadImages, humanSize } from './upload';
@@ -231,6 +231,7 @@ async function load(): Promise<void> {
       }));
 
     loaded = true;
+    setTopbarPath(paths.illustrationsDir());
     render();
     updateTabCount();
     void renderTrash();
@@ -326,14 +327,19 @@ async function remove(names: string[]): Promise<void> {
   const stillUsed = targets.filter((f) => f.refs !== null && f.refs > 0).length;
 
   const lines = [
-    `删除 ${targets.length} 张图（合计 ${humanSize(bytes)}）？`,
+    `合计 ${humanSize(bytes)}。这一次会合并成一条提交。`,
     undoable.length
       ? `其中 ${undoable.length} 张会留本地副本，7 天内可撤销。`
-      : '没有可撤销的副本。',
+      : '没有可撤销的副本（都超过体积上限）。',
     tooBig ? `另外 ${tooBig} 张超过 ${humanSize(MAX_UNDO_BYTES)}，删除后无法撤销。` : '',
     stillUsed ? `注意：有 ${stillUsed} 张仍被引用，删掉后线上会缺图。` : '',
   ].filter(Boolean);
-  if (!window.confirm(lines.join('\n'))) return;
+  const ok = await confirmDialog({
+    title: `删除 ${targets.length} 张图？`,
+    body: lines.join('\n'),
+    okLabel: '删除',
+  });
+  if (!ok) return;
 
   setStatus(`正在读取 ${targets.length} 张图…`, 'busy');
   try {
@@ -448,6 +454,11 @@ export function initAssets(): void {
   const fileInput = $<HTMLInputElement>('asset-file');
   const drop = $('asset-drop');
   drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    fileInput.click();
+  });
   fileInput.addEventListener('change', () => {
     void uploadAndReload(fileInput.files);
     fileInput.value = '';

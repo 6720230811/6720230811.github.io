@@ -404,7 +404,22 @@ export function initPostList(
     if (!shown.length) {
       const li = document.createElement('li');
       li.className = 'pcard-empty';
-      li.textContent = items.length ? '没有匹配的文章' : '还没有文章';
+      if (items.length) {
+        li.textContent = '没有匹配的文章';
+      } else {
+        // 首次进来（或文章被清空）时给一张三步上手卡，比「还没有文章」有用
+        li.innerHTML = `
+          <div class="guide">
+            <p class="guide__title">还没有文章</p>
+            <ol class="guide__steps">
+              <li>左下角配好 GitHub Token（Contents 读写权限）</li>
+              <li>点「新建文章」开始写，右侧检查器填分类与封面</li>
+              <li>配图直接拖进正文，自动压 WebP 并写进仓库</li>
+            </ol>
+            <p class="guide__foot">⌘S 发布 · ⌘⇧D 与仓库对比 · ? 看全部快捷键</p>
+          </div>
+        `;
+      }
       frag.append(li);
     }
 

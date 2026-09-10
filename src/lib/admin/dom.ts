@@ -18,8 +18,14 @@ export type StatusKind = 'ok' | 'error' | 'info' | 'busy';
 /** 当前打开的分区（文章 / 个人信息 / 友链 / 素材），快捷键按它决定要不要响应 */
 export function activeSection(): string {
   return (
-    document.querySelector('.sidebar__tab[aria-current="page"]')?.getAttribute('data-tab') ?? 'post'
+    document.querySelector('.sidebar__tab[aria-selected="true"]')?.getAttribute('data-tab') ?? 'post'
   );
+}
+
+/** 顶栏中间那行字：当前在编辑哪个文件 */
+export function setTopbarPath(text: string): void {
+  const el = document.getElementById('topbar-path');
+  if (el) el.textContent = text;
 }
 
 /**

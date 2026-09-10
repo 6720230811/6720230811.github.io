@@ -6,7 +6,8 @@ import { initAssets } from './assets';
 import { initUnsavedGuard } from './unsaved';
 import { pruneDrafts } from './drafts';
 import { initDropGuard } from './upload';
-import { $, readFlag, writeFlag, activeSection } from './dom';
+import { $, readFlag, writeFlag, activeSection, setTopbarPath } from './dom';
+import { onDirtyChange } from './unsaved';
 import { initShortcuts, registerShortcut, openShortcutHelp } from './shortcuts';
 
 /**
@@ -29,14 +30,23 @@ const panels = Array.from(document.querySelectorAll<HTMLElement>('.canvas__panel
 function showTab(name: string): void {
   for (const panel of panels) panel.hidden = panel.dataset.panel !== name;
   for (const tab of tabs) {
-    if (tab.dataset.tab === name) tab.setAttribute('aria-current', 'page');
-    else tab.removeAttribute('aria-current');
+    tab.setAttribute('aria-selected', String(tab.dataset.tab === name));
   }
   // 只有写文章时才需要右侧检查器
   workbench.dataset.section = name;
+  // 顶栏中间那行跟着分区走（各分区自己也可能覆盖它，比如载入了具体文章）
+  setTopbarPath(SECTION_PATH[name] ?? '');
   // 各分区按需载入自己的数据（个人信息 / 友链都不在启动路径上读仓库）
   document.dispatchEvent(new CustomEvent<string>('admin:section', { detail: name }));
 }
+
+/** 顶栏路径的兜底文案：具体文件由各分区载入后覆盖（见 setTopbarPath） */
+const SECTION_PATH: Record<string, string> = {
+  post: 'src/content/posts/',
+  profile: 'src/data/profile.{zh,en}.json',
+  friends: 'src/data/friends.json',
+  assets: 'public/illustrations',
+};
 
 for (const tab of tabs) {
   tab.addEventListener('click', () => showTab(tab.dataset.tab ?? 'post'));
@@ -101,5 +111,10 @@ initUnsavedGuard('有未保存的改动，确定离开吗？');
 showTab('post');
 setSidebar(readFlag(sidebarKey, true));
 setInspector(readFlag(inspectorKey, true));
+
+// 顶栏那盏「未保存」小灯（订阅时会立刻同步一次当前状态）
+onDirtyChange((dirty) => {
+  $('topbar-dirty').hidden = !dirty;
+});
 
 void pruneDrafts();

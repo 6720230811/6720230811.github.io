@@ -6,17 +6,30 @@
  */
 
 let dirty = false;
+const listeners = new Set<(dirty: boolean) => void>();
+
+function set(next: boolean): void {
+  if (dirty === next) return;
+  dirty = next;
+  for (const cb of Array.from(listeners)) cb(dirty);
+}
 
 export function markDirty(): void {
-  dirty = true;
+  set(true);
 }
 
 export function markClean(): void {
-  dirty = false;
+  set(false);
 }
 
 export function isDirty(): boolean {
   return dirty;
+}
+
+/** 顶栏那盏「未保存」小灯挂在它上面；订阅时会立刻收到当前状态 */
+export function onDirtyChange(cb: (dirty: boolean) => void): void {
+  listeners.add(cb);
+  cb(dirty);
 }
 
 export function initUnsavedGuard(leaveText: string): void {

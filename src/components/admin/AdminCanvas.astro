@@ -11,7 +11,7 @@ import AssetPanel from './AssetPanel.astro';
 ---
 
 <main class="canvas">
-  <section class="canvas__panel" data-panel="post">
+  <section class="canvas__panel" data-panel="post" id="panel-post" role="tabpanel" aria-labelledby="tab-post">
     <div class="canvas__head">
       <input
         id="post-title"
@@ -92,15 +92,36 @@ import AssetPanel from './AssetPanel.astro';
     </div>
   </section>
 
-  <section class="canvas__panel canvas__panel--doc" data-panel="profile" hidden>
+  <section
+    class="canvas__panel canvas__panel--doc"
+    data-panel="profile"
+    id="panel-profile"
+    role="tabpanel"
+    aria-labelledby="tab-profile"
+    hidden
+  >
     <ProfileEditor />
   </section>
 
-  <section class="canvas__panel canvas__panel--doc" data-panel="friends" hidden>
+  <section
+    class="canvas__panel canvas__panel--doc"
+    data-panel="friends"
+    id="panel-friends"
+    role="tabpanel"
+    aria-labelledby="tab-friends"
+    hidden
+  >
     <FriendsEditor />
   </section>
 
-  <section class="canvas__panel canvas__panel--doc" data-panel="assets" hidden>
+  <section
+    class="canvas__panel canvas__panel--doc"
+    data-panel="assets"
+    id="panel-assets"
+    role="tabpanel"
+    aria-labelledby="tab-assets"
+    hidden
+  >
     <AssetPanel />
   </section>
 </main>

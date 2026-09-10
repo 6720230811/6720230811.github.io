@@ -66,15 +66,19 @@ const base = import.meta.env.BASE_URL;
         <span id="autosave-pill" class="autosave" data-state="idle">草稿已就绪</span>
       </div>
 
+      {/* 中间留给「正在编辑哪个文件」+ 未保存状态；视图切换挪到右侧，和栏折叠按钮同一组 */}
       <div class="topbar__center">
+        <code id="topbar-path" class="topbar__path">—</code>
+        <span id="topbar-dirty" class="topbar__dirty" hidden>未保存</span>
+      </div>
+
+      <div class="topbar__right">
         <div class="seg" role="group" aria-label="视图模式">
           <button class="seg__btn" type="button" data-mode="write" aria-pressed="false">纯编辑</button>
           <button class="seg__btn" type="button" data-mode="split" aria-pressed="true">双栏预览</button>
           <button class="seg__btn" type="button" data-mode="render" aria-pressed="false">全真渲染</button>
         </div>
-      </div>
-
-      <div class="topbar__right">
+        <span class="topbar__sep" aria-hidden="true">/</span>
         <button
           id="shortcut-help-btn"
           class="icon-btn"

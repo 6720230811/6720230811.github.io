@@ -1,13 +1,6 @@
 import { setStatus } from './dom';
-import {
-  NewsItemSchema,
-  PublicationSchema,
-  TimelineEntrySchema,
-  SkillGroupSchema,
-  ProjectSchema,
-  AwardSchema,
-  type Publication,
-} from '../../data/profile.schema';
+import type { Publication } from '../../data/profile.schema';
+import { loadSchemas } from './schemas';
 import { getProfile, getStateVersion, mutate, subscribe } from './profileState';
 import { parsePublications } from './bibtex';
 
@@ -177,17 +170,53 @@ const MODULES: ModuleSpec[] = [
   },
 ];
 
-/** JSON 源码模式的逐模块校验 schema */
-const MODULE_SCHEMAS = {
-  news: NewsItemSchema.array(),
-  publications: PublicationSchema.array(),
-  research: TimelineEntrySchema.array(),
-  skills: SkillGroupSchema.array(),
-  projects: ProjectSchema.array(),
-  internships: TimelineEntrySchema.array(),
-  education: TimelineEntrySchema.array(),
-  awards: AwardSchema.array(),
-} as const;
+/**
+ * JSON 源码模式的逐模块校验 schema。
+ * zod 不进首包（见 schemas.ts），所以这里按需加载一次再缓存。
+ */
+interface ModuleParser {
+  parse: (value: unknown) => unknown;
+}
+
+let moduleSchemas: Record<ArrayKey, ModuleParser> | null = null;
+
+async function parserFor(key: ArrayKey): Promise<ModuleParser> {
+  if (!moduleSchemas) {
+    const mod = await loadSchemas();
+    moduleSchemas = {
+      news: mod.NewsItemSchema.array(),
+      publications: mod.PublicationSchema.array(),
+      research: mod.TimelineEntrySchema.array(),
+      skills: mod.SkillGroupSchema.array(),
+      projects: mod.ProjectSchema.array(),
+      internships: mod.TimelineEntrySchema.array(),
+      education: mod.TimelineEntrySchema.array(),
+      awards: mod.AwardSchema.array(),
+    };
+  }
+  return moduleSchemas[key];
+}
+
+type ParseResult = { ok: true; value: unknown } | { ok: false; message: string };
+
+/** 解析 + 校验一段模块 JSON：错误统一折成一句人话（schema 不合法时说清是哪一处） */
+async function parseModule(key: ArrayKey, text: string): Promise<ParseResult> {
+  try {
+    const parsed = JSON.parse(text || '[]') as unknown;
+    const schema = await parserFor(key);
+    return { ok: true, value: schema.parse(parsed) };
+  } catch (err) {
+    const issues = (err as { issues?: { path: (string | number)[]; message: string }[] }).issues;
+    return {
+      ok: false,
+      message: issues?.length
+        ? `${issues[0].path.join('.')}: ${issues[0].message}${
+            issues.length > 1 ? `（共 ${issues.length} 处）` : ''
+          }`
+        : (err as Error).message,
+    };
+  }
+}
 
 // ---------------------------------------------------------------- 小工具
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -629,7 +658,7 @@ function syncJsonTextarea(spec: ModuleSpec): void {
   ta.value = JSON.stringify(itemsOf(spec.key), null, 2);
 }
 
-function setJsonMode(spec: ModuleSpec, on: boolean): void {
+async function setJsonMode(spec: ModuleSpec, on: boolean): Promise<void> {
   const cards = document.querySelector<HTMLElement>(`[data-cards="${spec.key}"]`);
   const jsonField = document.querySelector<HTMLElement>(`[data-jsonfield="${spec.key}"]`);
   const btn = document.querySelector<HTMLButtonElement>(`[data-jsonbtn="${spec.key}"]`);
@@ -649,17 +678,12 @@ function setJsonMode(spec: ModuleSpec, on: boolean): void {
   // 回到卡片模式：先解析校验，过了才换
   const ta = jsonField.querySelector('textarea');
   if (ta) {
-    try {
-      const parsed = MODULE_SCHEMAS[spec.key].parse(JSON.parse(ta.value || '[]'));
-      replaceArray(spec.key, parsed as unknown[]);
-    } catch (err) {
-      const issues = (err as { issues?: { path: (string | number)[]; message: string }[] }).issues;
-      const detail = issues?.length
-        ? issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('；')
-        : (err as Error).message;
-      setStatus(`${spec.title} 的 JSON 有问题，暂时留在源码模式：${detail}`, 'error');
+    const result = await parseModule(spec.key, ta.value);
+    if (!result.ok) {
+      setStatus(`${spec.title} 的 JSON 有问题，暂时留在源码模式：${result.message}`, 'error');
       return; // 数据不对就不许回去，免得卡片模式下丢字段的假象
     }
+    replaceArray(spec.key, result.value as unknown[]);
   }
   cards.hidden = false;
   jsonField.hidden = true;
@@ -722,29 +746,28 @@ export function initProfileCards(): void {
     // JSON 源码模式
     document
       .querySelector<HTMLButtonElement>(`[data-jsonbtn="${spec.key}"]`)
-      ?.addEventListener('click', () => setJsonMode(spec, !jsonMode.has(spec.key)));
+      ?.addEventListener('click', () => void setJsonMode(spec, !jsonMode.has(spec.key)));
 
     // 源码模式下直接编辑：合法就写回 state（预览 / 校验跟着动）
     const jsonField = document.querySelector<HTMLElement>(`[data-jsonfield="${spec.key}"]`);
     const ta = jsonField?.querySelector('textarea');
     ta?.addEventListener('input', () => {
-    const errEl = document.getElementById(`e-${spec.key}`);
-    try {
-      const parsed = MODULE_SCHEMAS[spec.key].parse(JSON.parse(ta.value || '[]'));
-      if (errEl) {
-        errEl.hidden = true;
-        errEl.textContent = '';
-      }
-      replaceArray(spec.key, parsed as unknown[]);
-    } catch (err) {
-        if (errEl) {
-          const issues = (err as { issues?: { path: (string | number)[]; message: string }[] }).issues;
-          errEl.hidden = false;
-          errEl.textContent = issues?.length
-            ? `${issues[0].path.join('.')}: ${issues[0].message}${issues.length > 1 ? `（共 ${issues.length} 处）` : ''}`
-            : (err as Error).message;
+      const errEl = document.getElementById(`e-${spec.key}`);
+      void (async () => {
+        const result = await parseModule(spec.key, ta.value);
+        if (result.ok) {
+          if (errEl) {
+            errEl.hidden = true;
+            errEl.textContent = '';
+          }
+          replaceArray(spec.key, result.value as unknown[]);
+          return;
         }
-      }
+        if (errEl) {
+          errEl.hidden = false;
+          errEl.textContent = result.message;
+        }
+      })();
     });
   }
 

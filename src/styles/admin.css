@@ -177,7 +177,34 @@ body.admin-shell {
 
 .topbar__center {
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* 顶栏中间：当前文件路径 + 未保存小灯 */
+.topbar__path {
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  color: var(--adm-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar__dirty {
+  flex: none;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--adm-warn-soft);
+  color: #b45309;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+::root[data-theme='dark'] .topbar__dirty {
+  color: var(--adm-warn);
 }
 
 .topbar__sep {
@@ -417,7 +444,7 @@ body.admin-shell {
   color: var(--adm-text);
 }
 
-.sidebar__tab[aria-current='page'] {
+.sidebar__tab[aria-selected='true'] {
   color: var(--adm-accent);
   border-bottom-color: var(--adm-accent);
 }
@@ -3706,5 +3733,79 @@ select.input {
   .pubstate__dot,
   .pill__dot {
     animation: none !important;
+  }
+}
+
+/* ============================================================
+   空态引导 / 键盘可达 / 窄屏底部抽屉
+   ============================================================ */
+
+.guide {
+  text-align: left;
+}
+
+.guide__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--adm-text);
+}
+
+.guide__steps {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.72rem;
+  line-height: 1.95;
+  color: var(--adm-faint);
+}
+
+.guide__foot {
+  margin: 0.6rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--adm-line);
+  font-size: 0.68rem;
+  line-height: 1.7;
+  color: var(--adm-faint);
+}
+
+/* div 当按钮用（简历 / 素材拖放区）：键盘聚焦要有可见反馈 */
+.cvdrop:focus-visible,
+.assets__drop:focus-visible,
+.pcard__act:focus-visible,
+.asset__thumb:focus-visible {
+  outline: 2px solid var(--adm-accent);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   窄屏：右栏改成底部抽屉（浮层盖在正文上，比挤成两列好用）
+   ============================================================ */
+
+@media (max-width: 960px) {
+  .inspector {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: min(74vh, 40rem);
+    border-left: none;
+    border-top: 1px solid var(--adm-line);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -18px 44px -22px rgba(15, 23, 42, 0.55);
+  }
+
+  .inspector__head h2::after {
+    content: ' · 底部抽屉';
+    font-size: 0.66rem;
+    font-weight: 400;
+    color: var(--adm-faint);
+  }
+}
+
+/* 极窄屏：视图切换那三个按钮挤不下顶栏时允许换行 */
+@media (max-width: 720px) {
+  .topbar__center {
+    display: none;
   }
 }

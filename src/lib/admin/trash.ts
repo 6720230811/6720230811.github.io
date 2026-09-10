@@ -1,4 +1,4 @@
-import { $, setStatus } from './dom';
+import { $, setStatus, confirmDialog } from './dom';
 import { repo } from '../../data/admin';
 import { saveFile, saveBase64File, statFile, GhError, type Repo } from './github';
 import { loadDraft, saveDraft } from './drafts';
@@ -176,7 +176,14 @@ export async function restoreTrashItem(
 
   // 同名文件可能已经存在（比如手工又建了一篇）：直接 PUT 会替掉它，先问一句
   const exists = await statFile(repo as Repo, item.path, token);
-  if (exists && !window.confirm(`${item.path} 已经存在，还原会覆盖现有内容，继续吗？`)) return false;
+  if (exists) {
+    const ok = await confirmDialog({
+      title: '这个文件已经存在',
+      body: `${item.path}\n\n还原会覆盖它现在的内容。`,
+      okLabel: '覆盖还原',
+    });
+    if (!ok) return false;
+  }
 
   setStatus(`正在还原 ${item.slug}…`, 'busy');
   try {

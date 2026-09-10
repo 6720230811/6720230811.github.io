@@ -1,7 +1,8 @@
-import { $, setStatus, setFieldError, run, activeSection } from './dom';
+import { $, setStatus, setFieldError, run, activeSection, setTopbarPath } from './dom';
 import { repo, paths } from '../../data/admin';
 import { readFile, saveFile, GhError, type Repo } from './github';
 import { stableFriendsFileJson } from './serialize';
+import { loadSchemas } from './schemas';
 import { requireToken } from './token';
 
 /** 「友链」这一栏：编辑 src/data/friends.json 里当前语言的那一份 */
@@ -15,6 +16,7 @@ let loading = false;
 async function loadFriends(): Promise<void> {
   const token = requireToken();
   if (!token) return;
+  setTopbarPath(paths.friends());
   loading = true;
   try {
     const file = await readFile(repo as Repo, paths.friends(), token);
@@ -60,7 +62,8 @@ export function initFriends(): void {
         const file = await readFile(repo as Repo, paths.friends(), token);
         const all = file ? (JSON.parse(file.text) as Record<string, unknown>) : {};
         all[friendsLang.value] = current;
-        const text = stableFriendsFileJson(all.zh ?? [], all.en ?? []);
+        const { FriendsSchema } = await loadSchemas();
+        const text = stableFriendsFileJson(all.zh ?? [], all.en ?? [], FriendsSchema);
 
         setStatus('正在写入仓库…', 'busy');
         await saveFile(

@@ -1,4 +1,4 @@
-import { $, setStatus, setNotice, run, debounce, activeSection } from './dom';
+import { $, setStatus, setNotice, run, debounce, activeSection, setTopbarPath } from './dom';
 import { z } from 'zod';
 import { repo, paths } from '../../data/admin';
 import { readFile, saveFile, saveBinaryFile, GhError, type Repo } from './github';
@@ -8,7 +8,8 @@ import { markDirty, markClean } from './unsaved';
 import { createAutosave } from './autosave';
 import { loadDraft, clearDraft } from './drafts';
 import { registerShortcut } from './shortcuts';
-import { ProfileSchema, formatIssues, type Profile } from '../../data/profile.schema';
+import type { Profile } from '../../data/profile.schema';
+import { loadSchemas } from './schemas';
 import { getProfile, getLang, setLang, setState, mutate, subscribe } from './profileState';
 import { initProfileCards } from './profileCards';
 import { updateMirror } from './profilePreview';
@@ -68,6 +69,7 @@ async function loadProfile(): Promise<void> {
   if (!token) return;
   const lang = profileLang.value;
   $('profile-path').textContent = paths.profile(lang);
+  setTopbarPath(paths.profile(lang));
   loading = true;
   try {
     const file = await readFile(repo as Repo, paths.profile(lang), token);
@@ -76,6 +78,7 @@ async function loadProfile(): Promise<void> {
       return;
     }
     const raw = JSON.parse(file.text) as unknown;
+    const { ProfileSchema, formatIssues } = await loadSchemas();
     const parsed = ProfileSchema.safeParse(raw);
     if (!parsed.success) {
       setStatus(`profile.${lang}.json 与 schema 不一致（先显示出来，保存时会被拦）：\n${formatIssues(parsed.error)}`, 'error');
@@ -209,6 +212,12 @@ function bindCvDrop(): void {
   };
 
   zone.addEventListener('click', () => input.click());
+  // div 不是原生按钮：补上键盘路径，Tab 到它 + 回车/空格也能选文件
+  zone.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    input.click();
+  });
   input.addEventListener('change', () => handle(input.files));
   zone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -223,23 +232,30 @@ function bindCvDrop(): void {
 }
 
 // ---------------------------------------------------------------- 校验展示
-function validateNow(): void {
+async function validateNow(): Promise<void> {
   const p = readState();
   const box = $('profile-issues');
   if (!p) {
     box.hidden = true;
     return;
   }
-  const result = ProfileSchema.safeParse(p);
-  if (result.success) {
+  try {
+    const { ProfileSchema } = await loadSchemas();
+    const result = ProfileSchema.safeParse(p);
+    if (result.success) {
+      box.hidden = true;
+      box.textContent = '';
+      return;
+    }
+    const lines = result.error.issues.slice(0, 8).map((i) => `${issuePath(i.path)}: ${i.message}`);
+    const more =
+      result.error.issues.length > lines.length ? `\n… 共 ${result.error.issues.length} 处` : '';
+    box.hidden = false;
+    box.textContent = `保存会被 schema 拦下：\n${lines.join('\n')}${more}`;
+  } catch {
+    // schema 分块没加载出来（离线 / 刚部署换了文件名）：保存时还会再校验一次，静默即可
     box.hidden = true;
-    box.textContent = '';
-    return;
   }
-  const lines = result.error.issues.slice(0, 8).map((i) => `${issuePath(i.path)}: ${i.message}`);
-  const more = result.error.issues.length > lines.length ? `\n… 共 ${result.error.issues.length} 处` : '';
-  box.hidden = false;
-  box.textContent = `保存会被 schema 拦下：\n${lines.join('\n')}${more}`;
 }
 
 // ---------------------------------------------------------------- 双语对照
@@ -269,6 +285,7 @@ async function runBilingualCheck(): Promise<void> {
         return file ? (JSON.parse(file.text) as unknown) : null;
       })
     );
+    const { ProfileSchema, formatIssues } = await loadSchemas();
     const zhResult = ProfileSchema.safeParse(files[0]);
     const enResult = ProfileSchema.safeParse(files[1]);
     const showSchemaError = (lang: string, error: z.ZodError): void => {
@@ -371,7 +388,9 @@ async function saveProfile(): Promise<void> {
   for (const item of state.news) item.text = sanitizeInline(item.text);
 
   try {
-    const json = stableProfileJson(state);
+    // 校验用的 schema 按需加载（zod 不进首包）；解析失败会抛 ZodError，下面统一报
+    const { ProfileSchema } = await loadSchemas();
+    const json = stableProfileJson(state, ProfileSchema);
     setStatus('正在写入仓库…', 'busy');
     await saveFile(
       repo as Repo,

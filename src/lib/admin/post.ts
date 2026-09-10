@@ -1,4 +1,14 @@
-import { $, setStatus, setNotice, setFieldError, run, debounce, activeSection } from './dom';
+import {
+  $,
+  setStatus,
+  setNotice,
+  setFieldError,
+  run,
+  debounce,
+  activeSection,
+  setTopbarPath,
+  confirmDialog,
+} from './dom';
 import { registerShortcut } from './shortcuts';
 import { openDiffDialog } from './diffDialog';
 import { repo, paths, site } from '../../data/admin';
@@ -94,6 +104,12 @@ function showPostError(message: string): void {
   setFieldError('post-error', message);
 }
 
+/** 画布上的路径提示与顶栏中间那行保持同一份文案 */
+function paintPath(text: string): void {
+  $('post-path').textContent = text;
+  setTopbarPath(text);
+}
+
 function collectPost(): PostFrontmatter {
   return {
     title: titleInput.value.trim(),
@@ -180,9 +196,7 @@ export async function loadPost(slug: string, opts: { keepPanel?: boolean } = {})
   hideDeleteConfirm();
   deleteBtn.disabled = !slug;
   duplicateBtn.disabled = !slug;
-  $('post-path').textContent = slug
-    ? paths.post(postLang.value, slug)
-    : paths.postsDir(postLang.value);
+  paintPath(slug ? paths.post(postLang.value, slug) : paths.postsDir(postLang.value));
   setNotice('');
   showPostError('');
   // keepPanel：删完文章要留着「已删除 / 构建进度」那条反馈，不能被这次重载清掉
@@ -362,7 +376,7 @@ function duplicatePost(): void {
     body
   );
   slugInput.value = `${base}-copy`;
-  $('post-path').textContent = paths.postsDir(postLang.value);
+  paintPath(paths.postsDir(postLang.value));
   list?.setActive('');
   hideDeleteConfirm();
   deleteBtn.disabled = true;
@@ -670,13 +684,16 @@ export function initPost(): void {
       // 远端在这期间被改过（另一台设备 / 另一个标签页）就先问一句，别默默覆盖
       if (remote?.sha) {
         const fresh = await statFile(repo as Repo, remote.path, token);
-        if (
-          fresh &&
-          fresh !== remote.sha &&
-          !window.confirm('仓库里的这份文件在你编辑期间被改过（可能来自另一台设备或另一个标签页）。继续发布会覆盖那些改动，继续吗？')
-        ) {
-          panel.reset();
-          return;
+        if (fresh && fresh !== remote.sha) {
+          const ok = await confirmDialog({
+            title: '远端这份文件被改过',
+            body: `${remote.path}\n\n它在你编辑期间被别的设备或标签页改过。继续发布会覆盖那些改动（发布后仍可在「最近删除」里找回旧版本之前的内容，但覆盖是即时的）。`,
+            okLabel: '仍然覆盖发布',
+          });
+          if (!ok) {
+            panel.reset();
+            return;
+          }
         }
       }
 
@@ -708,7 +725,7 @@ export function initPost(): void {
       currentSlug = slug;
       slugLocked = true;
       paintLock();
-      $('post-path').textContent = paths.post(postLang.value, slug);
+      paintPath(paths.post(postLang.value, slug));
       await refreshPostList();
       list?.setActive(slug);
 

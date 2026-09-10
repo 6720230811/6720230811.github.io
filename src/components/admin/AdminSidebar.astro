@@ -11,21 +11,22 @@ const base = import.meta.env.BASE_URL;
   标了 data-only="post" 的块在个人信息 / 友链分区里会被整体藏掉（见 admin.css）。
 */}
 <aside class="admin-sidebar" id="sidebar" aria-label="文章与分区">
-  <nav class="sidebar__menu">
-    <button class="sidebar__tab" type="button" data-tab="post" aria-current="page">
+  {/* 语义上是 tablist：按钮用 aria-selected + aria-controls，中间的画布是 tabpanel */}
+  <nav class="sidebar__menu" role="tablist" aria-label="后台分区">
+    <button class="sidebar__tab" type="button" role="tab" id="tab-post" data-tab="post" aria-selected="true" aria-controls="panel-post">
       <Icon name="doc" />
       <span>文章</span>
       <span class="sidebar__count" id="post-count">0</span>
     </button>
-    <button class="sidebar__tab" type="button" data-tab="profile">
+    <button class="sidebar__tab" type="button" role="tab" id="tab-profile" data-tab="profile" aria-selected="false" aria-controls="panel-profile">
       <Icon name="user" />
       <span>个人信息</span>
     </button>
-    <button class="sidebar__tab" type="button" data-tab="friends">
+    <button class="sidebar__tab" type="button" role="tab" id="tab-friends" data-tab="friends" aria-selected="false" aria-controls="panel-friends">
       <Icon name="link" />
       <span>友链</span>
     </button>
-    <button class="sidebar__tab" type="button" data-tab="assets">
+    <button class="sidebar__tab" type="button" role="tab" id="tab-assets" data-tab="assets" aria-selected="false" aria-controls="panel-assets">
       <Icon name="image" />
       <span>素材</span>
       <span class="sidebar__count" id="asset-count" hidden>0</span>
@@ -105,7 +106,7 @@ const base = import.meta.env.BASE_URL;
     </label>
   </div>
 
-  <ul id="post-items" class="sidebar__list" data-only="post"></ul>
+  <ul id="post-items" class="sidebar__list" data-only="post" aria-label="文章列表"></ul>
   <p id="post-list-meta" class="sidebar__meta" data-only="post"></p>
 
   {/* 最近删除：本地留一份副本，删错了可以一键还原（重新 PUT 回仓库） */}

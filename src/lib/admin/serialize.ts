@@ -1,4 +1,14 @@
-import { ProfileSchema, FriendsSchema } from '../../data/profile.schema';
+/**
+ * 这里刻意不 import zod schema：那会把 zod 拖进后台首包（实测 gzip +23KB）。
+ * 需要校验的调用方自己 await loadSchemas() 再把 schema 传进来（见 lib/admin/schemas.ts）。
+ */
+interface StrictParser {
+  strict: () => { parse: (value: unknown) => unknown };
+}
+
+interface ArrayParser {
+  array: () => { parse: (value: unknown) => unknown };
+}
 
 /**
  * 后台的序列化工具：Markdown frontmatter 拼装/解析、slug 处理、
@@ -136,13 +146,17 @@ export function today(): string {
  * - strict() 拒绝未在 schema 里的键（zod 默认会静默丢掉未知键，那会悄悄吞数据）
  * - 输出对象的 key 顺序 = schema 声明顺序，所以 diff 永远是干净的
  */
-export function stableProfileJson(input: unknown): string {
+export function stableProfileJson(input: unknown, ProfileSchema: StrictParser): string {
   const parsed = ProfileSchema.strict().parse(input);
   return `${JSON.stringify(parsed, null, 2)}\n`;
 }
 
 /** 友链文件是 { zh: [...], en: [...] }，写回时两份一起序列化，key 顺序固定 */
-export function stableFriendsFileJson(zh: unknown, en: unknown): string {
+export function stableFriendsFileJson(
+  zh: unknown,
+  en: unknown,
+  FriendsSchema: ArrayParser
+): string {
   const parsed = {
     zh: FriendsSchema.array().parse(zh),
     en: FriendsSchema.array().parse(en),
