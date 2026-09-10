@@ -364,6 +364,7 @@ body.admin-shell {
    工作台三栏
    ============================================================ */
 .workbench {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -865,10 +866,12 @@ body.admin-shell {
 
 /* ---------- 编辑区 / 预览区 ---------- */
 .editor {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 编辑 / 预览 的分栏宽度可拖（见 lib/admin/resize.ts） */
+  grid-template-columns: minmax(0, var(--adm-editor-w, 50%)) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
 }
@@ -3166,8 +3169,10 @@ select.input {
 }
 
 .profile-workbench {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  /* 卡片 / 镜像 的分栏宽度可拖 */
+  grid-template-columns: minmax(0, var(--adm-pv-w, 52%)) minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
   margin-top: 0.75rem;
@@ -3806,6 +3811,130 @@ select.input {
 /* 极窄屏：视图切换那三个按钮挤不下顶栏时允许换行 */
 @media (max-width: 720px) {
   .topbar__center {
+    display: none;
+  }
+}
+
+/* ============================================================
+   可拖拽分隔条：三栏 + 写作区分栏 + 个人信息分栏
+   ============================================================ */
+
+.gutter {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 8px 而不是 10px：别把列表那侧的滚动条压掉太多，仍然好抓 */
+  width: 8px;
+  /* 触屏上要靠 pointer 事件接管，别让浏览器抢去做滚动手势 */
+  touch-action: none;
+  cursor: col-resize;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.gutter::before {
+  content: '';
+  width: 1px;
+  height: 100%;
+  background: var(--adm-line);
+  transition: background 0.12s ease, width 0.12s ease;
+}
+
+/* 悬停时中间浮出一个小握把：不然这条线太不起眼，没人知道能拖 */
+.gutter::after {
+  content: '';
+  position: absolute;
+  width: 3px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--adm-accent);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.gutter:hover::after,
+.gutter:focus-visible::after,
+.gutter.is-active::after {
+  opacity: 1;
+}
+
+.gutter:hover::before,
+.gutter:focus-visible::before,
+.gutter.is-active::before {
+  width: 2px;
+  background: var(--adm-accent);
+}
+
+.gutter:focus-visible {
+  outline: none;
+}
+
+/* 拖动中：关掉栏宽过渡（否则跟手会「橡皮筋」），并锁住选中 */
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-resizing .workbench {
+  transition: none;
+}
+
+/* 三栏的两条 */
+.gutter--sb {
+  top: 0;
+  bottom: 0;
+  left: var(--adm-sb-w);
+  transform: translateX(-50%);
+}
+
+.gutter--ins {
+  top: 0;
+  bottom: 0;
+  right: var(--adm-ins-w);
+  transform: translateX(50%);
+}
+
+.workbench[data-sidebar='closed'] .gutter--sb,
+.workbench[data-inspector='closed'] .gutter--ins,
+.workbench[data-resize='off'] .gutter--sb,
+.workbench[data-resize='off'] .gutter--ins {
+  display: none;
+}
+
+/* 写作区的两条（各自容器内部） */
+.gutter--edit {
+  top: 0;
+  bottom: 0;
+  left: var(--adm-editor-w, 50%);
+  transform: translateX(-50%);
+}
+
+.editor[data-mode='write'] .gutter--edit,
+.editor[data-mode='render'] .gutter--edit {
+  display: none;
+}
+
+.gutter--pv {
+  top: 0;
+  bottom: 0;
+  left: calc(var(--adm-pv-w, 52%) + 0.5rem);
+  transform: translateX(-50%);
+}
+
+/* 窄屏：左右栏是浮层、个人信息变单列，分隔条都没有意义 */
+@media (max-width: 960px) {
+  .gutter--sb,
+  .gutter--ins,
+  .gutter--edit {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .gutter--pv {
     display: none;
   }
 }

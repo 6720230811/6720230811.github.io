@@ -39,6 +39,18 @@ import AssetPanel from './AssetPanel.astro';
     </div>
 
     <div class="editor" id="editor" data-mode="split">
+      {/* 编辑 / 预览 的分界也能拖（只在双栏下出现） */}
+      <div
+        class="gutter gutter--edit"
+        data-resize-pane="editor"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整编辑区与预览的宽度"
+        tabindex="0"
+        title="拖动调整宽度，双击复位"
+      >
+      </div>
+
       <section class="editor__pane editor__pane--write" id="editor-write">
         <header class="editor__bar">
           <span class="editor__label">Markdown</span>

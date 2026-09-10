@@ -113,10 +113,33 @@ const base = import.meta.env.BASE_URL;
       </div>
     </header>
 
-    <div class="workbench" data-sidebar="open" data-inspector="open" data-section="post">
+    <div class="workbench" data-sidebar="open" data-inspector="open" data-section="post" data-resize="on">
+      {/* 三栏宽度可拖：左右两条分隔条（面板折叠或窄屏时自动隐藏） */}
+      <div
+        class="gutter gutter--sb"
+        data-resize-pane="sidebar"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整左栏宽度"
+        tabindex="0"
+        title="拖动调整宽度，双击复位"
+      >
+      </div>
+
       <AdminSidebar />
       <AdminCanvas />
       <AdminInspector />
+
+      <div
+        class="gutter gutter--ins"
+        data-resize-pane="inspector"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="调整右栏宽度"
+        tabindex="0"
+        title="拖动调整宽度，双击复位"
+      >
+      </div>
     </div>
 
     <TokenDrawer />

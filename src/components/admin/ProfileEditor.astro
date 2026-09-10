@@ -73,6 +73,18 @@ const linkFields = [
   <pre id="profile-issues" class="panel-issues" hidden></pre>
 
   <div class="profile-workbench">
+    {/* 卡片 / 镜像 的分界也能拖 */}
+    <div
+      class="gutter gutter--pv"
+      data-resize-pane="profile"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="调整卡片与预览的宽度"
+      tabindex="0"
+      title="拖动调整宽度，双击复位"
+    >
+    </div>
+
     {/* ---------------- 左栏：模块化编辑流 ---------------- */}
     <div class="profile-editor">
       <details class="mod" data-mod="basic" open>

@@ -3,6 +3,7 @@ import { initPost, refreshPostList } from './post';
 import { initProfile } from './profile';
 import { initFriends } from './friends';
 import { initAssets } from './assets';
+import { initResize } from './resize';
 import { initUnsavedGuard } from './unsaved';
 import { pruneDrafts } from './drafts';
 import { initDropGuard } from './upload';
@@ -76,6 +77,7 @@ initTokenPanel(() => {
   document.dispatchEvent(new CustomEvent<string>('admin:section', { detail: activeSection() }));
 });
 
+initResize();
 initShortcuts();
 // ⌘K：跳到文章分区并把焦点放进搜索框
 registerShortcut({
