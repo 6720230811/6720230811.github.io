@@ -1,0 +1,3 @@
+FROM unclecode/crawl4ai:latest
+# 让 CORS 预检穿过认证闸门（否则浏览器跨域调用必然 401）
+COPY auth_gate.py /app/auth_gate.py

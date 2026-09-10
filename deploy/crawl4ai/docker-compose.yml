@@ -1,0 +1,58 @@
+# crawl4ai 服务：给 /admin 后台调用的抓取后端
+#
+# 与官方 docker-compose.yml 的差别只有两处（都是必须的）：
+#   1. image 用派生镜像 crawl4ai-cors（让 CORS 预检穿过认证闸门，见 auth_gate.py）
+#   2. 挂载自己的 config.yml（官方默认 cors_allow_origins 是空的 = 拒绝一切跨域）
+# 其余安全加固（只读根文件系统、丢弃 capabilities、tmpfs、内存/PID 上限、健康检查、
+# shm 1GB 给 Chromium 用）都保持官方原样。
+#
+# 用法：
+#   export CRAWL4AI_API_TOKEN=$(openssl rand -hex 24)
+#   docker compose up -d
+#   docker compose ps && curl -s localhost:11235/health
+
+x-base-config: &base-config
+  ports:
+    - "11235:11235"
+  environment:
+    - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:?必须设置 CRAWL4AI_API_TOKEN}
+  shm_size: "1gb"
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  read_only: true
+  tmpfs:
+    - /tmp
+    - /var/lib/redis:uid=999,gid=999,mode=0700
+    - /var/lib/crawl4ai/outputs:uid=999,gid=999,mode=0700
+    - /home/appuser/.crawl4ai:uid=999,gid=999,mode=0700
+    - /home/appuser/.cache/url_seeder:uid=999,gid=999,mode=0700
+    - /home/appuser/.gunicorn:uid=999,gid=999,mode=0700
+  deploy:
+    resources:
+      limits:
+        memory: 4G
+        pids: 512
+      reservations:
+        memory: 1G
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 40s
+  user: "appuser"
+
+services:
+  crawl4ai:
+    # 派生镜像：FROM unclecode/crawl4ai:latest + COPY auth_gate.py /app/auth_gate.py
+    build:
+      context: .
+      dockerfile: Dockerfile.patched
+    image: crawl4ai-cors:0.9.3
+    volumes:
+      # 跨域白名单在这里配（见 config.yml 的 security.cors_allow_origins）
+      - ./config.yml:/app/config.yml:ro
+    <<: *base-config

@@ -1,0 +1,5 @@
+FROM unclecode/crawl4ai:latest
+# 让 CORS 预检穿过认证闸门（否则浏览器跨域调用必然 401）
+COPY auth_gate.py /app/auth_gate.py
+# 跨域白名单也打进镜像：省掉单文件 bind mount（macOS / Windows 上容易出坑）
+COPY config.yml /app/config.yml
