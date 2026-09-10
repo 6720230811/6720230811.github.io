@@ -950,7 +950,8 @@ export function initPost(): void {
   // 启动时也试着恢复草稿：没有 token 也能接着写，等填了 token 再发布
   void restoreDraft();
   if (isFallback()) {
-    setNotice('本地存储不可用（隐私模式？），草稿只会保留在当前标签页。');
+    // 环境级警告：不自动收起（降级状态下用户需要一直看得见），但可以点掉
+    setNotice('本地存储不可用（隐私模式？），草稿只会保留在当前标签页。', { sticky: true });
   }
   if (requireToken()) {
     run(() => refreshPostList());

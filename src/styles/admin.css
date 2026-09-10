@@ -2030,7 +2030,7 @@ select.input {
 }
 
 /* ============================================================
-   提示：右下角 toast + 左下角常驻提示
+   提示：右下角 toast 栈（.toasts）+ 左下角常驻提示（.admin-notice）
    ============================================================ */
 .status {
   position: fixed;
@@ -2047,6 +2047,7 @@ select.input {
   font-size: 0.8rem;
   line-height: 1.6;
   color: var(--adm-muted);
+  text-align: left;
   animation: adm-toast-in 0.2s ease-out;
 }
 
@@ -2061,39 +2062,52 @@ select.input {
   background: var(--adm-faint);
 }
 
-.status--ok {
-  color: var(--adm-accent);
-  border-color: var(--adm-accent);
-}
-
-.status--ok::before {
-  background: var(--adm-accent);
-}
-
-.status--error {
-  color: var(--adm-danger);
-  border-color: var(--adm-danger);
-}
-
-.status--error::before {
-  background: var(--adm-danger);
-}
-
-.status--busy::before {
-  animation: adm-pulse 1s ease-in-out infinite;
-}
-
+/* 左下角这块盖着侧栏底部，所以整块可点：点它就是让它让开 */
 .admin-notice {
-  position: fixed;
+  right: auto;
   left: 1rem;
   bottom: 1rem;
-  z-index: 80;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   max-width: min(24rem, calc(100vw - 2rem));
   border-color: var(--adm-warn);
+  cursor: pointer;
+}
+
+.admin-notice.is-leaving {
+  animation: adm-toast-out 0.16s ease-in forwards;
+}
+
+.status__text {
+  min-width: 0;
+}
+
+.status__close {
+  flex: none;
+  border: none;
+  background: none;
+  padding: 0 0.1rem;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.status__close:hover {
+  color: var(--adm-danger);
 }
 
 @keyframes adm-toast-in {
   from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+}
+
+@keyframes adm-toast-out {
+  to {
     opacity: 0;
     transform: translateY(0.4rem);
   }

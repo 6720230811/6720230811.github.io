@@ -121,11 +121,86 @@ export function setStatus(message: string, kind: StatusKind = 'info', action?: T
   if (ms) window.setTimeout(() => dismiss(toast), ms);
 }
 
-/** 常驻提示（草稿恢复、本地存储不可用），跟状态条分开：它不随下一次操作消失 */
-export function setNotice(message: string): void {
-  const el = $('draft-notice');
-  el.hidden = !message;
-  el.textContent = message;
+/**
+ * 左下角那块常驻提示（草稿恢复、本地存储不可用），跟右下角的 toast 分开。
+ *
+ * 它是 position: fixed，正好盖着侧栏底部（仓库胶囊、设置齿轮），而以前一旦出现
+ * 就一直挂到下一次操作——「已恢复草稿」那条能挡一整轮编辑。现在：
+ * - 默认 8 秒后自己收起；鼠标悬停或键盘停在上面时暂停计时（够时间读完）
+ * - 点整块、点 × 都能立刻收起
+ * - `sticky` 给环境级警告用（隐私模式下草稿存不下）：不自动走，但仍可点掉
+ */
+const NOTICE_AUTO_HIDE = 8000;
+/** 与 .admin-notice.is-leaving 的动画时长保持一致 */
+const NOTICE_LEAVE_MS = 160;
+
+let noticeTimer: number | undefined;
+let noticeSticky = false;
+let noticePaused = false;
+
+function collapseNotice(): void {
+  const el = document.getElementById('draft-notice');
+  window.clearTimeout(noticeTimer);
+  if (!el || el.hidden) return;
+  el.classList.add('is-leaving');
+  noticeTimer = window.setTimeout(() => {
+    el.hidden = true;
+    el.classList.remove('is-leaving');
+  }, NOTICE_LEAVE_MS);
+}
+
+function armNotice(): void {
+  window.clearTimeout(noticeTimer);
+  if (noticeSticky || noticePaused) return;
+  noticeTimer = window.setTimeout(collapseNotice, NOTICE_AUTO_HIDE);
+}
+
+/** 事件只挂一次：setNotice 会被反复调用（保存、切换文章都会清一下） */
+function noticeEl(): HTMLElement {
+  const el = $<HTMLElement>('draft-notice');
+  if (el.dataset.wired) return el;
+  el.dataset.wired = '1';
+
+  // 整块可点：它挡住的地方本来就是它，点下去就是想让它让开
+  el.addEventListener('click', collapseNotice);
+  el.addEventListener('mouseenter', () => {
+    noticePaused = true;
+    window.clearTimeout(noticeTimer);
+  });
+  el.addEventListener('mouseleave', () => {
+    noticePaused = false;
+    armNotice();
+  });
+  el.addEventListener('focusin', () => {
+    noticePaused = true;
+    window.clearTimeout(noticeTimer);
+  });
+  el.addEventListener('focusout', () => {
+    noticePaused = false;
+    armNotice();
+  });
+  return el;
+}
+
+export function setNotice(message: string, opts: { sticky?: boolean } = {}): void {
+  const el = noticeEl();
+  window.clearTimeout(noticeTimer);
+  el.classList.remove('is-leaving');
+  noticeSticky = Boolean(opts.sticky);
+  // 新的一条要有自己的完整计时；此刻指针/焦点就在上面的话就别计时了
+  noticePaused = el.matches(':hover') || el.contains(document.activeElement);
+
+  if (!message) {
+    el.hidden = true;
+    return;
+  }
+
+  // 先露出来再写文本：aria-live 只在可见时播报
+  el.hidden = false;
+  const text = el.querySelector('.status__text');
+  if (text) text.textContent = message;
+  else el.textContent = message;
+  armNotice();
 }
 
 /**

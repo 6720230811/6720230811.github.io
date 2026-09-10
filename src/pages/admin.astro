@@ -153,8 +153,12 @@ const base = import.meta.env.BASE_URL;
       <div id="shortcut-help-body" class="help__body"></div>
     </dialog>
 
-    {/* 提示条：右下角的栈，由 dom.ts 的 setStatus 维护（见 .toasts） */}
-    <p id="draft-notice" class="status status--info admin-notice" hidden></p>
+    {/* 左下角的常驻提示（草稿恢复 / 本地存储不可用）：dom.ts 的 setNotice 维护。
+        它盖着侧栏底部，所以默认 8 秒自己收起，点整块或点 × 也能立刻收起 */}
+    <div id="draft-notice" class="status admin-notice" hidden>
+      <span class="status__text" aria-live="polite"></span>
+      <button class="status__close" type="button" aria-label="收起提示">×</button>
+    </div>
 
     <script>
       import '../lib/admin/main';
