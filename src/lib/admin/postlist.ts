@@ -1,6 +1,8 @@
 import { $, setStatus } from './dom';
 import { repo, paths } from '../../data/admin';
 import { readFile, listDir, GhError, type Repo } from './github';
+import { site } from '../../data/admin';
+import { isDirty } from './unsaved';
 import { parsePostFile } from './serialize';
 
 /**
@@ -91,9 +93,12 @@ export function initPostList(onPick: (slug: string) => void): PostList {
   const categoryEl = $<HTMLSelectElement>('filter-category');
   const tagEl = $<HTMLSelectElement>('filter-tag');
   const statusEl = $<HTMLSelectElement>('filter-status');
+  const sortEl = $<HTMLSelectElement>('filter-sort');
 
   let items: PostMeta[] = [];
   let active = '';
+  /** 当前语言：给列表里的「打开线上文章」拼地址用 */
+  let lang = 'zh';
 
   function fillFilters(): void {
     const categories = new Set<string>();
@@ -129,7 +134,7 @@ export function initPostList(onPick: (slug: string) => void): PostList {
     const tag = tagEl.value;
     const status = statusEl.value;
 
-    return items.filter((item) => {
+    const out = items.filter((item) => {
       if (key && !`${item.title} ${item.slug}`.toLowerCase().includes(key)) return false;
       if (category && item.category !== category) return false;
       if (tag && !item.tags.includes(tag)) return false;
@@ -137,6 +142,14 @@ export function initPostList(onPick: (slug: string) => void): PostList {
       if (status === 'published' && item.draft) return false;
       return true;
     });
+
+    // 排序只影响显示顺序，不动 items 本身（active / 计数都还按原列表）
+    const byDate = (a: PostMeta, b: PostMeta) => (b.date || '').localeCompare(a.date || '');
+    if (sortEl.value === 'title') out.sort((a, b) => a.title.localeCompare(b.title, 'zh'));
+    else if (sortEl.value === 'updated')
+      out.sort((a, b) => (b.updated || b.date || '').localeCompare(a.updated || a.date || ''));
+    else out.sort(byDate);
+    return out;
   };
 
   function render(): void {
@@ -186,6 +199,19 @@ export function initPostList(onPick: (slug: string) => void): PostList {
 
       btn.append(title, sub, foot);
       li.append(btn);
+
+      // 已发布的文章给一个直达线上的入口；草稿没有线上页面，不给
+      if (!item.draft && !item.metaOnly) {
+        const link = document.createElement('a');
+        link.className = 'pcard__link';
+        link.href = site.post(lang, item.slug);
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.title = '打开线上文章';
+        link.textContent = '↗';
+        li.append(link);
+      }
+
       frag.append(li);
     }
 
@@ -205,6 +231,8 @@ export function initPostList(onPick: (slug: string) => void): PostList {
   listEl.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.pcard');
     if (!btn) return;
+    // 切换文章等于丢掉当前编辑的内容，先问一句
+    if (isDirty() && !window.confirm('有未保存的改动，切换文章会丢掉，继续吗？')) return;
     onPick(btn.dataset.slug ?? '');
   });
 
@@ -212,15 +240,18 @@ export function initPostList(onPick: (slug: string) => void): PostList {
   categoryEl.addEventListener('change', render);
   tagEl.addEventListener('change', render);
   statusEl.addEventListener('change', render);
+  sortEl.addEventListener('change', render);
 
   newBtn.addEventListener('click', () => {
+    if (isDirty() && !window.confirm('有未保存的改动，新建会清空当前编辑的内容，继续吗？')) return;
     filterEl.value = '';
     onPick('');
   });
 
   return {
-    async rebuild(lang: string, token: string) {
-      const index = await buildIndex(lang, token);
+    async rebuild(nextLang: string, token: string) {
+      lang = nextLang;
+      const index = await buildIndex(nextLang, token);
       items = index.items;
       fillFilters();
       render();

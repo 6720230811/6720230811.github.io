@@ -2,7 +2,7 @@
 import { repo } from '../../data/admin';
 
 /**
- * 右栏：Frontmatter 检查器 + 发布。
+ * 右栏：Frontmatter 检查器 + 发布 + 删除 / 改名 / 副本。
  * 所有字段都是同一份状态的入口（值由 lib/admin/post.ts 统一收集），
  * 底部吸底的操作区带发布生命周期（写入 → 轮询 → 生效）。
  */
@@ -43,13 +43,23 @@ import { repo } from '../../data/admin';
         </button>
       </div>
       <p id="slug-error" class="field__error" hidden></p>
+      <p id="slug-hint" class="field__hint" hidden></p>
       <button id="slug-overwrite" class="btn btn--xs btn--warn" type="button" hidden>确认覆盖同名文件</button>
     </div>
 
-    <label class="field">
-      <span class="field__label">发布日期</span>
-      <input id="post-date" class="input" type="date" />
-    </label>
+    <div class="field-row">
+      <label class="field">
+        <span class="field__label">发布日期</span>
+        <input id="post-date" class="input" type="date" />
+      </label>
+      <label class="field">
+        <span class="field__label">
+          修改时间
+          <span class="field__hint">留空不写</span>
+        </span>
+        <input id="post-updated" class="input" type="date" />
+      </label>
+    </div>
 
     <label class="field">
       <span class="field__label">分类 Category</span>
@@ -119,5 +129,21 @@ import { repo } from '../../data/admin';
     <p class="inspector__note">
       推送到 <code>{repo.branch}</code> 分支，自动触发 Actions 部署
     </p>
+
+    {/* 删除要两步：先给一个确认条，别把「删除」做成一键不可逆 */}
+    <div class="inspector__danger">
+      <button id="post-duplicate" class="btn btn--xs" type="button" data-write disabled>复制为新文章</button>
+      <button id="post-delete" class="btn btn--xs btn--danger" type="button" data-write disabled>删除文章</button>
+
+      <div id="delete-confirm" class="confirm" hidden>
+        <p class="confirm__text">
+          删除 <code id="delete-name"></code>？仓库里的这个文件会被删掉，Actions 跑完线上也一起消失。
+        </p>
+        <div class="confirm__actions">
+          <button id="delete-cancel" class="btn btn--xs" type="button">取消</button>
+          <button id="delete-ok" class="btn btn--xs btn--danger" type="button">确认删除</button>
+        </div>
+      </div>
+    </div>
   </footer>
 </aside>

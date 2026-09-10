@@ -480,10 +480,6 @@ body.admin-shell {
   gap: 0.35rem;
 }
 
-.sidebar__filters #filter-status {
-  grid-column: 1 / -1;
-}
-
 .sidebar__list {
   flex: 1;
   min-height: 0;
@@ -575,6 +571,36 @@ body.admin-shell {
 
 :root[data-theme='dark'] .pcard__live {
   color: var(--adm-ok);
+}
+
+.pcard__link {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: var(--adm-faint);
+  opacity: 0;
+}
+
+.pcard__link:hover {
+  background: var(--adm-accent-soft);
+  color: var(--adm-accent);
+  text-decoration: none;
+}
+
+.sidebar__list li {
+  position: relative;
+}
+
+.sidebar__list li:hover .pcard__link,
+.pcard__link:focus-visible {
+  opacity: 1;
 }
 
 .pcard-empty {
@@ -1066,6 +1092,55 @@ body.admin-shell {
   flex: 1.4;
 }
 
+.admin-shell .btn--danger {
+  border-color: var(--adm-danger);
+  color: var(--adm-danger);
+}
+
+.admin-shell .btn--danger:hover {
+  background: var(--adm-danger);
+  border-color: var(--adm-danger);
+  color: #fff;
+}
+
+.inspector__danger {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--adm-line);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.confirm {
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--adm-danger);
+  border-radius: var(--adm-r);
+  background: rgba(225, 29, 72, 0.06);
+}
+
+.confirm__text {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--adm-text);
+}
+
+.confirm__text code {
+  padding: 0 0.2rem;
+  border-radius: 3px;
+  background: var(--adm-surface);
+  font-size: 0.7rem;
+}
+
+.confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
 .inspector__note {
   margin: 0.5rem 0 0;
   text-align: center;
@@ -1304,6 +1379,12 @@ body.admin-shell {
   font-size: 0.78rem;
   line-height: 1.7;
   tab-size: 2;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
 }
 
 .input--invalid,

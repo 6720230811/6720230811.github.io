@@ -1,6 +1,6 @@
 import { $, setStatus, setNotice, setFieldError, run, debounce } from './dom';
 import { repo, paths, site } from '../../data/admin';
-import { readFile, saveFile, statFile, GhError, type Repo } from './github';
+import { readFile, saveFile, statFile, deleteFile, GhError, type Repo } from './github';
 import { buildPostFile, parsePostFile, today, toSlug, isValidSlug } from './serialize';
 import type { PostFrontmatter } from './serialize';
 import { loadDraft, clearDraft, isFallback } from './drafts';
@@ -9,7 +9,7 @@ import { renderStats } from './stats';
 import { initMdToolbar, initTabIndent, initSaveShortcut } from './toolbar';
 import { initImageDrop } from './upload';
 import { initPostList, type PostList } from './postlist';
-import { markDirty, markClean } from './unsaved';
+import { markDirty, markClean, isDirty } from './unsaved';
 import { validatePost, showIssues } from './validate';
 import { requireToken, flagTokenProblem } from './token';
 import { initChips, rememberTags, type Chips } from './chips';
@@ -35,7 +35,15 @@ const titleInput = $<HTMLInputElement>('post-title');
 const slugInput = $<HTMLInputElement>('post-slug');
 const slugLock = $<HTMLButtonElement>('slug-lock');
 const slugOverwrite = $<HTMLButtonElement>('slug-overwrite');
+const slugHint = $('slug-hint');
 const dateInput = $<HTMLInputElement>('post-date');
+const updatedInput = $<HTMLInputElement>('post-updated');
+const deleteBtn = $<HTMLButtonElement>('post-delete');
+const deleteBox = $('delete-confirm');
+const deleteName = $('delete-name');
+const deleteOk = $<HTMLButtonElement>('delete-ok');
+const deleteCancel = $<HTMLButtonElement>('delete-cancel');
+const duplicateBtn = $<HTMLButtonElement>('post-duplicate');
 const categoryInput = $<HTMLInputElement>('post-category');
 const tagBox = $('tag-chips');
 const tagInput = $<HTMLInputElement>('tag-input');
@@ -60,6 +68,8 @@ let touched = false;
 let list: PostList | null = null;
 let chips: Chips | null = null;
 let cover: { refresh: () => void } | null = null;
+/** 自动暂存句柄：initPost 里建好，duplicatePost 也要用 */
+let autosaveRef: ReturnType<typeof createAutosave<PostDraft>> | null = null;
 
 /** 仓库里已有的 slug：发布前查重用（改过语言或重新载入时刷新） */
 const knownSlugs = new Set<string>();
@@ -75,6 +85,8 @@ function collectPost(): PostFrontmatter {
     title: titleInput.value.trim(),
     description: descInput.value.trim(),
     date: dateInput.value || today(),
+    // 留空就不写进 frontmatter：没有 updated 时列表里显示的是发布日期
+    updated: updatedInput.value.trim() || undefined,
     category: categoryInput.value.trim(),
     tags: chips?.get() ?? [],
     // 留空就不写进 frontmatter：文章页会自动退回正文第一张图
@@ -109,6 +121,7 @@ function fillPost(data: PostFrontmatter, body: string): void {
   titleInput.value = data.title;
   descInput.value = data.description;
   dateInput.value = data.date;
+  updatedInput.value = data.updated ?? '';
   categoryInput.value = data.category;
   chips?.set(data.tags);
   coverInput.value = data.cover ?? '';
@@ -119,7 +132,10 @@ function fillPost(data: PostFrontmatter, body: string): void {
 }
 
 function resetPost(): void {
-  fillPost({ title: '', description: '', date: today(), category: '', tags: [], draft: true }, '');
+  fillPost(
+    { title: '', description: '', date: today(), category: '', tags: [], draft: true },
+    ''
+  );
 }
 
 export async function refreshPostList(): Promise<void> {
@@ -131,7 +147,7 @@ export async function refreshPostList(): Promise<void> {
   for (const slug of list.slugs()) knownSlugs.add(slug);
 }
 
-export async function loadPost(slug: string): Promise<void> {
+export async function loadPost(slug: string, opts: { keepPanel?: boolean } = {}): Promise<void> {
   const token = requireToken();
   if (!token) return;
 
@@ -140,15 +156,20 @@ export async function loadPost(slug: string): Promise<void> {
   overwriteAck = false;
   slugOverwrite.hidden = true;
   list?.setActive(slug);
-  // 已有文章的 slug 就是文件名，改了等于新建一篇，所以直接锁住
-  slugInput.disabled = slug !== '';
-  slugLock.disabled = slug !== '';
+  // slug 默认锁住：跟标题走（新文章）或保持原文件名（老文章）。
+  // 解锁后就是「改名」——发布时会先写新文件、再删掉旧的那个。
+  slugLocked = true;
+  paintLock();
+  hideDeleteConfirm();
+  deleteBtn.disabled = !slug;
+  duplicateBtn.disabled = !slug;
   $('post-path').textContent = slug
     ? paths.post(postLang.value, slug)
     : paths.postsDir(postLang.value);
   setNotice('');
   showPostError('');
-  panel.reset();
+  // keepPanel：删完文章要留着「已删除 / 构建进度」那条反馈，不能被这次重载清掉
+  if (!opts.keepPanel) panel.reset();
 
   if (!slug) {
     resetPost();
@@ -184,10 +205,127 @@ async function restoreDraft(): Promise<void> {
   setNotice(`已恢复 ${minutes} 分钟前的本地草稿，发布成功后会自动清除。`);
 }
 
+// ---------------------------------------------------------------- 删除
+function showDeleteConfirm(): void {
+  if (!currentSlug) return;
+  deleteName.textContent = `${currentSlug}.md`;
+  deleteBox.hidden = false;
+  deleteBtn.hidden = true;
+}
+
+function hideDeleteConfirm(): void {
+  deleteBox.hidden = true;
+  deleteBtn.hidden = false;
+}
+
+/**
+ * 删掉仓库里这篇文章。
+ * 删除也是一次提交，所以同样走一遍构建反馈：删完能看到 Actions 什么时候跑完。
+ */
+const removePost = async (): Promise<void> => {
+  const token = requireToken();
+  if (!token || !currentSlug) return;
+
+  const slug = currentSlug;
+  panel.busy(true);
+  panel.commit('正在从仓库删除…');
+  try {
+    const commitSha = await deleteFile(
+      repo as Repo,
+      paths.post(postLang.value, slug),
+      token,
+      `delete post: ${slug}`
+    );
+    await clearDraft(draftKey());
+    knownSlugs.delete(slug);
+    markClean();
+    setNotice('');
+
+    if (!commitSha) {
+      panel.note('仓库里本来就没有这个文件。');
+      await refreshPostList();
+      await loadPost('', { keepPanel: true });
+      return;
+    }
+
+    panel.poll();
+    const result = await waitForBuild(commitSha);
+    if (result.phase === 'success') {
+      panel.done(site.blog(postLang.value));
+      setStatus(`已删除 ${slug}，线上已生效。`, 'ok');
+    } else if (result.phase === 'failure') {
+      panel.fail(`删除已提交，但构建在第 ${result.seconds} 秒失败`, {
+        steps: result.steps,
+        logUrl: result.run?.html_url,
+        retry: () => void removePost(),
+      });
+    } else if (result.phase === 'timeout') {
+      panel.note('删除已提交，构建 4 分钟还没结束，去 Actions 页面看进度。');
+    } else {
+      panel.note('已删除；读不到 Actions 状态（Token 缺 Actions 读权限）。');
+    }
+
+    await refreshPostList();
+    await loadPost('', { keepPanel: true });
+  } catch (e) {
+    const hint = e instanceof GhError ? e.hint : String(e);
+    if (e instanceof GhError && (e.status === 401 || e.status === 403)) {
+      flagTokenProblem(hint);
+      panel.reset();
+    } else {
+      panel.fail(hint, { logUrl: site.actions(), retry: () => void removePost() });
+    }
+    setStatus(hint, 'error');
+  } finally {
+    hideDeleteConfirm();
+    panel.busy(false);
+  }
+};
+
+/** 复制一份当前内容为新的草稿：slug 加 -copy，默认草稿，改好再发布 */
+function duplicatePost(): void {
+  const data = collectPost();
+  const body = bodyInput.value;
+  const base = toSlug(data.title) || currentSlug || 'post';
+
+  currentSlug = '';
+  slugLocked = false;
+  overwriteAck = false;
+  fillPost(
+    {
+      ...data,
+      title: data.title ? `${data.title}（副本）` : '',
+      date: today(),
+      updated: undefined,
+      draft: true,
+    },
+    body
+  );
+  slugInput.value = `${base}-copy`;
+  $('post-path').textContent = paths.postsDir(postLang.value);
+  list?.setActive('');
+  hideDeleteConfirm();
+  deleteBtn.disabled = true;
+  duplicateBtn.disabled = true;
+  paintLock();
+  markDirty();
+  autosaveRef?.markDirty();
+  renderNow();
+  setStatus('已复制成一份新草稿，改好 slug 再发布。', 'ok');
+}
+
 // ---------------------------------------------------------------- slug
 function paintLock(): void {
   slugLock.setAttribute('aria-pressed', String(slugLocked));
-  slugLock.title = slugLocked ? '跟随标题自动更新（点一下解锁手改）' : '已解锁，可手动编辑';
+  slugLock.title = slugLocked
+    ? currentSlug
+      ? '锁住了（点一下解锁：可以改文件名）'
+      : '跟随标题自动更新（点一下解锁手改）'
+    : '已解锁，可手动编辑';
+  slugInput.disabled = slugLocked;
+  // 已解锁 + 已有文章 = 改名，这件事得说清楚，不然发布后凭空多一个文件
+  slugHint.hidden = slugLocked || !currentSlug;
+  slugHint.textContent = '改名：发布时会写入新文件，再删掉原来那个。';
 }
 
 /**
@@ -273,10 +411,10 @@ export function initPost(): void {
     },
   });
 
-  const autosave = createAutosave<PostDraft>({
+  const autosave = (autosaveRef = createAutosave<PostDraft>({
     key: draftKey,
     collect: () => ({ data: collectPost(), body: bodyInput.value }),
-  });
+  }));
 
   initPreviewLoad(previewFrame);
   onPreviewLoad(() => sync.attach());
@@ -307,7 +445,7 @@ export function initPost(): void {
   titleInput.addEventListener('input', syncSlug);
   slugInput.addEventListener('input', () => {
     // 手改过就自动解锁：不然下一次敲标题又把人写的覆盖掉
-    if (slugLocked && !currentSlug) {
+    if (slugLocked) {
       slugLocked = false;
       paintLock();
     }
@@ -423,28 +561,40 @@ export function initPost(): void {
     const token = requireToken();
     if (!token) return;
 
-    const slug = currentSlug || slugInput.value.trim();
+    const slug = slugInput.value.trim() || currentSlug;
+    const renaming = Boolean(currentSlug) && slug !== currentSlug;
     const data = collectPost();
     const text = buildPostFile({ data, body: bodyInput.value.trimEnd() });
 
     panel.busy(true);
-    panel.commit();
+    panel.commit(renaming ? '正在写入新文件名…' : undefined);
     try {
       const commitSha = await saveFile(
         repo as Repo,
         paths.post(postLang.value, slug),
         token,
         text,
-        `${currentSlug ? 'update' : 'add'} post: ${data.title}`
+        `${renaming ? 'rename' : currentSlug ? 'update' : 'add'} post: ${data.title}`
       );
+
+      // 改名：新文件写好了再把旧的删掉。顺序反过来会有一瞬间两篇都在
+      if (renaming && commitSha) {
+        await deleteFile(
+          repo as Repo,
+          paths.post(postLang.value, currentSlug),
+          token,
+          `rename post: ${currentSlug} -> ${slug}`
+        );
+        knownSlugs.delete(currentSlug);
+      }
 
       await clearDraft(draftKey());
       setNotice('');
       markClean();
       rememberTags(data.tags);
       currentSlug = slug;
-      slugInput.disabled = true;
-      slugLock.disabled = true;
+      slugLocked = true;
+      paintLock();
       $('post-path').textContent = paths.post(postLang.value, slug);
       await refreshPostList();
       list?.setActive(slug);
@@ -499,6 +649,16 @@ export function initPost(): void {
     () => void publish(),
     () => document.querySelector('.sidebar__tab[aria-current="page"]')?.getAttribute('data-tab') === 'post'
   );
+
+  deleteBtn.addEventListener('click', showDeleteConfirm);
+  deleteCancel.addEventListener('click', hideDeleteConfirm);
+  deleteOk.addEventListener('click', () => void removePost());
+  duplicateBtn.addEventListener('click', () => {
+    if (isDirty() && !window.confirm('有未保存的改动，复制之后当前这篇的改动会留在副本里，继续吗？')) {
+      return;
+    }
+    duplicatePost();
+  });
 
   $('post-save-local').addEventListener('click', () => {
     void autosave.flush().then(() => setStatus('已存成本地草稿，换台机器看不到。', 'ok'));

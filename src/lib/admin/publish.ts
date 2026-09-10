@@ -40,7 +40,10 @@ export function createPublishPanel(): PublishPanel {
   const steps = $<HTMLUListElement>('pub-detail-steps');
   const retry = $<HTMLButtonElement>('pub-retry');
   const log = $<HTMLAnchorElement>('pub-log');
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-publish]'));
+  // data-write：删除 / 副本这类写操作，发布期间同样要锁住
+  const buttons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[data-publish], [data-write]')
+  );
 
   let tick: number | undefined;
   let startedAt = 0;

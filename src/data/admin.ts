@@ -30,5 +30,7 @@ export const site = {
   url: 'https://6720230811.github.io',
   /** 文章线上地址：中文站 /blog/<slug>，英文站 /en/blog/<slug> */
   post: (lang: string, slug: string) => `${site.url}${lang === 'zh' ? '' : `/${lang}`}/blog/${slug}`,
+  /** 博客列表页：删除文章之后没有单篇可跳，就跳这里 */
+  blog: (lang: string) => `${site.url}${lang === 'zh' ? '' : `/${lang}`}/blog`,
   actions: () => `https://github.com/${repo.owner}/${repo.repo}/actions`,
 };

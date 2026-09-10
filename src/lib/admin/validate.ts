@@ -31,8 +31,9 @@ export function validatePost(input: ValidateInput): Issue[] {
   const { slug, currentSlug, data, known } = input;
   const issues: Issue[] = [];
 
-  // 已有文章的 slug 就是文件名，改不了，也就不用查重
-  if (!currentSlug) {
+  // 已有文章且 slug 没动 → 就是原地更新，不用查重；
+  // 改名（slug 与当前文件名不同）等同于新建一份，规则与新建一样
+  if (!currentSlug || slug !== currentSlug) {
     if (!slug) {
       issues.push({ field: 'post-slug', message: '新建文章必须填 slug（就是文件名）。' });
     } else if (!isValidSlug(slug)) {

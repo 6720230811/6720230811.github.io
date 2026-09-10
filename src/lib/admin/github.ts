@@ -191,6 +191,14 @@ const put = (r: Repo, path: string, token: string, b64: string, message: string,
     }),
   });
 
+// DELETE contents：删文件，必须带 sha
+const del = (r: Repo, path: string, token: string, sha: string, message: string) =>
+  request(fileUrl(r, path), token, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, sha, branch: r.branch }),
+  });
+
 /**
  * 写入队列：所有写操作串行执行。
  * 连点两次会互相把对方的 sha 顶掉（409），串行化之后就不会了。
@@ -261,6 +269,35 @@ export async function saveBinaryFile(
           await put(r, path, token, b64, message, fresh);
           return;
         }
+      }
+      throw e;
+    }
+  });
+}
+
+/**
+ * 删文件。与 saveFile 同一套：串行队列 + 409 重试。
+ * 返回这次提交的 commit sha（文件本来就不存在时返回 null）。
+ */
+export async function deleteFile(
+  r: Repo,
+  path: string,
+  token: string,
+  message: string
+): Promise<string | null> {
+  return enqueue(async () => {
+    const sha = await statFile(r, path, token);
+    if (!sha) return null;
+
+    try {
+      const res = (await del(r, path, token, sha, message)) as { commit?: { sha?: string } };
+      return res?.commit?.sha ?? null;
+    } catch (e) {
+      if (e instanceof GhError && e.status === 409) {
+        const fresh = await statFile(r, path, token);
+        if (!fresh) return null;
+        const res = (await del(r, path, token, fresh, message)) as { commit?: { sha?: string } };
+        return res?.commit?.sha ?? null;
       }
       throw e;
     }
