@@ -1,11 +1,11 @@
 {
-  "name": "张三",
+  "name": "adgo",
   "title": "计算机科学与技术 · 硕士研究生",
-  "affiliation": "XX 大学",
+  "affiliation": "江西理工大学",
   "affiliationLink": "https://example.edu.cn",
   "lab": "XX 实验室",
-  "location": "中国 · 北京",
-  "email": "your.email@example.com",
+  "location": "中国 · 江西",
+  "email": "1979157344@qq.com",
   "bio": [
     "我是 XX 大学计算机科学与技术专业的硕士研究生，师从 XX 教授，主要研究方向为高效机器学习与大模型推理优化。",
     "我的研究关注如何在受限算力下提升大模型的推理效率，包括显存管理、调度策略与分布式推理系统设计。",
@@ -18,12 +18,10 @@
     "高性能计算"
   ],
   "links": {
-    "github": "https://github.com/GITHUB_ID",
+    "github": "https://github.com/6720230811",
     "scholar": "https://scholar.google.com/citations?user=SCHOLAR_ID",
-    "linkedin": "https://www.linkedin.com/in/LINKEDIN_ID",
     "blog": "https://example.com"
   },
-  "citationSummary": "Google Scholar 引用 120+",
   "cvFile": "cv-zh.pdf",
   "news": [
     {
