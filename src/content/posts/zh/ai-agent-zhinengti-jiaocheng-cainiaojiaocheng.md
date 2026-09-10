@@ -4,7 +4,6 @@ description: "AI Agent(智能体) 教程    AI Agent（Artificial Intelligence A
 date: 2026-09-10
 category: "agent"
 tags: ["AI Agent(智能体) 教程"]
-draft: true
 ---
 
 > **原文**：[AI Agent(智能体) 教程 | 菜鸟教程](https://www.runoob.com/ai-agent/ai-agent-tutorial.html) · runoob.com
