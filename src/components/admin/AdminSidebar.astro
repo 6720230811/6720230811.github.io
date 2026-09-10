@@ -83,8 +83,19 @@ const base = import.meta.env.BASE_URL;
     </div>
 
     <div class="bulk__row">
+      <input id="bulk-tag" class="input input--xs" type="text" placeholder="标签（逗号分隔）" spellcheck="false" />
+      <button id="bulk-tag-add" class="btn btn--xs" type="button" disabled>加标签</button>
+      <button id="bulk-tag-remove" class="btn btn--xs btn--ghost" type="button" disabled>去标签</button>
+    </div>
+
+    <div class="bulk__row">
       <button id="bulk-draft" class="btn btn--xs" type="button" disabled>转草稿</button>
       <button id="bulk-publish" class="btn btn--xs" type="button" disabled>取消草稿</button>
+    </div>
+
+    <div class="bulk__row">
+      <button id="bulk-transfer" class="btn btn--xs" type="button" disabled>复制到 English</button>
+      <button id="bulk-export" class="btn btn--xs btn--ghost" type="button" disabled>导出 .md</button>
       <button id="bulk-delete" class="btn btn--xs btn--danger" type="button" disabled>删除</button>
     </div>
 

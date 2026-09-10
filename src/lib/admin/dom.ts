@@ -148,6 +148,71 @@ export function setFieldError(id: string, message: string): void {
   el.textContent = message;
 }
 
+// ---------------------------------------------------------------- 确认浮层
+export interface ConfirmOptions {
+  title: string;
+  /** 支持换行（原样显示） */
+  body: string;
+  okLabel?: string;
+  /** 危险操作：确认按钮用红色（默认 true） */
+  danger?: boolean;
+}
+
+let confirmEl: HTMLDialogElement | null = null;
+
+function ensureConfirm(): HTMLDialogElement {
+  if (confirmEl) return confirmEl;
+  const el = document.createElement('dialog');
+  el.className = 'cmodal';
+  el.innerHTML = `
+    <p class="cmodal__title"></p>
+    <p class="cmodal__body"></p>
+    <div class="cmodal__actions">
+      <button class="btn btn--sm cmodal__cancel" type="button">取消</button>
+      <button class="btn btn--sm btn--danger cmodal__ok" type="button">确定</button>
+    </div>
+  `;
+  document.body.append(el);
+  confirmEl = el;
+  return el;
+}
+
+/**
+ * 危险操作的确认框。
+ *
+ * 以前是 window.confirm：样式跟后台完全两张皮，而且一长串清单挤在一行里。
+ * 现在是自己的模态：标题 + 可换行的正文 + 明确的两个按钮，Esc / 点外面都不会误确认。
+ */
+export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
+  const el = ensureConfirm();
+  (el.querySelector('.cmodal__title') as HTMLElement).textContent = opts.title;
+  (el.querySelector('.cmodal__body') as HTMLElement).textContent = opts.body;
+
+  const ok = el.querySelector<HTMLButtonElement>('.cmodal__ok');
+  const cancel = el.querySelector<HTMLButtonElement>('.cmodal__cancel');
+  if (ok) {
+    ok.textContent = opts.okLabel ?? '确定';
+    ok.classList.toggle('btn--danger', opts.danger !== false);
+  }
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      el.removeEventListener('close', onClose);
+      if (el.open) el.close();
+      resolve(value);
+    };
+    // Esc 关闭 / 点 backdrop 关闭都会走 close，一律当「取消」
+    const onClose = () => finish(false);
+    el.addEventListener('close', onClose);
+    if (ok) ok.onclick = () => finish(true);
+    if (cancel) cancel.onclick = () => finish(false);
+    el.showModal();
+  });
+}
+
 /** 异步入口的统一兜底：GhError 显示中文提示，避免错误被 Promise 静默吞掉 */
 export function run(task: () => Promise<void>): void {
   void task().catch((e: unknown) => {

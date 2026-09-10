@@ -1,11 +1,13 @@
-import { $, setStatus } from './dom';
+import { $, setStatus, confirmDialog } from './dom';
 import { repo, paths, rawUrl } from '../../data/admin';
 import { readFile, listDir, GhError, type Repo } from './github';
 import { site } from '../../data/admin';
 import { isDirty } from './unsaved';
 import { parsePostFile } from './serialize';
-import type { BulkAction } from './bulk';
+import { exportPosts, type BulkAction } from './bulk';
 import { resolveCoverFields } from '../cover';
+import { buildZip, downloadBlob } from './zip';
+import { requireToken } from './token';
 
 /**
  * 左侧的文章列表。
@@ -180,7 +182,21 @@ export function initPostList(
   const toPublished = $<HTMLButtonElement>('bulk-publish');
   const bulkDelete = $<HTMLButtonElement>('bulk-delete');
   const bulkCover = $<HTMLInputElement>('bulk-cover');
-  const bulkBtns = [setCategory, toDraft, toPublished, bulkDelete];
+  const bulkTag = $<HTMLInputElement>('bulk-tag');
+  const tagAdd = $<HTMLButtonElement>('bulk-tag-add');
+  const tagRemove = $<HTMLButtonElement>('bulk-tag-remove');
+  const bulkTransfer = $<HTMLButtonElement>('bulk-transfer');
+  const bulkExport = $<HTMLButtonElement>('bulk-export');
+  const bulkBtns = [
+    setCategory,
+    toDraft,
+    toPublished,
+    bulkDelete,
+    tagAdd,
+    tagRemove,
+    bulkTransfer,
+    bulkExport,
+  ];
 
   let items: PostMeta[] = [];
   let active = '';
@@ -250,6 +266,7 @@ export function initPostList(
     for (const btn of bulkBtns) btn.disabled = bulkBusy || n === 0;
     bulkClear.hidden = n === 0;
     bulkCategory.disabled = bulkBusy || n === 0;
+    bulkTag.disabled = bulkBusy || n === 0;
 
     const picked = shown.filter((item) => selected.has(item.slug)).length;
     bulkAll.checked = shown.length > 0 && picked === shown.length;
@@ -345,19 +362,41 @@ export function initPostList(
       body.className = 'pcard__body';
       body.append(title, sub, foot);
       btn.append(body);
-      li.append(pick, btn);
 
-      // 已发布的文章给一个直达线上的入口；草稿没有线上页面，不给
+      // 行内快捷操作：悬停/聚焦才显形，免得平时刷屏
+      const acts = document.createElement('span');
+      acts.className = 'pcard__acts';
+      acts.dataset.slug = item.slug;
+
       if (!item.draft && !item.metaOnly) {
-        const link = document.createElement('a');
-        link.className = 'pcard__link';
-        link.href = site.post(lang, item.slug);
-        link.target = '_blank';
-        link.rel = 'noreferrer';
-        link.title = '打开线上文章';
-        link.textContent = '↗';
-        li.append(link);
+        const open = document.createElement('a');
+        open.className = 'pcard__act';
+        open.href = site.post(lang, item.slug);
+        open.target = '_blank';
+        open.rel = 'noreferrer';
+        open.title = '打开线上文章';
+        open.textContent = '↗';
+        acts.append(open);
       }
+
+      const act = (name: string, label: string, title: string, danger = false) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `pcard__act${danger ? ' pcard__act--danger' : ''}`;
+        button.dataset.act = name;
+        button.title = title;
+        button.setAttribute('aria-label', title);
+        button.textContent = label;
+        return button;
+      };
+
+      acts.append(
+        act('copy', '⧉', '复制线上链接'),
+        act('flip', item.draft ? '◑' : '◐', item.draft ? '转为已发布' : '转为草稿'),
+        act('kill', '✕', '删除这篇', true)
+      );
+
+      li.append(pick, btn, acts);
 
       frag.append(li);
     }
@@ -415,16 +454,105 @@ export function initPostList(
     const slugs = picked();
     if (!slugs.length) return;
     const withCover = bulkCover.checked;
-    const preview = slugs.slice(0, 8).join('、');
-    const more = slugs.length > 8 ? ` 等 ${slugs.length} 篇` : '';
-    if (
-      !window.confirm(
-        `删除这 ${slugs.length} 篇文章？\n${preview}${more}\n仓库里的这些文件会被删掉${withCover ? '，站内封面也一起删' : ''}，删除记录会留在「最近删除」里。`
-      )
-    ) {
+    const preview = slugs.slice(0, 6).join('\n');
+    const more = slugs.length > 6 ? `\n… 等 ${slugs.length} 篇` : '';
+    void confirmDialog({
+      title: `删除 ${slugs.length} 篇文章？`,
+      body: `${preview}${more}\n\n仓库里的这些文件会被删掉${withCover ? '，站内封面也一起删' : ''}。删除记录会留在「最近删除」里 7 天内可还原。`,
+      okLabel: '删除',
+    }).then((ok) => {
+      if (ok) dispatch(slugs, { kind: 'delete', cover: withCover });
+    });
+  });
+
+  // 改标签：留空即忽略，逗号 / 空格 / 回车都能分隔
+  const tagList = () =>
+    bulkTag.value
+      .split(/[,，\s]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+  tagAdd.addEventListener('click', () => {
+    const add = tagList();
+    if (!selected.size || !add.length) return;
+    dispatch(picked(), { kind: 'tags', add, remove: [] });
+    bulkTag.value = '';
+  });
+
+  tagRemove.addEventListener('click', () => {
+    const remove = tagList();
+    if (!selected.size || !remove.length) return;
+    dispatch(picked(), { kind: 'tags', add: [], remove });
+    bulkTag.value = '';
+  });
+
+  bulkTransfer.addEventListener('click', () => {
+    const slugs = picked();
+    if (!slugs.length) return;
+    const to = lang === 'zh' ? 'en' : 'zh';
+    void confirmDialog({
+      title: `把 ${slugs.length} 篇复制到${to === 'en' ? '英文' : '中文'}目录？`,
+      body: `原文件保留不动，另存一份到 src/content/posts/${to}/。\n目标目录里已有同名的会被跳过（不会覆盖）。\n复制过去的是原文，译文需要你自己改。`,
+      okLabel: '复制',
+      danger: false,
+    }).then((ok) => {
+      if (ok) dispatch(slugs, { kind: 'transfer', to });
+    });
+  });
+
+  bulkExport.addEventListener('click', () => {
+    const slugs = picked();
+    if (!slugs.length) return;
+    const token = requireToken();
+    if (!token) return;
+    void (async () => {
+      setStatus(`正在读取 ${slugs.length} 篇文章…`, 'busy');
+      try {
+        const files = await exportPosts(lang, slugs, token);
+        if (!files.length) {
+          setStatus('一篇都没读到，导出取消。', 'error');
+          return;
+        }
+        const stamp = new Date().toISOString().slice(0, 10);
+        downloadBlob(buildZip(files), `posts-${lang}-${files.length}-${stamp}.zip`);
+        setStatus(`已导出 ${files.length} 篇 Markdown。`, 'ok');
+      } catch (e) {
+        setStatus(e instanceof GhError ? e.hint : `导出失败：${(e as Error).message}`, 'error');
+      }
+    })();
+  });
+
+  // 行内快捷操作（悬停出现的小按钮）
+  listEl.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('.pcard__act');
+    if (!btn || btn.tagName === 'A') return;
+    const slug = btn.closest<HTMLElement>('.pcard__acts')?.dataset.slug ?? '';
+    if (!slug) return;
+    e.stopPropagation();
+
+    if (btn.dataset.act === 'copy') {
+      const url = site.post(lang, slug);
+      void navigator.clipboard
+        ?.writeText(url)
+        .then(() => setStatus(`已复制：${url}`, 'ok'))
+        .catch(() => setStatus(`浏览器不让写剪贴板：${url}`, 'info'));
       return;
     }
-    dispatch(slugs, { kind: 'delete', cover: withCover });
+
+    const item = items.find((it) => it.slug === slug);
+    if (btn.dataset.act === 'flip' && item) {
+      dispatch([slug], { kind: 'draft', value: !item.draft });
+      return;
+    }
+    if (btn.dataset.act === 'kill') {
+      void confirmDialog({
+        title: `删除「${item?.title || slug}」？`,
+        body: `src/content/posts/${lang}/${slug}.md 会被删掉${bulkCover.checked ? '，站内封面也一起删' : ''}。\n删除记录会留在「最近删除」里，7 天内可还原。`,
+        okLabel: '删除',
+      }).then((ok) => {
+        if (ok) dispatch([slug], { kind: 'delete', cover: bulkCover.checked });
+      });
+    }
   });
 
   /** 批量执行期间锁住按钮：连点会排出两批任务 */
@@ -464,6 +592,8 @@ export function initPostList(
       // 换语言 = 换一批文件，勾选留着会误伤到另一语言的同名文章
       if (nextLang !== lang) selected.clear();
       lang = nextLang;
+      // 「复制到另一语言」的目标跟着当前语言走
+      bulkTransfer.textContent = lang === 'zh' ? '复制到 English' : '复制到中文';
 
       // 先拿上次的结果顶上：换分区、刷新页面都是秒开，随后静默更新
       const cached = readCache(nextLang);

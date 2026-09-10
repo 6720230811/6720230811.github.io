@@ -1,5 +1,6 @@
 import { $, setStatus, setNotice, setFieldError, run, debounce, activeSection } from './dom';
 import { registerShortcut } from './shortcuts';
+import { openDiffDialog } from './diffDialog';
 import { repo, paths, site } from '../../data/admin';
 import { readFile, saveFile, statFile, deleteFile, readBase64, GhError, type Repo } from './github';
 import { buildPostFile, parsePostFile, today, toSlug, isValidSlug } from './serialize';
@@ -80,6 +81,12 @@ let autosaveRef: ReturnType<typeof createAutosave<PostDraft>> | null = null;
 
 /** 仓库里已有的 slug：发布前查重用（改过语言或重新载入时刷新） */
 const knownSlugs = new Set<string>();
+
+/**
+ * 仓库里那份原文：载入时存下来，用来做「与仓库对比」和发布前的 sha 预检。
+ * 发布成功后会刷新成刚写上去的内容（此时 sha 留空 = 内容确定是最新的，不必再查）。
+ */
+let remote: { path: string; sha: string; text: string } | null = null;
 
 const draftKey = () => `post:${postLang.value}/${currentSlug || '__new__'}`;
 
@@ -182,6 +189,7 @@ export async function loadPost(slug: string, opts: { keepPanel?: boolean } = {})
   if (!opts.keepPanel) panel.reset();
 
   if (!slug) {
+    remote = null;
     resetPost();
     await restoreDraft();
     return;
@@ -191,8 +199,10 @@ export async function loadPost(slug: string, opts: { keepPanel?: boolean } = {})
     const file = await readFile(repo as Repo, paths.post(postLang.value, slug), token);
     if (!file) {
       setStatus('这个文件在仓库里不存在了，可能是刚被删掉。', 'error');
+      remote = null;
       return;
     }
+    remote = { path: paths.post(postLang.value, slug), sha: file.sha, text: file.text };
     const parsed = parsePostFile(file.text);
     fillPost(parsed.data, parsed.body);
     setStatus(`已载入 ${slug}`, 'ok');
@@ -500,6 +510,21 @@ export function initPost(): void {
     });
   });
 
+  // 与仓库版本对比：改了半小时之后，至少能看清自己动了哪些行
+  $('post-diff').addEventListener('click', () => {
+    if (!remote) {
+      setStatus('这是还没发布的新文章，仓库里没有可对比的版本。', 'info');
+      return;
+    }
+    openDiffDialog({
+      title: remote.path,
+      oldLabel: '仓库版本',
+      newLabel: '编辑器里',
+      oldText: remote.text,
+      newText: buildPostFile({ data: collectPost(), body: bodyInput.value.trimEnd() }),
+    });
+  });
+
   postLang.addEventListener('change', () => {
     run(async () => {
       await refreshPostList();
@@ -642,6 +667,19 @@ export function initPost(): void {
     panel.busy(true);
     panel.commit(renaming ? '正在写入新文件名…' : undefined);
     try {
+      // 远端在这期间被改过（另一台设备 / 另一个标签页）就先问一句，别默默覆盖
+      if (remote?.sha) {
+        const fresh = await statFile(repo as Repo, remote.path, token);
+        if (
+          fresh &&
+          fresh !== remote.sha &&
+          !window.confirm('仓库里的这份文件在你编辑期间被改过（可能来自另一台设备或另一个标签页）。继续发布会覆盖那些改动，继续吗？')
+        ) {
+          panel.reset();
+          return;
+        }
+      }
+
       const commitSha = await saveFile(
         repo as Repo,
         paths.post(postLang.value, slug),
@@ -665,6 +703,8 @@ export function initPost(): void {
       setNotice('');
       markClean();
       rememberTags(data.tags);
+      // 刚写上去的就是仓库里的那份：对比基准跟着走（sha 留空表示确定是最新）
+      remote = { path: paths.post(postLang.value, slug), sha: '', text };
       currentSlug = slug;
       slugLocked = true;
       paintLock();
@@ -814,6 +854,14 @@ export function initPost(): void {
     allowInInput: true,
     when: () => activeSection() === 'post',
     run: () => void publish(),
+  });
+  registerShortcut({
+    keys: 'mod+shift+d',
+    label: '与仓库版本对比',
+    group: '视图',
+    allowInInput: true,
+    when: () => activeSection() === 'post',
+    run: () => $<HTMLButtonElement>('post-diff').click(),
   });
 
   deleteBtn.addEventListener('click', showDeleteConfirm);

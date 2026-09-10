@@ -595,19 +595,43 @@ body.admin-shell {
   color: var(--adm-ok);
 }
 
-.pcard__link {
+.pcard__acts {
   position: absolute;
   top: 0.35rem;
   right: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.pcard__act {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: var(--adm-surface);
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
   color: var(--adm-faint);
-  opacity: 0;
+  cursor: pointer;
+}
+
+.pcard__act:hover {
+  background: var(--adm-accent-soft);
+  color: var(--adm-accent);
+  text-decoration: none;
+}
+
+.pcard__act--danger:hover {
+  background: rgba(225, 29, 72, 0.12);
+  color: var(--adm-danger);
 }
 
 .pcard__link:hover {
@@ -620,8 +644,8 @@ body.admin-shell {
   position: relative;
 }
 
-.sidebar__list li:hover .pcard__link,
-.pcard__link:focus-visible {
+.sidebar__list li:hover .pcard__acts,
+.pcard__acts:focus-within {
   opacity: 1;
 }
 
@@ -2645,6 +2669,170 @@ select.input {
   .help__body {
     grid-template-columns: 1fr;
   }
+}
+
+/* ============================================================
+   确认浮层（危险操作）与版本对比
+   ============================================================ */
+
+.cmodal {
+  width: min(30rem, 92vw);
+  padding: 0.9rem 1rem 0.8rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 12px;
+  background: var(--adm-surface);
+  color: var(--adm-text);
+}
+
+.cmodal::backdrop {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.cmodal__title {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.cmodal__body {
+  margin: 0 0 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.75;
+  color: var(--adm-muted);
+  /* 正文里的换行是要保留的（文件清单一行一个） */
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.cmodal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.diff {
+  width: min(64rem, 94vw);
+  height: min(80vh, 52rem);
+  padding: 0;
+  border: 1px solid var(--adm-line);
+  border-radius: 12px;
+  background: var(--adm-surface);
+  color: var(--adm-text);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.diff::backdrop {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.diff__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--adm-line);
+  font-size: 0.78rem;
+}
+
+.diff__title {
+  font-family: var(--font-code);
+  font-size: 0.76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff__stat {
+  color: var(--adm-faint);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.diff__only {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--adm-faint);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.diff__close {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.diff__close:hover {
+  color: var(--adm-danger);
+}
+
+.diff__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.5rem 0 1rem;
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  line-height: 1.7;
+}
+
+.diff__row {
+  display: grid;
+  grid-template-columns: 3rem 3rem 1.1rem minmax(0, 1fr);
+  align-items: start;
+  padding: 0 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff__no {
+  color: var(--adm-faint);
+  text-align: right;
+  padding-right: 0.5rem;
+  user-select: none;
+}
+
+.diff__sign {
+  color: var(--adm-faint);
+  user-select: none;
+}
+
+.diff__row--add {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.diff__row--add .diff__sign {
+  color: var(--adm-ok);
+}
+
+.diff__row--del {
+  background: rgba(225, 29, 72, 0.09);
+}
+
+.diff__row--del .diff__sign {
+  color: var(--adm-danger);
+}
+
+.diff__gap {
+  margin: 0.25rem 0;
+  padding: 0.2rem 0.75rem;
+  background: var(--adm-line-soft);
+  color: var(--adm-faint);
+  font-size: 0.68rem;
+  text-align: center;
 }
 
 /* ============================================================
