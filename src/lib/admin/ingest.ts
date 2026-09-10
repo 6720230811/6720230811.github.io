@@ -196,11 +196,12 @@ export async function buildDraftFromUrl(url: string, opts: ImportOptions): Promi
     };
   }
 
-  const cleaned = cleanMarkdown(result.markdown);
+  const cleaned = cleanMarkdown(result.markdown, { reference: result.reference });
   report.push(
-    result.bodySource === 'fit'
-      ? `正文取服务端过滤版：${result.rawLength} → ${result.markdown.length} 字符（导航/侧栏/页脚已剔掉）`
-      : `正文用整页原始内容（${result.markdown.length} 字符）`,
+    result.bodySource === 'raw'
+      ? `取回整页 ${result.markdown.length} 字符（配图完整）`
+      : `服务端只给了过滤版正文（${result.markdown.length} 字符）`,
+    cleaned.reference ? `按过滤版剔掉 ${cleaned.reference} 行样板（导航/侧栏/页脚）` : '',
     `规则清洗后 ${cleaned.text.length} 字符`,
     cleaned.head ? `去掉页头样板 ${cleaned.head} 行` : '',
     cleaned.tail ? `去掉页脚样板 ${cleaned.tail} 行` : '',
@@ -265,6 +266,10 @@ async function assemble(cleanedText: string, context: AssembleContext): Promise<
     return { ok: false, report: context.report, error: '清洗后正文是空的，这篇可能抓不到正文。' };
   }
   if (context.style === 'excerpt') body = takeParagraphs(body, EXCERPT_PARAGRAPHS);
+
+  // 配图是内容的一部分：报一下数量，免得"图没了"要等发出去才发现
+  const imgCount = listImages(body).length;
+  if (imgCount) context.report.push(`正文含 ${imgCount} 张配图`);
 
   if (context.transferImages) {
     const stem = toSlug(title).slice(0, 40) || 'import';

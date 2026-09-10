@@ -81,9 +81,27 @@ export function isLinkSoup(line: string, minLinks = 3, minDensity = 0.6): boolea
   return labelChars / visible >= minDensity;
 }
 
-/** 整行只有一张图（页脚二维码、分隔图这类，出现在首尾肯定不是正文） */
+/** 整行只有一张图 */
 function isOnlyImage(line: string): boolean {
   return /^\s*!\[[^\]]*\]\(.*\)\s*$/.test(line);
+}
+
+/**
+ * 二维码/引导关注图：页脚那种。图片本身是内容（头图、插图、图表都要留），
+ * 但这一类的 URL 特征很明确，按 URL 认比按位置认安全。
+ */
+function isQrImage(line: string): boolean {
+  if (!isOnlyImage(line)) return false;
+  return /qrcode|qr[-_]?code|erweima|weixin|wechat|二维码|扫码/i.test(line);
+}
+
+/** 页头/页脚里算「样板」的一行（图片不在此列——图片另行判断） */
+function isBoilerplateLine(line: string): boolean {
+  if (isNoise(line) || isLinkSoup(line) || isLinkBullet(line) || isLabelLink(line)) return true;
+  if (isQrImage(line)) return true;
+  // 整行只有链接的标题＝站点 banner
+  if (isHeadingLine(line)) return isOnlyLink(line.replace(/^\s*#+\s*/, ''));
+  return isLabel(line);
 }
 
 /** 非全局版：给 test() 用（LINK 带 g，test 会推 lastIndex，踩过这个坑） */
@@ -93,13 +111,58 @@ const HAS_LINK = /\[[^\]]*\]\([^)]*\)/;
  * 「标签 + 链接」行：页脚那排入口就是这形态（`在线实例·[JavaScript 实例](…)`、
  * `· [免责声明](…)`）。判据是链接之外的文字很短、且整行不以句末标点结尾——
  * 正文里嵌一行"详见 [官方文档](…)。"会带句号，不会中招。
+ * 带图的行直接跳过：`[![](图)](链接)` 是正经配图，不是页脚入口。
  */
 function isLabelLink(line: string): boolean {
   const text = line.trim();
   if (!text || SENTENCE_END.test(text)) return false;
+  if (isOnlyImage(text) || text.includes('![')) return false;
   if (!HAS_LINK.test(text)) return false;
   const rest = text.replace(LINK, ' ').replace(/[·|—–*_`\s]/g, '');
   return rest.length <= LABEL_MAX;
+}
+
+// ---------------------------------------------------------------- 参照系过滤
+/** 归一化：去掉 markdown 标记与全部空白，用来判断"这行在过滤版里有没有" */
+function normalizeForMatch(text: string): string {
+  return text.replace(/[*_`#>|]/g, '').replace(/\s+/g, '');
+}
+
+/** 这行的文字在参照正文里出现过吗（长行取前 24 字当探针，够独特又不怕换行差异） */
+function matchesReference(line: string, reference: string): boolean {
+  const key = normalizeForMatch(line);
+  // 太短的行判断不了（"---"、"1." 这种），留给后面的规则，别在这儿误删
+  if (key.length < 8) return true;
+  return reference.includes(key.length > 24 ? key.slice(0, 24) : key);
+}
+
+/**
+ * 用服务端过滤版当"参照系"：整页里那些在过滤版中找不到的行就是样板。
+ *
+ * 为什么不用过滤版本身当正文？因为 PruningContentFilter 是按文本密度给节点打分的，
+ * 图片没有文字、整段都会被剪掉——实测 runoob 那篇：过滤版 0 张图，整页 7 张。
+ * 拿它当正文等于把配图全丢了，所以它只用来判"哪一行是样板"，正文仍从整页取。
+ *
+ * 例外：
+ * - 图片行一律保留（它不可能出现在过滤版里，但它是内容）
+ * - 代码块内一律保留：过滤版对代码的处理和整页不一定一致，别拿它当依据
+ */
+function dropByReference(lines: string[], reference: string): { lines: string[]; dropped: number } {
+  const ref = normalizeForMatch(reference);
+  if (!ref) return { lines, dropped: 0 };
+
+  const out: string[] = [];
+  let dropped = 0;
+  let inFence = false;
+  for (const line of lines) {
+    const isFence = /^\s{0,3}(?:```|~~~)/.test(line);
+    const keep =
+      inFence || isFence || !line.trim() || isOnlyImage(line) || matchesReference(line, ref);
+    if (isFence) inFence = !inFence;
+    if (keep) out.push(line);
+    else dropped += 1;
+  }
+  return { lines: out, dropped };
 }
 
 /** 短标签行：栏目名、"暂无记录"这种，既不成句也不是列表项 */
@@ -162,49 +225,51 @@ function stripHead(lines: string[]): { lines: string[]; dropped: number } {
       i += 1;
       continue;
     }
-    const branding = isHeadingLine(line) && isOnlyLink(line.replace(/^\s*#+\s*/, ''));
-    if (isLinkSoup(line) || isLabel(line) || isLinkBullet(line) || isOnlyImage(line) || isLabelLink(line) || branding) {
+    if (isBoilerplateLine(line) || (isHeadingLine(line) && sawNoise)) {
       sawNoise = true;
       i += 1;
       continue;
     }
-    if (isHeadingLine(line)) {
-      if (sawNoise) {
-        i += 1;
-        continue;
-      }
-      break;
+    // 普通图片当"透明"：不删、也不当作边界，继续往后找第一段正文。
+    // 头图常常紧跟标题落在这一段里，按样板删掉就把配图吃了。
+    if (isOnlyImage(line)) {
+      i += 1;
+      continue;
     }
     break; // 第一段正文：到此为止
   }
-  return sawNoise ? { lines: lines.slice(i), dropped: i } : { lines, dropped: 0 };
+  if (!sawNoise) return { lines, dropped: 0 };
+  // 只删样板，这段里的图片留下（保持原顺序）
+  const kept = lines.slice(0, i).filter((l) => !l.trim() || isOnlyImage(l));
+  return { lines: [...kept, ...lines.slice(i)], dropped: i - kept.length };
 }
 
-/** 砍掉结尾的样板：页脚链接、栏目名、备案号、以及它们上面的那几个小标题 */
 function stripTail(lines: string[]): { lines: string[]; dropped: number } {
-  let end = lines.length;
+  let i = lines.length - 1;
   let sawNoise = false;
-  while (end > 0) {
-    const line = lines[end - 1];
+  while (i >= 0) {
+    const line = lines[i];
     if (!line.trim()) {
-      end -= 1;
+      i -= 1;
       continue;
     }
-    if (isNoise(line) || isLinkSoup(line) || isLabel(line) || isLinkBullet(line) || isOnlyImage(line) || isLabelLink(line)) {
+    if (isBoilerplateLine(line) || (isHeadingLine(line) && sawNoise)) {
       sawNoise = true;
-      end -= 1;
+      i -= 1;
       continue;
     }
-    if (isHeadingLine(line)) {
-      if (sawNoise) {
-        end -= 1;
-        continue;
-      }
-      break;
+    if (isOnlyImage(line)) {
+      i -= 1;
+      continue;
     }
     break;
   }
-  return sawNoise ? { lines: lines.slice(0, end), dropped: lines.length - end } : { lines, dropped: 0 };
+  const boundary = i + 1;
+  if (!sawNoise || boundary >= lines.length) return { lines, dropped: 0 };
+  // 只删样板，普通图片留着：结尾的图表也是内容，宁可留个页脚二维码让人手删
+  const rest = lines.slice(boundary);
+  const kept = rest.filter((l) => !l.trim() || (isOnlyImage(l) && !isQrImage(l)));
+  return { lines: [...lines.slice(0, boundary), ...kept], dropped: rest.length - kept.length };
 }
 
 /**
@@ -272,6 +337,16 @@ export interface CleanResult {
   head: number;
   /** 页脚样板去掉的行数（页脚链接、备案号、相关阅读） */
   tail: number;
+  /** 按服务端过滤版判定为样板、从整页里剔掉的行数（没有参照系时为 0） */
+  reference: number;
+}
+
+export interface CleanOptions {
+  /**
+   * 服务端过滤版正文（crawl4ai 的 fit）。有它时当"参照系"：
+   * 整页里找不到的行判为样板。正文仍取整页——过滤版会把图片全剪掉。
+   */
+  reference?: string;
 }
 
 /**
@@ -306,7 +381,7 @@ function mergeSoftWraps(lines: string[]): { lines: string[]; merged: number } {
 }
 
 /** 主入口：一轮清洗 */
-export function cleanMarkdown(input: string): CleanResult {
+export function cleanMarkdown(input: string, opts: CleanOptions = {}): CleanResult {
   const removed: string[] = [];
 
   // 归一化不可见字符与"•"这种非标准列表符号
@@ -334,7 +409,8 @@ export function cleanMarkdown(input: string): CleanResult {
 
   // 页头/页脚必须在合并软换行之前砍：导航那一行会被 mergeSoftWraps 和紧邻的正文
   // 粘成一行（"AI Agent 教程" + 21 个链接 + 正文），粘上之后就再也认不出来了
-  const headTrim = stripHead(kept);
+  const refFilter = opts.reference ? dropByReference(kept, opts.reference) : { lines: kept, dropped: 0 };
+  const headTrim = stripHead(refFilter.lines);
   const tailTrim = stripTail(headTrim.lines);
   const { lines, merged } = mergeSoftWraps(tailTrim.lines);
 
@@ -366,7 +442,14 @@ export function cleanMarkdown(input: string): CleanResult {
   const fences = (text.match(/^\s{0,3}(?:```|~~~)/gm) ?? []).length;
   if (fences % 2 === 1) text += '\n```';
 
-  return { text, removed, merged, head: headTrim.dropped, tail: tailTrim.dropped };
+  return {
+    text,
+    removed,
+    merged,
+    head: headTrim.dropped,
+    tail: tailTrim.dropped,
+    reference: refFilter.dropped,
+  };
 }
 
 // ---------------------------------------------------------------- 结构提取

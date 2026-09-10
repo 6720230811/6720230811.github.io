@@ -99,11 +99,15 @@ interface CrawlMeta {
 }
 
 export interface CrawlResult {
+  /** 正文：整页 markdown（配图完整）；/crawl 不通时才退回只有正文的过滤版 */
   markdown: string;
-  /** 正文来源：fit = 服务端内容过滤（只要正文），raw = 整页原始 markdown */
-  bodySource: 'fit' | 'raw';
-  /** 整页原始 markdown 长度，用来说明过滤掉了多少（raw 模式下与 markdown 等长） */
-  rawLength: number;
+  /**
+   * 服务端过滤版正文（fit），当"样板参照系"用：整页里找不到的行判为导航/页脚。
+   * 不直接拿它当正文——它是按文本密度剪的，图片整段都会被剪掉。
+   */
+  reference: string;
+  /** raw = 正文取自整页，fit = /crawl 不通、只能拿过滤版 */
+  bodySource: 'raw' | 'fit';
   meta: CrawlMeta;
   /** 正文里出现的图片绝对地址（去重、去掉 data:） */
   images: string[];
@@ -215,15 +219,14 @@ async function fetchFitMarkdown(url: string, timeoutMs: number): Promise<string>
 }
 
 /**
- * 整页还是过滤后的？过滤后太短（<200 字符，或不到整页的 25%）就判定为过度修剪，
- * 退回整页——宁可多带点噪音，也不能把正文删没。
+ * 过滤版能不能当参照系。太短（<200 字符，或不到整页的 25%）说明它把正文也剪了——
+ * 这时拿它当参照会把整页删空，宁可退回纯规则清洗。
  */
-function pickBody(raw: string, fit: string): { text: string; source: 'fit' | 'raw' } {
-  const trimmed = fit.trim();
-  if (trimmed.length >= 200 && trimmed.length >= raw.trim().length * 0.25) {
-    return { text: fit, source: 'fit' };
-  }
-  return { text: raw, source: 'raw' };
+function usableReference(raw: string, fit: string): string {
+  const f = fit.trim();
+  if (f.length < 200) return '';
+  if (raw.trim() && f.length < raw.trim().length * 0.25) return '';
+  return fit;
 }
 
 /**
@@ -244,13 +247,12 @@ export async function crawlUrl(url: string, timeoutMs = DEFAULT_TIMEOUT): Promis
     const meta = (first.metadata ?? {}) as Record<string, unknown>;
 
     if (markdown.trim() && first.success !== false) {
-      const body = pickBody(markdown, fit);
       return {
         ok: true,
         result: {
-          markdown: body.text,
-          bodySource: body.source,
-          rawLength: markdown.length,
+          markdown,
+          reference: usableReference(markdown, fit),
+          bodySource: 'raw',
           meta: {
             title: typeof meta.title === 'string' ? meta.title : undefined,
             description: typeof meta.description === 'string' ? meta.description : undefined,
@@ -278,14 +280,14 @@ export async function crawlUrl(url: string, timeoutMs = DEFAULT_TIMEOUT): Promis
     return { ok: false, failure: full.failure };
   }
 
-  // /crawl 这条路不通（或没给出正文）：/md 拿到什么就用什么
+  // /crawl 这条路不通（或没给出正文）：/md 拿到什么就用什么（没有整页可参照）
   if (fit.trim()) {
     return {
       ok: true,
       result: {
         markdown: fit,
+        reference: '',
         bodySource: 'fit',
-        rawLength: fit.length,
         meta: {},
         images: [],
         statusCode: undefined,
