@@ -65,18 +65,27 @@ function dismiss(el: HTMLElement): void {
   window.setTimeout(() => el.remove(), 160);
 }
 
+/** 还算「在场」的那些：正在播退场动画的不算，否则去重与淘汰都会被它们干扰 */
+function liveToasts(): HTMLElement[] {
+  return Array.from(toastHost().children).filter(
+    (el) => !(el as HTMLElement).classList.contains('is-leaving')
+  ) as HTMLElement[];
+}
+
 export function setStatus(message: string, kind: StatusKind = 'info', action?: ToastAction): void {
   if (!message) return;
   const host = toastHost();
 
   // 同一操作会连着报好几次同样的话（进度、重试），别堆成一摞
-  const same = Array.from(host.children).find(
-    (el) => (el as HTMLElement).dataset.message === message
-  );
-  if (same) return;
-  if (kind === 'busy') {
-    for (const el of Array.from(host.children)) {
-      if ((el as HTMLElement).dataset.kind === 'busy') dismiss(el as HTMLElement);
+  if (liveToasts().some((el) => el.dataset.message === message)) return;
+
+  // busy 是「某件事正在进行」：新的 busy 顶掉旧的（换阶段了），ok / error 说明这件事
+  // 收尾了，也该把它撤掉——busy 没有自动消失，不撤就会一直挂在角落里
+  // （「正在抓取页面…」能挂到下一次抓取）。info 是自动暂存之类的碎碎念，
+  // 不能拿它误杀正在进行的进度条。
+  if (kind !== 'info') {
+    for (const el of liveToasts()) {
+      if (el.dataset.kind === 'busy') dismiss(el);
     }
   }
 
@@ -114,7 +123,12 @@ export function setStatus(message: string, kind: StatusKind = 'info', action?: T
   }
 
   host.append(toast);
-  while (host.children.length > TOAST_MAX) dismiss(host.firstElementChild as HTMLElement);
+
+  // 超出上限就从最旧的开始挤出去。dismiss 是等退场动画走完才 remove 的，
+  // 所以必须先把要淘汰的名单算出来再动手——写成 while (children.length > MAX)
+  // + firstElementChild 会因为子节点数不减少而死循环（第 4 条提示一到就卡死页面）。
+  const live = liveToasts();
+  for (const el of live.slice(0, Math.max(0, live.length - TOAST_MAX))) dismiss(el);
 
   // 带动作（比如「撤销删除」）的多留一会儿：6 秒来不及看清就没了
   const ms = action ? Math.max(AUTO_HIDE[kind], 12000) : AUTO_HIDE[kind];
