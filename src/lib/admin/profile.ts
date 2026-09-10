@@ -1,10 +1,13 @@
-import { $, setStatus, run, debounce } from './dom';
+import { $, setStatus, setNotice, run, debounce, activeSection } from './dom';
 import { z } from 'zod';
 import { repo, paths } from '../../data/admin';
 import { readFile, saveFile, saveBinaryFile, GhError, type Repo } from './github';
 import { stableProfileJson, sanitizeInline, toSlug } from './serialize';
 import { requireToken } from './token';
 import { markDirty, markClean } from './unsaved';
+import { createAutosave } from './autosave';
+import { loadDraft, clearDraft } from './drafts';
+import { registerShortcut } from './shortcuts';
 import { ProfileSchema, formatIssues, type Profile } from '../../data/profile.schema';
 import { getProfile, getLang, setLang, setState, mutate, subscribe } from './profileState';
 import { initProfileCards } from './profileCards';
@@ -43,6 +46,15 @@ function readState(): Profile | null {
   return getProfile();
 }
 
+/** 已经载入过仓库内容：切回分区不用再读一遍 */
+let loaded = false;
+/** 正在整体替换状态（载入 / 恢复草稿）：这段时间的 emit 不该记成「用户改了东西」 */
+let loading = false;
+
+function draftKey(): string {
+  return `profile:${getLang()}`;
+}
+
 /** zod 的 issue path → `publications[2].title` 这样的人话 */
 function issuePath(path: PropertyKey[]): string {
   return path
@@ -56,6 +68,7 @@ async function loadProfile(): Promise<void> {
   if (!token) return;
   const lang = profileLang.value;
   $('profile-path').textContent = paths.profile(lang);
+  loading = true;
   try {
     const file = await readFile(repo as Repo, paths.profile(lang), token);
     if (!file) {
@@ -69,12 +82,33 @@ async function loadProfile(): Promise<void> {
     }
     // 校验不过也照常填：有问题的字段在卡片里看得见，改对了才能保存
     setState(parsed.success ? parsed.data : (raw as Profile));
+
+    // 本地还有没发布的改动就先顶上（和文章一致：草稿优先，保存成功后清）
+    const draft = await loadDraft<Profile>(`profile:${lang}`);
+    if (draft) {
+      setState(draft.data);
+      const minutes = Math.max(1, Math.round((Date.now() - draft.updatedAt) / 60000));
+      setNotice(`已恢复 ${minutes} 分钟前的本地草稿（profile.${lang}），保存成功后自动清除。`);
+    } else {
+      setNotice('');
+    }
+
     fillBaseInputs();
     markClean();
+    loaded = true;
     setStatus(`已载入 profile.${lang}.json`, 'ok');
   } catch (e) {
     setStatus(e instanceof GhError ? e.hint : String(e), 'error');
+  } finally {
+    loading = false;
   }
+}
+
+/** 打开「个人信息」分区时按需载入：没配 token、或者已经载入过就什么都不做 */
+export function ensureProfileLoaded(): void {
+  if (loaded || loading) return;
+  if (!requireToken()) return;
+  void loadProfile();
 }
 
 // ---------------------------------------------------------------- 基本信息绑定
@@ -346,6 +380,8 @@ async function saveProfile(): Promise<void> {
       json,
       `update profile: ${getLang()}（后台可视化编辑）`
     );
+    await clearDraft(draftKey());
+    setNotice('');
     markClean();
     setStatus(`已保存 profile.${getLang()}.json，Actions 大约 1 分钟后上线。`, 'ok');
   } catch (e) {
@@ -371,6 +407,12 @@ export function initProfile(): void {
   bindCvDrop();
   initProfileCards();
 
+  // 本地暂存：和文章共用一套（IndexedDB + localStorage 镜像），刷新不再丢半份档案
+  const autosave = createAutosave<Profile>({
+    key: draftKey,
+    collect: () => readState() as Profile,
+  });
+
   // 镜像预览：改动防抖后整文档重建（内部有 key 比对，没变就不重写）
   const refresh = debounce(() => {
     const p = readState();
@@ -382,14 +424,34 @@ export function initProfile(): void {
   // 校验：敲字时别每键都跑 zod
   const scheduleValidate = debounce(validateNow, 500);
   subscribe(() => {
-    markDirty();
     scheduleValidate();
+    // 载入 / 恢复草稿也算 emit，但那不是「用户改了东西」
+    if (loading) return;
+    markDirty();
+    autosave.markDirty();
   });
 
   $('profile-reload').addEventListener('click', () => run(loadProfile));
   profileLang.addEventListener('change', () => {
+    // 先把当前语言的内容落盘，否则会写进另一个语言的 key 里
+    void autosave.flush();
     setLang(profileLang.value as 'zh' | 'en');
     run(loadProfile);
+  });
+
+  registerShortcut({
+    keys: 'mod+s',
+    label: '保存个人信息到仓库',
+    group: '发布',
+    allowInInput: true,
+    when: () => activeSection() === 'profile',
+    run: () => void saveProfile(),
+  });
+
+  // 切到「个人信息」分区时才去读仓库（不在启动路径上付这份开销）
+  if (activeSection() === 'profile') ensureProfileLoaded();
+  document.addEventListener('admin:section', (e) => {
+    if ((e as CustomEvent<string>).detail === 'profile') ensureProfileLoaded();
   });
   $('profile-save').addEventListener('click', () => void saveProfile());
   $('profile-bilingual').addEventListener('click', () => void runBilingualCheck());

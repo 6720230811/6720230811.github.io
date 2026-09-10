@@ -75,6 +75,20 @@ const base = import.meta.env.BASE_URL;
       </div>
 
       <div class="topbar__right">
+        <button
+          id="shortcut-help-btn"
+          class="icon-btn"
+          type="button"
+          title="快捷键一览（按 ? 也可以）"
+          aria-label="快捷键一览"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7v.5" />
+            <path d="M12 17.2h.01" />
+          </svg>
+        </button>
+
         <a class="admin-top__link" href={base} target="_blank" rel="noreferrer">
           <Icon name="external" />
           <span>查看线上</span>
@@ -103,7 +117,16 @@ const base = import.meta.env.BASE_URL;
 
     <TokenDrawer />
 
-    <p id="status" class="status" role="status" hidden></p>
+    {/* 快捷键一览：内容由 shortcuts.ts 按注册表渲染，不会跟实现走散 */}
+    <dialog id="shortcut-help" class="help">
+      <div class="help__head">
+        <b>快捷键</b>
+        <button id="shortcut-help-close" class="help__close" type="button" aria-label="关闭">×</button>
+      </div>
+      <div id="shortcut-help-body" class="help__body"></div>
+    </dialog>
+
+    {/* 提示条：右下角的栈，由 dom.ts 的 setStatus 维护（见 .toasts） */}
     <p id="draft-notice" class="status status--info admin-notice" hidden></p>
 
     <script>

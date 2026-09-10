@@ -15,20 +15,104 @@ export function $<T extends HTMLElement>(id: string): T {
 
 export type StatusKind = 'ok' | 'error' | 'info' | 'busy';
 
-/** ok / info 是「事情办完了」的提示，几秒后自己消失；error 与 busy 留着等用户处理 */
-const AUTO_HIDE: Record<StatusKind, number> = { ok: 6000, info: 6000, error: 0, busy: 0 };
-let hideTimer: number | undefined;
+/** 当前打开的分区（文章 / 个人信息 / 友链 / 素材），快捷键按它决定要不要响应 */
+export function activeSection(): string {
+  return (
+    document.querySelector('.sidebar__tab[aria-current="page"]')?.getAttribute('data-tab') ?? 'post'
+  );
+}
 
-export function setStatus(message: string, kind: StatusKind = 'info'): void {
-  const el = $('status');
-  el.hidden = false;
-  el.textContent = message;
-  el.className = `status status--${kind}`;
-  window.clearTimeout(hideTimer);
-  const ms = AUTO_HIDE[kind];
-  if (ms) hideTimer = window.setTimeout(() => {
-    el.hidden = true;
-  }, ms);
+/**
+ * 提示条（toast）。
+ *
+ * 以前是页面底部一条 `#status`：新消息直接顶掉旧的，error 还永远不消失——
+ * 一条失败提示能把底部挡住一整轮操作。现在改成右下角的栈：
+ * - ok / info 几秒后自己走，error / busy 留着但要能手动关掉
+ * - 最多 3 条，多的从最旧的开始挤出去
+ * - 同一条消息连着来（比如限流重试）不重复堆
+ * - busy 是「当前操作进行中」的进度，新的 busy 顶掉旧的
+ * 调用方签名没变，还能多给一个动作按钮（比如「撤销」）。
+ */
+const AUTO_HIDE: Record<StatusKind, number> = { ok: 6000, info: 6000, error: 0, busy: 0 };
+const TOAST_MAX = 3;
+
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
+function toastHost(): HTMLElement {
+  let host = document.getElementById('toasts');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'toasts';
+    host.className = 'toasts';
+    // 屏幕阅读器播报：礼貌模式，不打断用户当前朗读
+    host.setAttribute('aria-live', 'polite');
+    document.body.append(host);
+  }
+  return host;
+}
+
+function dismiss(el: HTMLElement): void {
+  el.classList.add('is-leaving');
+  window.setTimeout(() => el.remove(), 160);
+}
+
+export function setStatus(message: string, kind: StatusKind = 'info', action?: ToastAction): void {
+  if (!message) return;
+  const host = toastHost();
+
+  // 同一操作会连着报好几次同样的话（进度、重试），别堆成一摞
+  const same = Array.from(host.children).find(
+    (el) => (el as HTMLElement).dataset.message === message
+  );
+  if (same) return;
+  if (kind === 'busy') {
+    for (const el of Array.from(host.children)) {
+      if ((el as HTMLElement).dataset.kind === 'busy') dismiss(el as HTMLElement);
+    }
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast--${kind}`;
+  toast.dataset.message = message;
+  toast.dataset.kind = kind;
+
+  const text = document.createElement('span');
+  text.className = 'toast__text';
+  text.textContent = message;
+  toast.append(text);
+
+  if (action) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast__action';
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => {
+      dismiss(toast);
+      action.run();
+    });
+    toast.append(btn);
+  }
+
+  // 常驻的那些必须能关：以前 error 只能靠下一次操作把它顶掉
+  if (!AUTO_HIDE[kind]) {
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast__close';
+    close.setAttribute('aria-label', '关闭提示');
+    close.textContent = '×';
+    close.addEventListener('click', () => dismiss(toast));
+    toast.append(close);
+  }
+
+  host.append(toast);
+  while (host.children.length > TOAST_MAX) dismiss(host.firstElementChild as HTMLElement);
+
+  // 带动作（比如「撤销删除」）的多留一会儿：6 秒来不及看清就没了
+  const ms = action ? Math.max(AUTO_HIDE[kind], 12000) : AUTO_HIDE[kind];
+  if (ms) window.setTimeout(() => dismiss(toast), ms);
 }
 
 /** 常驻提示（草稿恢复、本地存储不可用），跟状态条分开：它不随下一次操作消失 */

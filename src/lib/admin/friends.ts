@@ -1,4 +1,4 @@
-import { $, setStatus, setFieldError, run } from './dom';
+import { $, setStatus, setFieldError, run, activeSection } from './dom';
 import { repo, paths } from '../../data/admin';
 import { readFile, saveFile, GhError, type Repo } from './github';
 import { stableFriendsFileJson } from './serialize';
@@ -8,9 +8,14 @@ import { requireToken } from './token';
 
 const friendsLang = $<HTMLSelectElement>('friends-lang');
 
+/** 已经载入过：切回分区不用再读一遍 */
+let loaded = false;
+let loading = false;
+
 async function loadFriends(): Promise<void> {
   const token = requireToken();
   if (!token) return;
+  loading = true;
   try {
     const file = await readFile(repo as Repo, paths.friends(), token);
     const all = file ? (JSON.parse(file.text) as Record<string, unknown[]>) : {};
@@ -20,15 +25,29 @@ async function loadFriends(): Promise<void> {
       2
     );
     setFieldError('e-friends-json', '');
+    loaded = true;
     setStatus('已载入 friends.json', 'ok');
   } catch (e) {
     setStatus(e instanceof GhError ? e.hint : String(e), 'error');
+  } finally {
+    loading = false;
   }
+}
+
+/** 打开「友链」分区时按需载入 */
+export function ensureFriendsLoaded(): void {
+  if (loaded || loading) return;
+  if (!requireToken()) return;
+  void loadFriends();
 }
 
 export function initFriends(): void {
   $('friends-reload').addEventListener('click', () => run(loadFriends));
   friendsLang.addEventListener('change', () => run(loadFriends));
+  if (activeSection() === 'friends') ensureFriendsLoaded();
+  document.addEventListener('admin:section', (e) => {
+    if ((e as CustomEvent<string>).detail === 'friends') ensureFriendsLoaded();
+  });
 
   $('friends-save').addEventListener('click', () => {
     void (async () => {

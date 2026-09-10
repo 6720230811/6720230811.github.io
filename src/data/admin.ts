@@ -33,6 +33,20 @@ export const paths = {
 };
 
 /**
+ * 仓库文件的原始直链（raw.githubusercontent）。
+ *
+ * 后台列表的缩略图走这里，而不是线上站点地址：刚上传/刚改的图不必等
+ * Actions 部署完就能看到，而且拿到的永远是仓库当前状态。
+ * 注意：仓库私有的话这条路走不通（raw 需要鉴权，会 404），
+ * 所以调用方都挂了 onerror 兜底，失败了顶多是没缩略图。
+ */
+export const rawUrl = (path: string): string =>
+  `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${path
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/')}`;
+
+/**
  * 线上站点地址：发布成功后给「点击直达线上文章」用。
  * 与 astro.config.mjs 里的 SITE 保持一致（那边是构建期常量，这里要跑在浏览器里）。
  */

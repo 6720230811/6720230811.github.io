@@ -5,6 +5,8 @@
  * 预览、草稿、统计都挂在 input 上，不派发的话改了正文界面却没反应。
  */
 
+import { registerShortcut } from './shortcuts';
+
 interface MdAction {
   /** 包裹选中内容：[前缀, 后缀] */
   wrap?: [string, string];
@@ -168,14 +170,17 @@ export function initTabIndent(ta: HTMLTextAreaElement): void {
   });
 }
 
-/** Cmd/Ctrl+S 发布。isActive 用来限定只在文章栏生效，别在友链栏也拦这个键 */
+/**
+ * Cmd/Ctrl+S：交给统一的快捷键层（见 shortcuts.ts），这样它也会出现在「?」帮助里。
+ * isActive 用来限定只在当前分区生效，别在个人信息栏也拦这个键。
+ */
 export function initSaveShortcut(save: () => void, isActive: () => boolean): void {
-  document.addEventListener('keydown', (e) => {
-    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-    if (e.key.toLowerCase() !== 's') return;
-    if (!isActive()) return;
-    // 不拦的话浏览器会弹「保存网页」
-    e.preventDefault();
-    save();
+  registerShortcut({
+    keys: 'mod+s',
+    label: '保存 / 发布（当前分区）',
+    group: '发布',
+    allowInInput: true,
+    when: isActive,
+    run: save,
   });
 }

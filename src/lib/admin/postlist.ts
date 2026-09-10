@@ -1,10 +1,11 @@
 import { $, setStatus } from './dom';
-import { repo, paths } from '../../data/admin';
+import { repo, paths, rawUrl } from '../../data/admin';
 import { readFile, listDir, GhError, type Repo } from './github';
 import { site } from '../../data/admin';
 import { isDirty } from './unsaved';
 import { parsePostFile } from './serialize';
 import type { BulkAction } from './bulk';
+import { resolveCoverFields } from '../cover';
 
 /**
  * 左侧的文章列表。
@@ -12,10 +13,14 @@ import type { BulkAction } from './bulk';
  * GitHub 列目录只给文件名，标题 / 日期 / 分类 / 草稿要逐篇读文件才知道，
  * 所以并发读一批（6 个一组）。文章多了要控制请求量：
  * 超过 MAX_INDEX 篇或撞上限流就退化成只列文件名，并在列表下方说明。
+ *
+ * 为了不让列表空着，做了三层兜底：
+ *   本地缓存先画（秒开）→ 目录列出来就铺骨架 → 每读完一批就往上填
  */
 
 const CONCURRENCY = 6;
 const MAX_INDEX = 60;
+const CACHE_VERSION = 1;
 
 export interface PostMeta {
   slug: string;
@@ -25,8 +30,51 @@ export interface PostMeta {
   category: string;
   tags: string[];
   draft: boolean;
+  /** 还没读到的条目（骨架/渐进填充时用），不是「读失败」 */
+  pending?: boolean;
   /** 没能读到内容（限流或文章过多）：只有文件名，标题就用 slug */
   metaOnly: boolean;
+  /** 封面或正文首图的站内地址，列表里当缩略图用 */
+  thumb?: string;
+}
+
+/** 缩略图直连仓库原文：不必等 Actions 部署，刚上传的图也能看到 */
+function thumbSrc(src: string): string {
+  if (/^(?:https?:)?\/\//i.test(src)) return src;
+  const base = import.meta.env.BASE_URL || '/';
+  const path = src.startsWith(base) ? src.slice(base.length) : src.replace(/^\/+/, '');
+  return rawUrl(`public/${path}`);
+}
+
+interface IndexCache {
+  v: number;
+  at: number;
+  items: PostMeta[];
+}
+
+function readCache(lang: string): PostMeta[] | null {
+  try {
+    const raw = localStorage.getItem(`post_index:${lang}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as IndexCache;
+    if (parsed?.v !== CACHE_VERSION || !Array.isArray(parsed.items) || !parsed.items.length) {
+      return null;
+    }
+    return parsed.items;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(lang: string, items: PostMeta[]): void {
+  try {
+    localStorage.setItem(
+      `post_index:${lang}`,
+      JSON.stringify({ v: CACHE_VERSION, at: Date.now(), items } satisfies IndexCache)
+    );
+  } catch {
+    // 隐私模式 / 配额满：缓存只是加速，没有也能用
+  }
 }
 
 export interface PostIndex {
@@ -35,7 +83,18 @@ export interface PostIndex {
   degraded: boolean;
 }
 
-export async function buildIndex(lang: string, token: string): Promise<PostIndex> {
+export interface IndexHooks {
+  /** 目录刚列出来（还不知道每篇写了什么）：列表可以先把骨架铺上 */
+  onSlugs?: (slugs: string[]) => void;
+  /** 每读完一批：把「已经拿到的」交出去，列表可以边读边填 */
+  onProgress?: (items: PostMeta[]) => void;
+}
+
+export async function buildIndex(
+  lang: string,
+  token: string,
+  hooks: IndexHooks = {}
+): Promise<PostIndex> {
   const entries = await listDir(repo as Repo, paths.postsDir(lang), token);
   const slugs = entries
     .filter((e) => e.type === 'file' && e.name.endsWith('.md'))
@@ -43,6 +102,8 @@ export async function buildIndex(lang: string, token: string): Promise<PostIndex
     .sort();
 
   const indexed = slugs.slice(0, MAX_INDEX);
+  hooks.onSlugs?.(indexed);
+
   const items: PostMeta[] = [];
   let degraded = slugs.length > indexed.length;
 
@@ -54,6 +115,7 @@ export async function buildIndex(lang: string, token: string): Promise<PostIndex
           const file = await readFile(repo as Repo, paths.post(lang, slug), token);
           if (!file) return { slug, title: slug, date: '', updated: '', category: '', tags: [], draft: false, metaOnly: true };
           const parsed = parsePostFile(file.text);
+          const cover = resolveCoverFields(parsed.data.cover, parsed.body);
           return {
             slug,
             title: parsed.data.title || slug,
@@ -63,6 +125,7 @@ export async function buildIndex(lang: string, token: string): Promise<PostIndex
             tags: parsed.data.tags,
             draft: parsed.data.draft,
             metaOnly: false,
+            ...(cover ? { thumb: cover.src } : {}),
           };
         } catch (e) {
           // 单篇失败不拖垮整份列表；撞限流就整体退化为只列文件名
@@ -72,6 +135,7 @@ export async function buildIndex(lang: string, token: string): Promise<PostIndex
       })
     );
     items.push(...done);
+    hooks.onProgress?.([...items]);
   }
 
   items.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.slug.localeCompare(b.slug));
@@ -192,6 +256,23 @@ export function initPostList(
     bulkAll.indeterminate = picked > 0 && picked < shown.length;
   }
 
+  /** 读文件期间的骨架行：让「还没到」看起来是在加载，而不是没有内容 */
+  function renderPlaceholders(count: number): void {
+    listEl.textContent = '';
+    countEl.textContent = '…';
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < count; i += 1) {
+      const li = document.createElement('li');
+      li.className = 'pcard-sk';
+      li.style.setProperty('--sk-delay', `${(i % 6) * 90}ms`);
+      li.innerHTML =
+        '<span class="pcard-sk__thumb"></span><span class="pcard-sk__body"><i></i><i></i><i></i></span>';
+      frag.append(li);
+    }
+    listEl.append(frag);
+    renderSelection();
+  }
+
   function render(): void {
     const shown = visible();
     listEl.textContent = '';
@@ -248,7 +329,22 @@ export function initPostList(
         foot.append(tag);
       }
 
-      btn.append(title, sub, foot);
+      if (item.thumb) {
+        const img = document.createElement('img');
+        img.className = 'pcard__thumb';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.alt = '';
+        img.src = thumbSrc(item.thumb);
+        // 仓库私有、外链失效、图还没提交：退化成没有缩略图，不留破图
+        img.addEventListener('error', () => img.remove());
+        btn.append(img);
+      }
+
+      const body = document.createElement('span');
+      body.className = 'pcard__body';
+      body.append(title, sub, foot);
+      btn.append(body);
       li.append(pick, btn);
 
       // 已发布的文章给一个直达线上的入口；草稿没有线上页面，不给
@@ -368,13 +464,42 @@ export function initPostList(
       // 换语言 = 换一批文件，勾选留着会误伤到另一语言的同名文章
       if (nextLang !== lang) selected.clear();
       lang = nextLang;
-      const index = await buildIndex(nextLang, token);
+
+      // 先拿上次的结果顶上：换分区、刷新页面都是秒开，随后静默更新
+      const cached = readCache(nextLang);
+      if (cached) {
+        items = cached;
+        fillFilters();
+        render();
+        metaEl.textContent = `共 ${items.length} 篇 · 正在更新…`;
+      } else {
+        items = [];
+        renderPlaceholders(0);
+        metaEl.textContent = '正在读取文章…';
+      }
+
+      // 没有缓存时才边读边填（有缓存就别让列表中途自己跳一下）
+      const progressive = !cached;
+      const index = await buildIndex(nextLang, token, {
+        onSlugs: (slugs) => {
+          if (!progressive) return;
+          renderPlaceholders(slugs.length);
+          metaEl.textContent = `正在读取 ${slugs.length} 篇…`;
+        },
+        onProgress: (partial) => {
+          if (!progressive) return;
+          items = partial;
+          render();
+        },
+      });
+
       items = index.items;
       // 已经被删掉的文章不该还留在勾选里
       const alive = new Set(items.map((item) => item.slug));
       for (const slug of Array.from(selected)) if (!alive.has(slug)) selected.delete(slug);
       fillFilters();
       render();
+      writeCache(nextLang, index.items);
       setStatus(
         index.degraded
           ? '文章较多或撞上限流，列表只显示文件名（标题与日期要逐篇读取）。'

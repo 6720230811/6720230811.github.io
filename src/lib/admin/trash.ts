@@ -132,42 +132,12 @@ export function initTrash(opts: TrashOptions): void {
   reload = reloadItems;
 
   async function restore(item: TrashItem): Promise<void> {
-    const token = requireToken();
-    if (!token) return;
-
-    // 同名文件可能已经存在（比如手工又建了一篇）：直接 PUT 会替掉它，先问一句
-    const exists = await statFile(repo as Repo, item.path, token);
-    if (exists && !window.confirm(`${item.path} 已经存在，还原会覆盖现有内容，继续吗？`)) return;
-
     busy = true;
     render();
-    setStatus(`正在还原 ${item.slug}…`, 'busy');
-    try {
-      await saveFile(repo as Repo, item.path, token, item.text, `restore post: ${item.slug}`);
-      if (item.cover) {
-        await saveBase64File(
-          repo as Repo,
-          item.cover.path,
-          token,
-          item.cover.b64,
-          `restore cover: ${item.slug}`
-        );
-      }
-      await dropTrash(item.id);
-      items = await loadTrash();
-      render();
-      setStatus(
-        `已还原 ${item.slug}，Actions 跑完线上就回来了。${item.cover ? '封面也一起还原了。' : ''}`,
-        'ok'
-      );
-      opts.onRestored(item);
-    } catch (e) {
-      const hint = e instanceof GhError ? e.hint : String(e);
-      setStatus(`还原失败：${hint}`, 'error');
-    } finally {
-      busy = false;
-      render();
-    }
+    await restoreTrashItem(item, { onDone: (it) => opts.onRestored(it) });
+    busy = false;
+    items = await loadTrash();
+    render();
   }
 
   async function drop(item: TrashItem): Promise<void> {
@@ -191,6 +161,47 @@ export function initTrash(opts: TrashOptions): void {
   });
 
   void reloadItems();
+}
+
+/**
+ * 把一条记录还原回仓库（重新 PUT，封面一起）。
+ * 侧栏的「还原」按钮和删除后那条「撤销」提示条走的是同一个函数。
+ */
+export async function restoreTrashItem(
+  item: TrashItem,
+  hooks: { onDone?: (item: TrashItem) => void } = {}
+): Promise<boolean> {
+  const token = requireToken();
+  if (!token) return false;
+
+  // 同名文件可能已经存在（比如手工又建了一篇）：直接 PUT 会替掉它，先问一句
+  const exists = await statFile(repo as Repo, item.path, token);
+  if (exists && !window.confirm(`${item.path} 已经存在，还原会覆盖现有内容，继续吗？`)) return false;
+
+  setStatus(`正在还原 ${item.slug}…`, 'busy');
+  try {
+    await saveFile(repo as Repo, item.path, token, item.text, `restore post: ${item.slug}`);
+    if (item.cover) {
+      await saveBase64File(
+        repo as Repo,
+        item.cover.path,
+        token,
+        item.cover.b64,
+        `restore cover: ${item.slug}`
+      );
+    }
+    await dropTrash(item.id);
+    await refreshTrash();
+    setStatus(
+      `已还原 ${item.slug}，Actions 跑完线上就回来了。${item.cover ? '封面也一起还原了。' : ''}`,
+      'ok'
+    );
+    hooks.onDone?.(item);
+    return true;
+  } catch (e) {
+    setStatus(`还原失败：${e instanceof GhError ? e.hint : String(e)}`, 'error');
+    return false;
+  }
 }
 
 /** 删除文章时在调用方的 catch 之外兜底：存不进去也不该影响删除本身 */

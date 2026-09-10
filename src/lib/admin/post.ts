@@ -1,4 +1,5 @@
-import { $, setStatus, setNotice, setFieldError, run, debounce } from './dom';
+import { $, setStatus, setNotice, setFieldError, run, debounce, activeSection } from './dom';
+import { registerShortcut } from './shortcuts';
 import { repo, paths, site } from '../../data/admin';
 import { readFile, saveFile, statFile, deleteFile, readBase64, GhError, type Repo } from './github';
 import { buildPostFile, parsePostFile, today, toSlug, isValidSlug } from './serialize';
@@ -22,7 +23,7 @@ import { Mirror } from './mirror';
 import { createSync, renderWithLines } from './sync';
 import { initBubble } from './bubble';
 import { resolveCoverFields } from '../cover';
-import { initTrash, rememberDeletion, makeTrashItem, refreshTrash } from './trash';
+import { initTrash, rememberDeletion, makeTrashItem, refreshTrash, restoreTrashItem } from './trash';
 import { runBulk, bulkLabel, type BulkAction } from './bulk';
 import type { Locale } from '../../i18n/ui';
 
@@ -271,35 +272,45 @@ const removePost = async (): Promise<void> => {
     }
 
     // 删完先留一份本地副本：侧栏「最近删除」里可以一键还原
-    await rememberDeletion(
-      makeTrashItem({
-        lang: postLang.value,
-        slug,
-        title: data.title || slug,
-        path: paths.post(postLang.value, slug),
-        text,
-        ...(cover && coverPath ? { cover: { path: coverPath, b64: cover.b64 } } : {}),
-      })
-    );
+    const trashItem = makeTrashItem({
+      lang: postLang.value,
+      slug,
+      title: data.title || slug,
+      path: paths.post(postLang.value, slug),
+      text,
+      ...(cover && coverPath ? { cover: { path: coverPath, b64: cover.b64 } } : {}),
+    });
+    await rememberDeletion(trashItem);
     if (cover && coverPath) {
       await deleteFile(repo as Repo, coverPath, token, `delete cover: ${slug}`);
     }
+
+    // 提示条上直接给后悔药（和侧栏「最近删除」的还原是同一条代码路径）
+    const undo = {
+      label: '撤销删除',
+      run: () => {
+        void restoreTrashItem(trashItem, { onDone: () => void refreshPostList() });
+      },
+    };
 
     panel.poll();
     const result = await waitForBuild(commitSha);
     if (result.phase === 'success') {
       panel.done(site.blog(postLang.value));
-      setStatus(`已删除 ${slug}，线上已生效${cover ? '（封面一起删了）' : ''}。可在「最近删除」里还原。`, 'ok');
+      setStatus(`已删除 ${slug}，线上已生效${cover ? '（封面一起删了）' : ''}。`, 'ok', undo);
     } else if (result.phase === 'failure') {
       panel.fail(`删除已提交，但构建在第 ${result.seconds} 秒失败`, {
         steps: result.steps,
         logUrl: result.run?.html_url,
         retry: () => void removePost(),
       });
+      setStatus(`已删除 ${slug}（构建失败的那次与此无关）。`, 'info', undo);
     } else if (result.phase === 'timeout') {
       panel.note('删除已提交，构建 4 分钟还没结束，去 Actions 页面看进度。');
+      setStatus(`已删除 ${slug}。`, 'info', undo);
     } else {
       panel.note('已删除；读不到 Actions 状态（Token 缺 Actions 读权限）。');
+      setStatus(`已删除 ${slug}。`, 'info', undo);
     }
 
     await refreshPostList();
@@ -779,10 +790,31 @@ export function initPost(): void {
 
   $('publish-btn').addEventListener('click', () => void publish());
   // Cmd/Ctrl+S 发布：只在文章栏拦这个键，别在友链栏也拦
-  initSaveShortcut(
-    () => void publish(),
-    () => document.querySelector('.sidebar__tab[aria-current="page"]')?.getAttribute('data-tab') === 'post'
-  );
+  initSaveShortcut(() => void publish(), () => activeSection() === 'post');
+
+  // 视图切换：用 Alt+数字，⌘1/2/3 是浏览器切标签页、页面拦不住
+  const viewShortcuts: [string, string, string][] = [
+    ['alt+1', '纯编辑', 'write'],
+    ['alt+2', '双栏预览', 'split'],
+    ['alt+3', '全真渲染', 'render'],
+  ];
+  for (const [keys, label, mode] of viewShortcuts) {
+    registerShortcut({
+      keys,
+      label: `视图：${label}`,
+      group: '视图',
+      when: () => activeSection() === 'post',
+      run: () => setMode(mode),
+    });
+  }
+  registerShortcut({
+    keys: 'mod+shift+p',
+    label: '发布到 GitHub',
+    group: '发布',
+    allowInInput: true,
+    when: () => activeSection() === 'post',
+    run: () => void publish(),
+  });
 
   deleteBtn.addEventListener('click', showDeleteConfirm);
   deleteCancel.addEventListener('click', hideDeleteConfirm);

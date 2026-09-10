@@ -5,12 +5,14 @@ import { initFriends } from './friends';
 import { initUnsavedGuard } from './unsaved';
 import { pruneDrafts } from './drafts';
 import { initDropGuard } from './upload';
-import { $, readFlag, writeFlag } from './dom';
+import { $, readFlag, writeFlag, activeSection } from './dom';
+import { initShortcuts, registerShortcut, openShortcutHelp } from './shortcuts';
 
 /**
  * 后台入口：只负责把三栏装配起来。
  * 各栏的逻辑分别在 post.ts / profile.ts / friends.ts，
- * 共用工具在 dom.ts，token 的胶囊与抽屉在 token.ts。
+ * 共用工具在 dom.ts，token 的胶囊与抽屉在 token.ts，
+ * 快捷键注册表在 shortcuts.ts（各模块自己往里加键）。
  */
 
 const found = document.querySelector<HTMLElement>('.workbench');
@@ -31,6 +33,8 @@ function showTab(name: string): void {
   }
   // 只有写文章时才需要右侧检查器
   workbench.dataset.section = name;
+  // 各分区按需载入自己的数据（个人信息 / 友链都不在启动路径上读仓库）
+  document.dispatchEvent(new CustomEvent<string>('admin:section', { detail: name }));
 }
 
 for (const tab of tabs) {
@@ -55,7 +59,38 @@ $('inspector-toggle').addEventListener('click', () => setInspector(workbench.dat
 // 拖着文件在页面上乱放时别让浏览器把文件当页面打开（正文会丢）
 initDropGuard();
 
-initTokenPanel(refreshPostList);
+initTokenPanel(() => {
+  refreshPostList();
+  // token 刚配好：把当前分区的内容也拉进来（各分区自己判断要不要响应）
+  document.dispatchEvent(new CustomEvent<string>('admin:section', { detail: activeSection() }));
+});
+
+initShortcuts();
+// ⌘K：跳到文章分区并把焦点放进搜索框
+registerShortcut({
+  keys: 'mod+k',
+  label: '搜索文章',
+  group: '导航',
+  allowInInput: true,
+  run: () => {
+    document.querySelector<HTMLButtonElement>('.sidebar__tab[data-tab="post"]')?.click();
+    const search = $<HTMLInputElement>('post-filter');
+    search.focus();
+    search.select();
+  },
+});
+// 「?」只在非输入框里生效：正文里敲问号得能正常打出来
+registerShortcut({
+  keys: 'shift+/',
+  label: '快捷键一览',
+  group: '通用',
+  run: openShortcutHelp,
+});
+$('shortcut-help-btn').addEventListener('click', openShortcutHelp);
+$('shortcut-help-close').addEventListener('click', () => {
+  $<HTMLDialogElement>('shortcut-help').close();
+});
+
 initPost();
 initProfile();
 initFriends();
