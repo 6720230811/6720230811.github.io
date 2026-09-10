@@ -26,6 +26,9 @@ const EXTRA_CSS = `
   --shiki-dark-bg: #24292e;
 }
 html { background: transparent; }
+/* admin.css 是给三栏布局用的：html{overflow:hidden} 会跟着复制进来，
+   把预览的滚动锁死（全真渲染下滚不动就是它）。这里解回来。 */
+html, body { height: auto; overflow: visible !important; }
 /* 预览窗格自己滚动（同步滚动要用到 scrollY），不再靠撑高 iframe */
 body { margin: 0; padding: 1.25rem 1.5rem; background: var(--c-bg-soft); min-height: 100%; }
 .admin-preview__empty { color: var(--c-text-faint); font-size: 0.9rem; }
