@@ -1,10 +1,9 @@
 ---
-title: 用 Astro 搭博客踩到的几个坑
-description: 内容集合的 id 规则、i18n 路由下的动态路径、Markdown 代码块的明暗主题，记录一下这次搭建时真正卡住我的三件事。
-date: 2026-09-01
-category: 技术
-tags: [Astro, 前端, 建站]
-cover: /illustrations/blog-astro-notes.webp
+title: "用 Astro 搭博客踩到的几个坑"
+description: "内容集合的 id 规则、i18n 路由下的动态路径、Markdown 代码块的明暗主题，记录一下这次搭建时真正卡住我的三件事。"
+date: 2026-09-08
+category: "技术"
+tags: ["Astro", "前端", "建站"]
 ---
 
 这次把单页主页改成博客，真正卡住我的不是布局，而是下面三件小事。
