@@ -47,6 +47,22 @@ import { repo } from '../../data/admin';
       <button id="slug-overwrite" class="btn btn--xs btn--warn" type="button" hidden>确认覆盖同名文件</button>
     </div>
 
+    <div class="field">
+      <span class="field__label">旧链接别名 <span class="field__hint">改名后旧地址自动跳转</span></span>
+      <div class="chip-field">
+        <div id="alias-chips" class="chip-field__chips" hidden></div>
+        <input
+          id="alias-input"
+          class="chip-field__input"
+          type="text"
+          placeholder="旧文件名，回车添加"
+          spellcheck="false"
+          autocomplete="off"
+        />
+      </div>
+      <p class="field__hint">每个别名会生成一个跳转页。改名时旧的 slug 会自动加到这里。</p>
+    </div>
+
     <div class="field-row">
       <label class="field">
         <span class="field__label">发布日期</span>
@@ -139,6 +155,11 @@ import { repo } from '../../data/admin';
         <p class="confirm__text">
           删除 <code id="delete-name"></code>？仓库里的这个文件会被删掉，Actions 跑完线上也一起消失。
         </p>
+        <label id="delete-cover-row" class="confirm__opt" hidden>
+          <input id="delete-cover" type="checkbox" />
+          <span>同时删除封面文件 <code id="delete-cover-name"></code></span>
+        </label>
+        <p class="confirm__hint">删完会在左栏「最近删除」里留一份本地副本，可以还原。</p>
         <div class="confirm__actions">
           <button id="delete-cancel" class="btn btn--xs" type="button">取消</button>
           <button id="delete-ok" class="btn btn--xs btn--danger" type="button">确认删除</button>

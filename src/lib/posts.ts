@@ -23,13 +23,32 @@ export async function postsOf(lang: Locale): Promise<Post[]> {
  * locale 必须显式塞进 props：prefixDefaultLocale:false 下动态路由里
  * 读 Astro.currentLocale 不可靠。
  */
+/** getStaticPaths 的返回单元：alias 有值时这一页是「旧地址跳转页」 */
+interface PostPath {
+  params: { slug: string };
+  props: { entry: Post; locale: Locale; alias?: string };
+}
+
 export function postPaths(lang: Locale) {
-  return async () => {
+  return async (): Promise<PostPath[]> => {
     const posts = await postsOf(lang);
-    return posts.map((entry) => ({
+    const taken = new Set(posts.map((p) => p.slug));
+
+    const out: PostPath[] = posts.map((entry) => ({
       params: { slug: entry.slug },
       props: { entry, locale: lang },
     }));
+
+    // 别名也各生成一页；撞上真实 slug、自己的、或不是合法 slug 的跳过
+    // （真身优先；非法字符会生成奇怪的路由，宁可这条别名不生效）
+    for (const entry of posts) {
+      for (const alias of entry.data.aliases ?? []) {
+        if (!alias || alias === entry.slug || taken.has(alias)) continue;
+        if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(alias)) continue;
+        out.push({ params: { slug: alias }, props: { entry, locale: lang, alias } });
+      }
+    }
+    return out;
   };
 }
 

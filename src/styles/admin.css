@@ -2118,6 +2118,258 @@ select.input {
 }
 
 /* ============================================================
+   多选 + 批量操作
+   ============================================================ */
+
+/* 勾选框与卡片同排：卡片本身是按钮，点它还是「载入这一篇」 */
+.sidebar__list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.sidebar__list li .pcard {
+  flex: 1;
+  min-width: 0;
+}
+
+.pcard__pick {
+  flex: none;
+  margin: 0.6rem 0 0 0.25rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  accent-color: var(--adm-accent);
+  cursor: pointer;
+}
+
+.sidebar__list li.is-picked > .pcard {
+  background: var(--adm-accent-soft);
+  border-color: var(--adm-accent);
+}
+
+.bulk {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.45rem 0.75rem;
+  border-top: 1px solid var(--adm-line);
+}
+
+.bulk__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.bulk__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--adm-text);
+  cursor: pointer;
+}
+
+.bulk__all input {
+  width: 0.85rem;
+  height: 0.85rem;
+  accent-color: var(--adm-accent);
+  cursor: pointer;
+}
+
+.bulk__link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.bulk__link:hover {
+  color: var(--adm-accent);
+  text-decoration: underline;
+}
+
+.bulk__row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.bulk__row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.bulk__opt {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  color: var(--adm-faint);
+}
+
+.bulk__opt input {
+  width: 0.8rem;
+  height: 0.8rem;
+  accent-color: var(--adm-accent);
+  cursor: pointer;
+}
+
+/* ============================================================
+   最近删除
+   ============================================================ */
+
+.trash {
+  flex: none;
+  border-top: 1px solid var(--adm-line);
+  padding: 0.35rem 0.75rem 0.5rem;
+}
+
+.trash__sum {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.trash__sum:hover {
+  color: var(--adm-text);
+}
+
+.trash__count {
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--adm-surface);
+  font-size: 0.66rem;
+}
+
+.trash__list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.trash__item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.35rem;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r);
+  background: var(--adm-surface);
+}
+
+.trash__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.trash__title,
+.trash__sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash__title {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--adm-text);
+}
+
+.trash__sub {
+  font-family: var(--font-code);
+  font-size: 0.64rem;
+  color: var(--adm-faint);
+}
+
+.trash__btn {
+  flex: none;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 999px;
+  background: var(--adm-bg, transparent);
+  font: inherit;
+  font-size: 0.68rem;
+  color: var(--adm-accent);
+  cursor: pointer;
+}
+
+.trash__btn:hover {
+  border-color: var(--adm-accent);
+  background: var(--adm-accent-soft);
+}
+
+.trash__btn--quiet {
+  color: var(--adm-faint);
+}
+
+.trash__btn--quiet:hover {
+  border-color: var(--adm-line);
+  background: none;
+  color: var(--adm-text);
+}
+
+.trash__empty,
+.trash__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.66rem;
+  line-height: 1.6;
+  color: var(--adm-faint);
+}
+
+/* ============================================================
+   删除确认：附带清理封面
+   ============================================================ */
+
+.confirm__opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem;
+  color: var(--adm-text);
+  cursor: pointer;
+}
+
+.confirm__opt input {
+  margin: 0.15rem 0 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  accent-color: var(--adm-danger);
+  cursor: pointer;
+}
+
+.confirm__opt code {
+  padding: 0 0.2rem;
+  border-radius: 3px;
+  background: var(--adm-surface);
+  font-size: 0.66rem;
+  word-break: break-all;
+}
+
+.confirm__hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.66rem;
+  line-height: 1.6;
+  color: var(--adm-faint);
+}
+
+/* ============================================================
    窄屏：三栏变两栏，右栏改成浮层
    ============================================================ */
 @media (max-width: 1180px) {

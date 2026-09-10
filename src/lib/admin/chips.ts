@@ -17,9 +17,9 @@ export interface Chips {
   remember: () => void;
 }
 
-function readHistory(): string[] {
+function readHistory(key: string): string[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(key);
     const list = raw ? (JSON.parse(raw) as unknown) : [];
     return Array.isArray(list) ? list.filter((t): t is string => typeof t === 'string') : [];
   } catch {
@@ -27,9 +27,9 @@ function readHistory(): string[] {
   }
 }
 
-function writeHistory(tags: string[]): void {
+function writeHistory(key: string, tags: string[]): void {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(tags.slice(0, HISTORY_MAX)));
+    localStorage.setItem(key, JSON.stringify(tags.slice(0, HISTORY_MAX)));
   } catch {
     // 隐私模式：历史丢了也不影响编辑
   }
@@ -40,20 +40,29 @@ export function rememberTags(tags: readonly string[]): void {
   const clean = tags.map((t) => t.trim()).filter(Boolean);
   if (!clean.length) return;
   const merged = [...clean];
-  for (const old of readHistory()) {
+  for (const old of readHistory(HISTORY_KEY)) {
     if (!merged.some((t) => t.toLowerCase() === old.toLowerCase())) merged.push(old);
   }
-  writeHistory(merged);
+  writeHistory(HISTORY_KEY, merged);
 }
 
 export function initChips(opts: {
   box: HTMLElement;
   input: HTMLInputElement;
-  suggest: HTMLElement;
+  /** 历史候选下拉；不给就不做「记住历史 / 联想」这一套（别名之类的一次性输入） */
+  suggest?: HTMLElement | null;
+  /** 历史记录的 localStorage key；传 null 表示不记历史 */
+  historyKey?: string | null;
   onChange: () => void;
 }): Chips {
   const { box, input, suggest, onChange } = opts;
+  const historyKey = opts.historyKey === undefined ? HISTORY_KEY : opts.historyKey;
   let tags: string[] = [];
+
+  const read = () => (historyKey ? readHistory(historyKey) : []);
+  const write = (list: string[]) => {
+    if (historyKey) writeHistory(historyKey, list);
+  };
 
   function render(): void {
     box.textContent = '';
@@ -103,13 +112,14 @@ export function initChips(opts: {
   function candidates(): string[] {
     const key = input.value.trim().toLowerCase();
     const used = new Set(tags.map((t) => t.toLowerCase()));
-    return readHistory()
+    return read()
       .filter((t) => !used.has(t.toLowerCase()))
       .filter((t) => !key || t.toLowerCase().includes(key))
       .slice(0, 10);
   }
 
   function showSuggest(): void {
+    if (!suggest) return;
     const list = candidates();
     if (!list.length) {
       suggest.hidden = true;
@@ -134,7 +144,7 @@ export function initChips(opts: {
   }
 
   const hideSoon = () => window.setTimeout(() => {
-    suggest.hidden = true;
+    if (suggest) suggest.hidden = true;
   }, 120);
 
   input.addEventListener('focus', showSuggest);
@@ -165,7 +175,14 @@ export function initChips(opts: {
     },
     add: commit,
     remember() {
-      rememberTags(tags);
+      if (!historyKey) return;
+      const clean = tags.map((t) => t.trim()).filter(Boolean);
+      if (!clean.length) return;
+      const merged = [...clean];
+      for (const old of read()) {
+        if (!merged.some((t) => t.toLowerCase() === old.toLowerCase())) merged.push(old);
+      }
+      write(merged);
     },
   };
 }

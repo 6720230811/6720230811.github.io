@@ -247,6 +247,26 @@ export async function saveFile(
 }
 
 /**
+ * 读文件的原始 base64。
+ * 二进制文件（配图）不能用 readFile：它会按 UTF-8 解码，图片会当场坏掉。
+ * 「最近删除」要留一份封面副本以便还原，所以得拿到原始 base64。
+ */
+export async function readBase64(
+  r: Repo,
+  path: string,
+  token: string
+): Promise<{ b64: string; sha: string } | null> {
+  try {
+    const res = await request<FileResponse>(fileUrl(r, path), token);
+    if (typeof res.content !== 'string') return null;
+    return { b64: res.content, sha: res.sha };
+  } catch (e) {
+    if (e instanceof GhError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/**
  * 写二进制文件（配图）。与 saveFile 同一套：串行队列 + 409 重试。
  * 权限还是 Contents: Read and write，不用额外申请。
  */
@@ -257,9 +277,19 @@ export async function saveBinaryFile(
   bytes: Uint8Array,
   message: string
 ): Promise<void> {
+  await saveBase64File(r, path, token, encodeBase64Bytes(bytes), message);
+}
+
+/** 直接写已经编好的 base64（还原封面时用：手上只有 base64，没有原始字节） */
+export async function saveBase64File(
+  r: Repo,
+  path: string,
+  token: string,
+  b64: string,
+  message: string
+): Promise<void> {
   return enqueue(async () => {
     const sha = await statFile(r, path, token);
-    const b64 = encodeBase64Bytes(bytes);
     try {
       await put(r, path, token, b64, message, sha ?? undefined);
     } catch (e) {

@@ -1,0 +1,86 @@
+---
+import type { Locale } from '../i18n/ui';
+
+/**
+ * 旧地址跳转页。
+ *
+ * 文章改了文件名（slug）之后旧链接会 404。后台改名时会把旧 slug 写进
+ * frontmatter 的 aliases，构建时每个别名额外生成一页这个页面：
+ * 静态站没有服务端重定向可用，只能落地一个 HTML，靠 meta refresh 把人送到新地址。
+ *
+ * 页面刻意做得极轻（不引全局样式、不引导航）：它存在的意义就是尽快跳走，
+ * 同时用 canonical + noindex 告诉爬虫新地址才是正主。
+ */
+
+interface Props {
+  title: string;
+  /** 新地址：站内路径，已含 base 前缀 */
+  href: string;
+  locale: Locale;
+}
+
+const { title, href, locale } = Astro.props;
+const origin = Astro.site?.origin;
+const canonical = origin ? new URL(href, origin).toString() : href;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="canonical" href={canonical} />
+    {/* 0 秒跳转；下面再给一条可点的链接，禁了 meta refresh 也走得到 */}
+    <meta http-equiv="refresh" content={`0; url=${href}`} />
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        background: #fff;
+        color: #0f172a;
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
+          sans-serif;
+      }
+
+      main {
+        max-width: 32rem;
+        text-align: center;
+        line-height: 1.7;
+      }
+
+      p {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+      }
+
+      a {
+        color: #4f46e5;
+        font-size: 0.85rem;
+        word-break: break-all;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0b1120;
+          color: #e2e8f0;
+        }
+
+        a {
+          color: #a5b4fc;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>这篇文章已经换了地址，正在跳转…</p>
+      <a href={href}>{canonical}</a>
+    </main>
+  </body>
+</html>

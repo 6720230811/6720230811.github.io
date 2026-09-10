@@ -20,6 +20,14 @@ export const paths = {
   // 所以 public/illustrations/x.png ↔ /illustrations/x.png
   illustrationsDir: () => 'public/illustrations',
   illustration: (name: string) => `public/illustrations/${name}`,
+  /**
+   * 封面 URL → 仓库里的路径；不是站内配图（外链 / 没写封面）返回 null。
+   * 只匹配 /illustrations/ 之后那一段：站点挂在子路径时 URL 会带 base 前缀。
+   */
+  illustrationFromUrl: (url: string): string | null => {
+    const match = /(?:^|\/)illustrations\/([^/?#]+)/.exec(url.trim());
+    return match ? `${paths.illustrationsDir()}/${decodeURIComponent(match[1])}` : null;
+  },
 };
 
 /**

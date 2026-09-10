@@ -4,6 +4,7 @@ import { readFile, listDir, GhError, type Repo } from './github';
 import { site } from '../../data/admin';
 import { isDirty } from './unsaved';
 import { parsePostFile } from './serialize';
+import type { BulkAction } from './bulk';
 
 /**
  * 左侧的文章列表。
@@ -81,10 +82,20 @@ export interface PostList {
   rebuild: (lang: string, token: string) => Promise<void>;
   setActive: (slug: string) => void;
   slugs: () => string[];
+  /** 当前勾选的文章（批量操作用） */
+  selection: () => string[];
+  clearSelection: () => void;
 }
 
-/** 列表 + 三个筛选器（分类 / 标签 / 状态）。选中与载入由 onPick 回调出去 */
-export function initPostList(onPick: (slug: string) => void): PostList {
+/**
+ * 列表 + 筛选器 + 多选批量操作。
+ * 批量操作只负责「收集选中 + 弹确认」，真正写仓库的活交给外部（post.ts），
+ * 那边才有发布面板与列表刷新。
+ */
+export function initPostList(
+  onPick: (slug: string) => void,
+  opts: { onBulk?: (slugs: string[], action: BulkAction) => void | Promise<void> } = {}
+): PostList {
   const listEl = $('post-items');
   const filterEl = $<HTMLInputElement>('post-filter');
   const metaEl = $('post-list-meta');
@@ -95,8 +106,23 @@ export function initPostList(onPick: (slug: string) => void): PostList {
   const statusEl = $<HTMLSelectElement>('filter-status');
   const sortEl = $<HTMLSelectElement>('filter-sort');
 
+  // 批量操作条
+  const bulkAll = $<HTMLInputElement>('bulk-all');
+  const bulkCount = $('bulk-count');
+  const bulkClear = $<HTMLButtonElement>('bulk-clear');
+  const bulkCategory = $<HTMLInputElement>('bulk-category');
+  const setCategory = $<HTMLButtonElement>('bulk-set-category');
+  const toDraft = $<HTMLButtonElement>('bulk-draft');
+  const toPublished = $<HTMLButtonElement>('bulk-publish');
+  const bulkDelete = $<HTMLButtonElement>('bulk-delete');
+  const bulkCover = $<HTMLInputElement>('bulk-cover');
+  const bulkBtns = [setCategory, toDraft, toPublished, bulkDelete];
+
   let items: PostMeta[] = [];
   let active = '';
+  /** 勾选的文章：按 slug 存，筛选/排序/重渲染都不影响 */
+  const selected = new Set<string>();
+  let bulkBusy = false;
   /** 当前语言：给列表里的「打开线上文章」拼地址用 */
   let lang = 'zh';
 
@@ -152,6 +178,20 @@ export function initPostList(onPick: (slug: string) => void): PostList {
     return out;
   };
 
+  /** 批量条：数量、按钮可用状态、全选框的三态都跟着选中集合走 */
+  function renderSelection(): void {
+    const shown = visible();
+    const n = selected.size;
+    bulkCount.textContent = n ? `已选 ${n} 篇` : '批量操作';
+    for (const btn of bulkBtns) btn.disabled = bulkBusy || n === 0;
+    bulkClear.hidden = n === 0;
+    bulkCategory.disabled = bulkBusy || n === 0;
+
+    const picked = shown.filter((item) => selected.has(item.slug)).length;
+    bulkAll.checked = shown.length > 0 && picked === shown.length;
+    bulkAll.indeterminate = picked > 0 && picked < shown.length;
+  }
+
   function render(): void {
     const shown = visible();
     listEl.textContent = '';
@@ -160,6 +200,17 @@ export function initPostList(onPick: (slug: string) => void): PostList {
     const frag = document.createDocumentFragment();
     for (const item of shown) {
       const li = document.createElement('li');
+      const picked = selected.has(item.slug);
+      li.classList.toggle('is-picked', picked);
+
+      const pick = document.createElement('input');
+      pick.type = 'checkbox';
+      pick.className = 'pcard__pick';
+      pick.checked = picked;
+      pick.dataset.slug = item.slug;
+      pick.setAttribute('aria-label', `选择 ${item.title}`);
+      pick.title = '选中后可批量改分类 / 转草稿 / 删除';
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'pcard';
@@ -198,7 +249,7 @@ export function initPostList(onPick: (slug: string) => void): PostList {
       }
 
       btn.append(title, sub, foot);
-      li.append(btn);
+      li.append(pick, btn);
 
       // 已发布的文章给一个直达线上的入口；草稿没有线上页面，不给
       if (!item.draft && !item.metaOnly) {
@@ -226,6 +277,70 @@ export function initPostList(onPick: (slug: string) => void): PostList {
     metaEl.textContent = items.length
       ? `共 ${items.length} 篇${shown.length !== items.length ? `，筛出 ${shown.length} 篇` : ''}`
       : '';
+    renderSelection();
+  }
+
+  // 勾选框：只更新自己那一行与批量条，不整表重渲染（否则键盘勾选会丢焦点）
+  listEl.addEventListener('change', (e) => {
+    const box = e.target;
+    if (!(box instanceof HTMLInputElement) || !box.classList.contains('pcard__pick')) return;
+    const slug = box.dataset.slug ?? '';
+    if (box.checked) selected.add(slug);
+    else selected.delete(slug);
+    (box.closest('li') as HTMLElement | null)?.classList.toggle('is-picked', box.checked);
+    renderSelection();
+  });
+
+  bulkAll.addEventListener('change', () => {
+    const shown = visible();
+    for (const item of shown) {
+      if (bulkAll.checked) selected.add(item.slug);
+      else selected.delete(item.slug);
+    }
+    render();
+  });
+
+  bulkClear.addEventListener('click', () => {
+    selected.clear();
+    render();
+  });
+
+  const picked = (): string[] => Array.from(selected);
+
+  setCategory.addEventListener('click', () => {
+    if (!selected.size) return;
+    const value = bulkCategory.value.trim();
+    if (!value && !window.confirm('分类留空 = 清空这些文章的分类，继续吗？')) return;
+    dispatch(picked(), { kind: 'category', value });
+  });
+  toDraft.addEventListener('click', () => dispatch(picked(), { kind: 'draft', value: true }));
+  toPublished.addEventListener('click', () => dispatch(picked(), { kind: 'draft', value: false }));
+  bulkDelete.addEventListener('click', () => {
+    const slugs = picked();
+    if (!slugs.length) return;
+    const withCover = bulkCover.checked;
+    const preview = slugs.slice(0, 8).join('、');
+    const more = slugs.length > 8 ? ` 等 ${slugs.length} 篇` : '';
+    if (
+      !window.confirm(
+        `删除这 ${slugs.length} 篇文章？\n${preview}${more}\n仓库里的这些文件会被删掉${withCover ? '，站内封面也一起删' : ''}，删除记录会留在「最近删除」里。`
+      )
+    ) {
+      return;
+    }
+    dispatch(slugs, { kind: 'delete', cover: withCover });
+  });
+
+  /** 批量执行期间锁住按钮：连点会排出两批任务 */
+  function setBulkBusy(on: boolean): void {
+    bulkBusy = on;
+    renderSelection();
+  }
+
+  function dispatch(slugs: string[], action: BulkAction): void {
+    if (!slugs.length || !opts.onBulk) return;
+    setBulkBusy(true);
+    void Promise.resolve(opts.onBulk(slugs, action)).finally(() => setBulkBusy(false));
   }
 
   listEl.addEventListener('click', (e) => {
@@ -250,9 +365,14 @@ export function initPostList(onPick: (slug: string) => void): PostList {
 
   return {
     async rebuild(nextLang: string, token: string) {
+      // 换语言 = 换一批文件，勾选留着会误伤到另一语言的同名文章
+      if (nextLang !== lang) selected.clear();
       lang = nextLang;
       const index = await buildIndex(nextLang, token);
       items = index.items;
+      // 已经被删掉的文章不该还留在勾选里
+      const alive = new Set(items.map((item) => item.slug));
+      for (const slug of Array.from(selected)) if (!alive.has(slug)) selected.delete(slug);
       fillFilters();
       render();
       setStatus(
@@ -267,5 +387,10 @@ export function initPostList(onPick: (slug: string) => void): PostList {
       render();
     },
     slugs: () => items.map((item) => item.slug),
+    selection: () => Array.from(selected),
+    clearSelection() {
+      selected.clear();
+      render();
+    },
   };
 }

@@ -62,8 +62,46 @@ const base = import.meta.env.BASE_URL;
     </div>
   </div>
 
+  {/* 批量操作：勾选文章后改分类 / 转草稿 / 删除，未选中时只有「全选」可用 */}
+  <div class="bulk" data-only="post">
+    <div class="bulk__head">
+      <label class="bulk__all">
+        <input id="bulk-all" type="checkbox" />
+        <span id="bulk-count">批量操作</span>
+      </label>
+      <button id="bulk-clear" class="bulk__link" type="button" hidden>取消选择</button>
+    </div>
+
+    <div class="bulk__row">
+      <input id="bulk-category" class="input input--xs" type="text" placeholder="要改成的分类" spellcheck="false" />
+      <button id="bulk-set-category" class="btn btn--xs" type="button" disabled>改分类</button>
+    </div>
+
+    <div class="bulk__row">
+      <button id="bulk-draft" class="btn btn--xs" type="button" disabled>转草稿</button>
+      <button id="bulk-publish" class="btn btn--xs" type="button" disabled>取消草稿</button>
+      <button id="bulk-delete" class="btn btn--xs btn--danger" type="button" disabled>删除</button>
+    </div>
+
+    <label class="bulk__opt">
+      <input id="bulk-cover" type="checkbox" />
+      <span>删除时一并删封面</span>
+    </label>
+  </div>
+
   <ul id="post-items" class="sidebar__list" data-only="post"></ul>
   <p id="post-list-meta" class="sidebar__meta" data-only="post"></p>
+
+  {/* 最近删除：本地留一份副本，删错了可以一键还原（重新 PUT 回仓库） */}
+  <details id="trash-box" class="trash" data-only="post">
+    <summary class="trash__sum">
+      最近删除
+      <span id="trash-count" class="trash__count">0</span>
+    </summary>
+    <ul id="trash-items" class="trash__list"></ul>
+    <p id="trash-empty" class="trash__empty" hidden>还没有删除记录。</p>
+    <p class="trash__hint">删掉的文章会在这台浏览器里留一份副本，可一键还原；换设备或清了站点数据就没有了。</p>
+  </details>
 
   <footer class="sidebar__foot">
     <button id="token-pill" class="pill" type="button" data-state="missing">

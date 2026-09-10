@@ -1,6 +1,6 @@
 import { $, setStatus, setNotice, setFieldError, run, debounce } from './dom';
 import { repo, paths, site } from '../../data/admin';
-import { readFile, saveFile, statFile, deleteFile, GhError, type Repo } from './github';
+import { readFile, saveFile, statFile, deleteFile, readBase64, GhError, type Repo } from './github';
 import { buildPostFile, parsePostFile, today, toSlug, isValidSlug } from './serialize';
 import type { PostFrontmatter } from './serialize';
 import { loadDraft, clearDraft, isFallback } from './drafts';
@@ -22,6 +22,8 @@ import { Mirror } from './mirror';
 import { createSync, renderWithLines } from './sync';
 import { initBubble } from './bubble';
 import { resolveCoverFields } from '../cover';
+import { initTrash, rememberDeletion, makeTrashItem, refreshTrash } from './trash';
+import { runBulk, bulkLabel, type BulkAction } from './bulk';
 import type { Locale } from '../../i18n/ui';
 
 /**
@@ -43,6 +45,9 @@ const deleteBox = $('delete-confirm');
 const deleteName = $('delete-name');
 const deleteOk = $<HTMLButtonElement>('delete-ok');
 const deleteCancel = $<HTMLButtonElement>('delete-cancel');
+const deleteCover = $<HTMLInputElement>('delete-cover');
+const deleteCoverRow = $('delete-cover-row');
+const deleteCoverName = $('delete-cover-name');
 const duplicateBtn = $<HTMLButtonElement>('post-duplicate');
 const categoryInput = $<HTMLInputElement>('post-category');
 const tagBox = $('tag-chips');
@@ -67,6 +72,7 @@ let overwriteAck = false;
 let touched = false;
 let list: PostList | null = null;
 let chips: Chips | null = null;
+let aliasChips: Chips | null = null;
 let cover: { refresh: () => void } | null = null;
 /** 自动暂存句柄：initPost 里建好，duplicatePost 也要用 */
 let autosaveRef: ReturnType<typeof createAutosave<PostDraft>> | null = null;
@@ -91,6 +97,8 @@ function collectPost(): PostFrontmatter {
     tags: chips?.get() ?? [],
     // 留空就不写进 frontmatter：文章页会自动退回正文第一张图
     cover: coverInput.value.trim() || undefined,
+    // 别名留空就不写：没有别名时不生成多余的跳转页
+    aliases: aliasChips?.get() ?? [],
     draft: draftInput.checked,
   };
 }
@@ -124,6 +132,7 @@ function fillPost(data: PostFrontmatter, body: string): void {
   updatedInput.value = data.updated ?? '';
   categoryInput.value = data.category;
   chips?.set(data.tags);
+  aliasChips?.set(data.aliases ?? []);
   coverInput.value = data.cover ?? '';
   draftInput.checked = data.draft;
   bodyInput.value = body;
@@ -209,6 +218,11 @@ async function restoreDraft(): Promise<void> {
 function showDeleteConfirm(): void {
   if (!currentSlug) return;
   deleteName.textContent = `${currentSlug}.md`;
+  // 只有站内的配图才谈得上「顺手删掉」：外链和「留空取正文首图」都不在仓库里
+  const coverPath = paths.illustrationFromUrl(coverInput.value);
+  deleteCoverRow.hidden = !coverPath;
+  deleteCover.checked = Boolean(coverPath);
+  if (coverPath) deleteCoverName.textContent = coverPath;
   deleteBox.hidden = false;
   deleteBtn.hidden = true;
 }
@@ -227,9 +241,17 @@ const removePost = async (): Promise<void> => {
   if (!token || !currentSlug) return;
 
   const slug = currentSlug;
+  // 存一份原文再删：编辑器里可能是没保存过的版本，那个才是用户想找回的
+  const data = collectPost();
+  const text = buildPostFile({ data, body: bodyInput.value.trimEnd() });
+
   panel.busy(true);
   panel.commit('正在从仓库删除…');
   try {
+    // 封面要在删掉之前读出来，之后就再也拿不到了
+    const coverPath = deleteCover.checked ? paths.illustrationFromUrl(data.cover ?? '') : null;
+    const cover = coverPath ? await readBase64(repo as Repo, coverPath, token) : null;
+
     const commitSha = await deleteFile(
       repo as Repo,
       paths.post(postLang.value, slug),
@@ -248,11 +270,26 @@ const removePost = async (): Promise<void> => {
       return;
     }
 
+    // 删完先留一份本地副本：侧栏「最近删除」里可以一键还原
+    await rememberDeletion(
+      makeTrashItem({
+        lang: postLang.value,
+        slug,
+        title: data.title || slug,
+        path: paths.post(postLang.value, slug),
+        text,
+        ...(cover && coverPath ? { cover: { path: coverPath, b64: cover.b64 } } : {}),
+      })
+    );
+    if (cover && coverPath) {
+      await deleteFile(repo as Repo, coverPath, token, `delete cover: ${slug}`);
+    }
+
     panel.poll();
     const result = await waitForBuild(commitSha);
     if (result.phase === 'success') {
       panel.done(site.blog(postLang.value));
-      setStatus(`已删除 ${slug}，线上已生效。`, 'ok');
+      setStatus(`已删除 ${slug}，线上已生效${cover ? '（封面一起删了）' : ''}。可在「最近删除」里还原。`, 'ok');
     } else if (result.phase === 'failure') {
       panel.fail(`删除已提交，但构建在第 ${result.seconds} 秒失败`, {
         steps: result.steps,
@@ -297,6 +334,8 @@ function duplicatePost(): void {
       title: data.title ? `${data.title}（副本）` : '',
       date: today(),
       updated: undefined,
+      // 副本不该继承原名那些旧链接：它们是属于原文章的
+      aliases: [],
       draft: true,
     },
     body
@@ -325,7 +364,7 @@ function paintLock(): void {
   slugInput.disabled = slugLocked;
   // 已解锁 + 已有文章 = 改名，这件事得说清楚，不然发布后凭空多一个文件
   slugHint.hidden = slugLocked || !currentSlug;
-  slugHint.textContent = '改名：发布时会写入新文件，再删掉原来那个。';
+  slugHint.textContent = '改名：发布时写入新文件、删掉旧的，并把旧 slug 记进别名（旧地址自动跳转）。';
 }
 
 /**
@@ -377,13 +416,28 @@ async function checkConflict(): Promise<void> {
 
 // ---------------------------------------------------------------- 初始化
 export function initPost(): void {
-  // 左侧列表：点一篇就载入它，点「新建」就清空
-  list = initPostList((slug) => run(() => loadPost(slug)));
+  // 左侧列表：点一篇就载入它，点「新建」就清空；勾选后可批量操作
+  list = initPostList((slug) => run(() => loadPost(slug)), {
+    onBulk: (slugs, action) => applyBulk(slugs, action),
+  });
 
   chips = initChips({
     box: tagBox,
     input: tagInput,
     suggest: tagSuggest,
+    onChange: () => {
+      touched = true;
+      markDirty();
+      autosave.markDirty();
+      schedulePreview();
+    },
+  });
+
+  // 别名不记历史、不给候选：旧 slug 是一次性的东西，混进标签历史只会干扰输入
+  aliasChips = initChips({
+    box: $('alias-chips'),
+    input: $<HTMLInputElement>('alias-input'),
+    historyKey: null,
     onChange: () => {
       touched = true;
       markDirty();
@@ -564,6 +618,14 @@ export function initPost(): void {
     const slug = slugInput.value.trim() || currentSlug;
     const renaming = Boolean(currentSlug) && slug !== currentSlug;
     const data = collectPost();
+    // 改名：把旧 slug 记进别名，构建时给旧地址生成一个跳转页，老链接不 404
+    if (renaming) {
+      // 换回一个曾经的旧名字时，那个别名就该退场了（不然真身和别名会撞车）
+      const aliases = (data.aliases ?? []).filter((a) => a !== slug);
+      if (!aliases.includes(currentSlug)) aliases.push(currentSlug);
+      data.aliases = aliases;
+      aliasChips?.set(aliases);
+    }
     const text = buildPostFile({ data, body: bodyInput.value.trimEnd() });
 
     panel.busy(true);
@@ -643,6 +705,78 @@ export function initPost(): void {
     }
   };
 
+  /**
+   * 批量操作：改分类 / 转草稿 / 删除。
+   * 逐篇串行（见 bulk.ts），整批跑完统一刷一次列表并跟一次构建。
+   */
+  async function applyBulk(slugs: string[], action: BulkAction): Promise<void> {
+    const token = requireToken();
+    if (!token || !slugs.length) return;
+    // 批量操作会重建列表，编辑中那篇的未保存改动要提醒一句
+    if (isDirty() && !window.confirm('有未保存的改动，批量操作会刷新文章列表，继续吗？')) return;
+
+    const label = bulkLabel(action);
+    panel.busy(true);
+    panel.commit(`正在批量${label}（0/${slugs.length}）…`);
+    try {
+      const outcome = await runBulk({
+        lang: postLang.value,
+        slugs,
+        action,
+        token,
+        onProgress: (done, total) => {
+          if (done < total) panel.commit(`正在批量${label}（${done}/${total}）…`);
+        },
+      });
+
+      await refreshPostList();
+      await refreshTrash();
+
+      const summary = `批量${label}完成：成功 ${outcome.ok} 篇${
+        outcome.failed.length ? `，失败 ${outcome.failed.length} 篇（${outcome.failed.join('；')}）` : ''
+      }。`;
+
+      if (action.kind === 'delete') {
+        list?.clearSelection();
+        // 正在编辑的这篇被删掉了：回到新建状态，别停在已消失的文件上
+        if (slugs.includes(currentSlug)) await loadPost('', { keepPanel: true });
+      }
+
+      if (!outcome.commit) {
+        panel.note(`${summary}没有产生新的提交（内容没变）。`);
+        setStatus(summary, 'info');
+        return;
+      }
+
+      panel.poll();
+      const result = await waitForBuild(outcome.commit);
+      if (result.phase === 'success') {
+        panel.done(site.blog(postLang.value));
+        setStatus(`${summary}线上已生效。`, 'ok');
+        return;
+      }
+      if (result.phase === 'failure') {
+        panel.fail(`已提交，但构建在第 ${result.seconds} 秒失败`, {
+          steps: result.steps,
+          logUrl: result.run?.html_url,
+          retry: () => void applyBulk(slugs, action),
+        });
+        return;
+      }
+      if (result.phase === 'timeout') {
+        panel.note(`${summary}构建 4 分钟还没结束，去 Actions 页面看进度。`);
+        return;
+      }
+      panel.note(`${summary}已提交；读不到 Actions 状态（Token 缺 Actions 读权限）。`);
+    } catch (e) {
+      const hint = e instanceof GhError ? e.hint : String(e);
+      panel.fail(hint, { logUrl: site.actions(), retry: () => void applyBulk(slugs, action) });
+      setStatus(hint, 'error');
+    } finally {
+      panel.busy(false);
+    }
+  }
+
   $('publish-btn').addEventListener('click', () => void publish());
   // Cmd/Ctrl+S 发布：只在文章栏拦这个键，别在友链栏也拦
   initSaveShortcut(
@@ -662,6 +796,16 @@ export function initPost(): void {
 
   $('post-save-local').addEventListener('click', () => {
     void autosave.flush().then(() => setStatus('已存成本地草稿，换台机器看不到。', 'ok'));
+  });
+
+  // 「最近删除」：还原后刷新列表，同一语言下顺手把这篇载回编辑器
+  initTrash({
+    onRestored: (item) => {
+      void refreshPostList().then(() => {
+        // 编辑器里有没保存的改动时不抢焦点：还原的文章已经在列表里了，想看再点
+        if (item.lang === postLang.value && !isDirty()) void loadPost(item.slug);
+      });
+    },
   });
 
   paintLock();

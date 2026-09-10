@@ -1,12 +1,13 @@
 ---
 import { render } from 'astro:content';
 import PostLayout from '../../layouts/PostLayout.astro';
+import PostRedirect from '../../components/PostRedirect.astro';
 import { profile } from '../../data/profile';
-import { postPaths, postsOf } from '../../lib/posts';
+import { postPaths, postsOf, postHref } from '../../lib/posts';
 
 export const getStaticPaths = postPaths('zh');
 
-const { entry, locale } = Astro.props;
+const { entry, locale, alias } = Astro.props;
 const { Content, headings } = await render(entry);
 
 // 上下篇：postsOf 按日期倒序，所以 i-1 是更新的一篇、i+1 是更早的一篇
@@ -16,13 +17,20 @@ const prev = index >= 0 ? posts[index + 1] : undefined;
 const next = index > 0 ? posts[index - 1] : undefined;
 ---
 
-<PostLayout
-  entry={entry}
-  locale={locale}
-  profile={profile[locale]}
-  headings={headings}
-  prev={prev}
-  next={next}
->
-  <Content />
-</PostLayout>
+{/* alias 有值 = 这一页是旧 slug 的跳转页：不渲染正文，直接把人送到新地址 */}
+{
+  alias ? (
+    <PostRedirect title={entry.data.title} href={postHref(locale, entry.slug)} locale={locale} />
+  ) : (
+    <PostLayout
+      entry={entry}
+      locale={locale}
+      profile={profile[locale]}
+      headings={headings}
+      prev={prev}
+      next={next}
+    >
+      <Content />
+    </PostLayout>
+  )
+}

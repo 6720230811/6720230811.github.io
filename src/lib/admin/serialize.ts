@@ -14,6 +14,11 @@ export interface PostFrontmatter {
   tags: string[];
   /** 封面图：/illustrations/x.png 这样的站内绝对路径，或完整外链；留空则用正文第一张图 */
   cover?: string;
+  /**
+   * 旧链接别名（改过名之前的 slug）。
+   * 每个别名会生成一个跳转页，旧地址不会 404。改名时自动把旧 slug 加进来。
+   */
+  aliases?: string[];
   draft: boolean;
 }
 
@@ -57,6 +62,7 @@ export function buildPostFile(post: PostFile): string {
   lines.push(`category: ${quote(data.category)}`);
   lines.push(`tags: [${data.tags.map((t) => quote(t)).join(', ')}]`);
   if (data.cover) lines.push(`cover: ${quote(data.cover)}`);
+  if (data.aliases?.length) lines.push(`aliases: [${data.aliases.map((a) => quote(a)).join(', ')}]`);
   if (data.draft) lines.push('draft: true');
   lines.push('---', '');
 
@@ -101,6 +107,7 @@ export function parsePostFile(text: string): PostFile {
       category: unquote(parsed.category ?? ''),
       tags: list(parsed.tags),
       cover: parsed.cover ? unquote(parsed.cover) : undefined,
+      aliases: list(parsed.aliases),
       draft: parsed.draft === 'true',
     },
     body: body ?? '',
