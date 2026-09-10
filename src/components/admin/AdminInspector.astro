@@ -113,6 +113,20 @@ import { repo } from '../../data/admin';
       <p id="cover-hint" class="cover__hint" hidden></p>
     </div>
 
+    {/* 转载/摘录型文章填这个：文章页据此把 canonical 指回原文，并显示「原文出处」。
+        「从网址导入」会自动填上；自己原创的留空。 */}
+    <label class="field">
+      <span class="field__label">原文出处</span>
+      <input
+        id="post-source"
+        class="input input--xs"
+        type="url"
+        spellcheck="false"
+        placeholder="https://…（转载/摘录时填，留空＝原创）"
+      />
+      <p id="e-post-source" class="field__error" hidden></p>
+    </label>
+
     <label class="field">
       <span class="field__label">SEO 摘要</span>
       <textarea id="post-desc" class="input" rows="3" spellcheck="false" placeholder="用于列表卡片与搜索结果…"></textarea>

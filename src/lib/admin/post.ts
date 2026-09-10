@@ -67,6 +67,7 @@ const tagInput = $<HTMLInputElement>('tag-input');
 const tagSuggest = $('tag-suggest');
 const coverInput = $<HTMLInputElement>('post-cover');
 const descInput = $<HTMLTextAreaElement>('post-desc');
+const sourceInput = $<HTMLInputElement>('post-source');
 const draftInput = $<HTMLInputElement>('post-draft');
 const bodyInput = $<HTMLTextAreaElement>('post-body');
 const previewFrame = $<HTMLIFrameElement>('post-preview');
@@ -124,7 +125,15 @@ function collectPost(): PostFrontmatter {
     // 别名留空就不写：没有别名时不生成多余的跳转页
     aliases: aliasChips?.get() ?? [],
     draft: draftInput.checked,
+    // 转载/摘录的原文地址：文章页据此把 canonical 指回原文。不是绝对 http(s) 地址
+    // 就宁可当没填——canonical 是给搜索引擎看的，写个半截地址比不写更糟
+    source: isHttpUrl(sourceInput.value.trim()) ? sourceInput.value.trim() : undefined,
   };
+}
+
+/** canonical 只接受绝对 http(s) 地址 */
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
 }
 
 // ---------------------------------------------------------------- 渲染
@@ -167,6 +176,7 @@ function fillPost(data: PostFrontmatter, body: string): void {
   chips?.set(data.tags);
   aliasChips?.set(data.aliases ?? []);
   coverInput.value = data.cover ?? '';
+  sourceInput.value = data.source ?? '';
   draftInput.checked = data.draft;
   paintPublishLabel();
   bodyInput.value = body;
@@ -646,6 +656,7 @@ export function initPost(): void {
     dateInput,
     categoryInput,
     coverInput,
+    sourceInput,
     draftInput,
     bodyInput,
   ];
@@ -711,6 +722,14 @@ export function initPost(): void {
     // 先校验：字段的问题当场指出来，比「没 token」这种环境问题更该先看到
     touched = true;
     if (!checkNow()) return;
+
+    // 原文出处填了但不是完整地址：就地拦住，别等上线才发现 canonical 是个坏链接
+    const rawSource = sourceInput.value.trim();
+    if (rawSource && !isHttpUrl(rawSource)) {
+      setFieldError('e-post-source', '原文出处要填完整地址（http:// 或 https:// 开头）');
+      return;
+    }
+    setFieldError('e-post-source', '');
 
     const token = requireToken();
     if (!token) return;
