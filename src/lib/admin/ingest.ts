@@ -2,6 +2,7 @@ import { setStatus } from './dom';
 import { crawlUrl, describeFailure, type CrawlResult } from './crawl';
 import {
   cleanMarkdown,
+  clipDescription,
   firstHeading,
   firstParagraph,
   htmlToMarkdown,
@@ -73,8 +74,22 @@ function stripTitleHeading(md: string, title: string): string {
   const match = /^\s{0,3}#\s+(.+?)\s*#*\s*$/.exec(lines[firstIndex]);
   if (!match) return md;
   const heading = match[1].replace(/[*_`]/g, '').trim();
-  const same = heading === title.trim() || heading.replace(/\s+/g, '') === title.replace(/\s+/g, '');
-  return same ? lines.slice(firstIndex + 1).join('\n').trim() : md;
+  return sameTitle(heading, title) ? lines.slice(firstIndex + 1).join('\n').trim() : md;
+}
+
+/**
+ * 标题比对：忽略空白与分隔符。「AI Agent 教程」和「AI Agent 教程 | 菜鸟教程」是同一篇
+ * ——原标题常带站点后缀，严格相等会漏掉，正文里就多出一个重复 H1。
+ */
+function sameTitle(a: string, b: string): boolean {
+  const norm = (s: string): string =>
+    s.replace(/[\s|/\\\-–—_·,，。:：()（）[\]【】]/g, '').toLowerCase();
+  const x = norm(a);
+  const y = norm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return long.includes(short) && short.length >= long.length * 0.5;
 }
 
 async function fetchAsFile(url: string, name: string): Promise<File | null> {
@@ -183,8 +198,13 @@ export async function buildDraftFromUrl(url: string, opts: ImportOptions): Promi
 
   const cleaned = cleanMarkdown(result.markdown);
   report.push(
-    `取回 ${result.markdown.length} 字符，清洗后 ${cleaned.text.length} 字符`,
-    cleaned.removed.length ? `去掉 ${cleaned.removed.length} 行页脚/推荐` : '',
+    result.bodySource === 'fit'
+      ? `正文取服务端过滤版：${result.rawLength} → ${result.markdown.length} 字符（导航/侧栏/页脚已剔掉）`
+      : `正文用整页原始内容（${result.markdown.length} 字符）`,
+    `规则清洗后 ${cleaned.text.length} 字符`,
+    cleaned.head ? `去掉页头样板 ${cleaned.head} 行` : '',
+    cleaned.tail ? `去掉页脚样板 ${cleaned.tail} 行` : '',
+    cleaned.removed.length ? `去掉链接堆/推荐行 ${cleaned.removed.length} 行` : '',
     cleaned.merged ? `合并 ${cleaned.merged} 处软换行` : ''
   );
   // 上面几项有些是条件语句的结果，统一去掉空串，免得提示里出现空档
@@ -212,8 +232,15 @@ export async function buildDraftFromPaste(
 
   const raw = isHtml(text) ? htmlToMarkdown(text) : text;
   const cleaned = cleanMarkdown(raw);
-  report.push(`粘贴 ${raw.length} 字符，清洗后 ${cleaned.text.length} 字符`);
-  if (cleaned.removed.length) report.push(`去掉 ${cleaned.removed.length} 行页脚/推荐`);
+  report.push(
+    `粘贴 ${raw.length} 字符，清洗后 ${cleaned.text.length} 字符`,
+    cleaned.head ? `去掉页头样板 ${cleaned.head} 行` : '',
+    cleaned.tail ? `去掉页脚样板 ${cleaned.tail} 行` : '',
+    cleaned.removed.length ? `去掉链接堆/推荐行 ${cleaned.removed.length} 行` : ''
+  );
+  const keptPaste = report.filter(Boolean);
+  report.length = 0;
+  report.push(...keptPaste);
 
   return assemble(cleaned.text, {
     url: opts.url.trim(),
@@ -257,8 +284,11 @@ async function assemble(cleanedText: string, context: AssembleContext): Promise<
     .filter((tag) => tag && tag.length <= 20)
     .slice(0, 5);
 
-  const description =
-    (context.meta.description ?? '').trim().slice(0, 160) || firstParagraph(body).slice(0, 160);
+  // 摘要按句末标点截断：硬截断会切出"…它不仅"这种半句（导入 runoob 那篇就是）
+  const description = clipDescription(
+    (context.meta.description ?? '').trim() || firstParagraph(body),
+    160
+  );
 
   const notes = [`via ${context.via}`].filter(Boolean);
 

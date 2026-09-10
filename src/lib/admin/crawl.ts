@@ -100,6 +100,10 @@ interface CrawlMeta {
 
 export interface CrawlResult {
   markdown: string;
+  /** 正文来源：fit = 服务端内容过滤（只要正文），raw = 整页原始 markdown */
+  bodySource: 'fit' | 'raw';
+  /** 整页原始 markdown 长度，用来说明过滤掉了多少（raw 模式下与 markdown 等长） */
+  rawLength: number;
   meta: CrawlMeta;
   /** 正文里出现的图片绝对地址（去重、去掉 data:） */
   images: string[];
@@ -199,9 +203,38 @@ function asStringArray(value: unknown): string[] {
   return [];
 }
 
-/** 抓一页：先 /crawl（信息全），失败或拿不到正文时退回 /md */
+/**
+ * 只要正文：`POST /md` 的 `f: "fit"` 走 crawl4ai 自带的 PruningContentFilter，
+ * 导航/侧栏/页脚会被剔掉。实测 runoob 那篇：整页 31415 字符 → 11921（少 62%）。
+ * 失败不报错——只是少一层过滤，正文还有 /crawl 的原始 markdown 兜着。
+ */
+async function fetchFitMarkdown(url: string, timeoutMs: number): Promise<string> {
+  const simple = await post('/md', { url, f: 'fit' }, timeoutMs);
+  if (!simple.ok) return '';
+  return pickMarkdown((simple.data as Record<string, unknown>).markdown);
+}
+
+/**
+ * 整页还是过滤后的？过滤后太短（<200 字符，或不到整页的 25%）就判定为过度修剪，
+ * 退回整页——宁可多带点噪音，也不能把正文删没。
+ */
+function pickBody(raw: string, fit: string): { text: string; source: 'fit' | 'raw' } {
+  const trimmed = fit.trim();
+  if (trimmed.length >= 200 && trimmed.length >= raw.trim().length * 0.25) {
+    return { text: fit, source: 'fit' };
+  }
+  return { text: raw, source: 'raw' };
+}
+
+/**
+ * 抓一页：/crawl 取元数据+图片+状态码，同时 /md?f=fit 取"只剩正文"的版本。
+ * 两个请求并行——它们互不依赖，串行会白等一倍（实测并行总耗时≈较慢的那个）。
+ */
 export async function crawlUrl(url: string, timeoutMs = DEFAULT_TIMEOUT): Promise<Outcome> {
-  const full = await post('/crawl', { urls: [url], crawler_config: { cache_mode: 'BYPASS' } }, timeoutMs);
+  const [full, fit] = await Promise.all([
+    post('/crawl', { urls: [url], crawler_config: { cache_mode: 'BYPASS' } }, timeoutMs),
+    fetchFitMarkdown(url, timeoutMs),
+  ]);
 
   if (full.ok) {
     const data = full.data as { results?: unknown[] };
@@ -211,10 +244,13 @@ export async function crawlUrl(url: string, timeoutMs = DEFAULT_TIMEOUT): Promis
     const meta = (first.metadata ?? {}) as Record<string, unknown>;
 
     if (markdown.trim() && first.success !== false) {
+      const body = pickBody(markdown, fit);
       return {
         ok: true,
         result: {
-          markdown,
+          markdown: body.text,
+          bodySource: body.source,
+          rawLength: markdown.length,
           meta: {
             title: typeof meta.title === 'string' ? meta.title : undefined,
             description: typeof meta.description === 'string' ? meta.description : undefined,
@@ -242,23 +278,23 @@ export async function crawlUrl(url: string, timeoutMs = DEFAULT_TIMEOUT): Promis
     return { ok: false, failure: full.failure };
   }
 
-  const simple = await post('/md', { url, f: 'fit' }, timeoutMs);
-  if (!simple.ok) return { ok: false, failure: simple.failure };
+  // /crawl 这条路不通（或没给出正文）：/md 拿到什么就用什么
+  if (fit.trim()) {
+    return {
+      ok: true,
+      result: {
+        markdown: fit,
+        bodySource: 'fit',
+        rawLength: fit.length,
+        meta: {},
+        images: [],
+        statusCode: undefined,
+        via: 'md',
+      },
+    };
+  }
 
-  const data = simple.data as Record<string, unknown>;
-  const markdown = pickMarkdown(data.markdown);
-  if (!markdown.trim()) return { ok: false, failure: { kind: 'empty' } };
-
-  return {
-    ok: true,
-    result: {
-      markdown,
-      meta: {},
-      images: [],
-      statusCode: undefined,
-      via: 'md',
-    },
-  };
+  return { ok: false, failure: full.ok ? { kind: 'empty' } : full.failure };
 }
 
 /** 健康检查（同时当预热用：叫醒容器里的浏览器） */

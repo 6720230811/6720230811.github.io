@@ -36,11 +36,196 @@ const NOISE: RegExp[] = [
 
 const NOISE_MAX = 40;
 
+/**
+ * 不限长度的噪音：版权行经常长到 60+ 字符（"Copyright © 2013-2026 All Rights Reserved.
+ * 备案号：闽ICP备15012807号-1"），按短行匹配会漏；但也不能随便放宽——下面这些
+ * 模式几乎只出现在页脚，放宽是安全的。
+ */
+const NOISE_ANY: RegExp[] = [
+  /^(?:©|copyright|版权所有|all rights reserved)/i,
+  /^(?:.{0,80}?)(?:ICP备|公安备案|备案号)/,
+];
+
 function isNoise(line: string): boolean {
   const text = line.trim();
   if (!text) return false;
+  if (NOISE_ANY.some((re) => re.test(text))) return true;
   if (text.length > NOISE_MAX) return false;
   return NOISE.some((re) => re.test(text));
+}
+
+// ---------------------------------------------------------------- 页头 / 页脚样板
+/**
+ * Markdown 链接（含可选 title）。链接目标要容忍转义括号——导航里常见
+ * `javascript:void\(0\)` 这种地址，写成 `[^)\s]+` 会匹配不全，后面按"可见文字"
+ * 或"整行是否只有链接"判断时就会漏判（踩过两次）。
+ */
+const LINK = /\[([^\]]*)\]\((?:\\.|[^)\\])*\)/g;
+/** 短标签行的长度上限：栏目名、"暂无记录"这类 */
+const LABEL_MAX = 20;
+
+/**
+ * 「链接汤」判定：一行里 ≥3 个链接，且可见文字基本由链接标签组成。
+ *
+ * 导航栏 / 目录 / 相关阅读就是这个形态。按行数判断是抓不到的——crawl4ai 会把
+ * 整个侧栏压成**一整行**（实测 runoob：一行 21 个链接），所以只能看链接密度。
+ */
+export function isLinkSoup(line: string, minLinks = 3, minDensity = 0.6): boolean {
+  const links = [...line.matchAll(LINK)];
+  if (links.length < minLinks) return false;
+  const labelChars = links.reduce((n, m) => n + m[1].trim().length, 0);
+  // 可见文字 = 把每个链接换成它的标签文字，再去掉标记符号与空白
+  const visible = line.replace(LINK, '$1').replace(/[*_`#>\s]/g, '').length;
+  // 全是空标签的图标链接行（`[ ](javascript:void(0) "返回顶部")`）：可见文字几乎为零
+  if (visible <= 12) return true;
+  return labelChars / visible >= minDensity;
+}
+
+/** 整行只有一张图（页脚二维码、分隔图这类，出现在首尾肯定不是正文） */
+function isOnlyImage(line: string): boolean {
+  return /^\s*!\[[^\]]*\]\(.*\)\s*$/.test(line);
+}
+
+/** 非全局版：给 test() 用（LINK 带 g，test 会推 lastIndex，踩过这个坑） */
+const HAS_LINK = /\[[^\]]*\]\([^)]*\)/;
+
+/**
+ * 「标签 + 链接」行：页脚那排入口就是这形态（`在线实例·[JavaScript 实例](…)`、
+ * `· [免责声明](…)`）。判据是链接之外的文字很短、且整行不以句末标点结尾——
+ * 正文里嵌一行"详见 [官方文档](…)。"会带句号，不会中招。
+ */
+function isLabelLink(line: string): boolean {
+  const text = line.trim();
+  if (!text || SENTENCE_END.test(text)) return false;
+  if (!HAS_LINK.test(text)) return false;
+  const rest = text.replace(LINK, ' ').replace(/[·|—–*_`\s]/g, '');
+  return rest.length <= LABEL_MAX;
+}
+
+/** 短标签行：栏目名、"暂无记录"这种，既不成句也不是列表项 */
+function isLabel(line: string): boolean {
+  const text = line.trim();
+  if (!text || text.length > LABEL_MAX) return false;
+  if (/^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>|\||```|~~~|!\[)/.test(text)) return false;
+  if (SENTENCE_END.test(text)) return false;
+  return !/[。！？.!?,，；;]/.test(text);
+}
+
+/**
+ * 「只有链接的列表项」：整页抓取时导航是一行一个子弹链接（`* [首页](…)`），
+ * 链接密度判不出来（每行只有 1 个链接），但形态很固定。
+ * 只在页头/页脚这两段里算样板——正文中间的单链接列表可能是正经参考链接。
+ */
+function isLinkBullet(line: string): boolean {
+  const m = /^\s{0,3}(?:[-*+]|\d+[.)])\s+(.+)$/.exec(line);
+  if (!m) return false;
+  const rest = m[1].trim();
+  // 链接目标要放宽：导航里常见 javascript:void\(0\) 这种带转义括号的地址，
+  // 用严格的 [^)\s]+ 匹配不到（踩过一次）
+  return /^\[[^\]]*\]\(.*\)$/.test(rest) || /^<[^>\s]+>$/.test(rest);
+}
+
+/** 整行只有链接、没有别的文字（站点 banner 那种「# [站点名](首页)」） */
+function isOnlyLink(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  const links = [...t.matchAll(LINK)];
+  if (!links.length) return false;
+  return t.replace(LINK, '').replace(/[*_`\s]/g, '').length <= 4;
+}
+
+/** 诊断用：一行属于哪类样板（不是样板返回 ''），测试里按它逐行核对 */
+export function classifyBoilerplate(line: string): string {
+  if (!line.trim()) return 'blank';
+  if (isNoise(line)) return 'noise';
+  if (isHeadingLine(line)) return isOnlyLink(line.replace(/^\s*#+\s*/, '')) ? 'brand' : 'heading';
+  if (isLinkSoup(line)) return 'soup';
+  if (isLinkBullet(line)) return 'linkbullet';
+  if (isLabel(line)) return 'label';
+  return 'text';
+}
+
+const isHeadingLine = (line: string): boolean => /^\s{0,3}#{1,6}\s/.test(line);
+
+/**
+ * 砍掉开头的样板：站点 banner（整行就是一个链接的标题）、栏目名、链接汤、
+ * 以及原本属于导航的那几个小标题，直到第一段真正的正文为止。
+ *
+ * 只在「确实见过样板」时才砍（sawNoise）——一篇开头就是小标题的文章不该被误伤。
+ */
+function stripHead(lines: string[]): { lines: string[]; dropped: number } {
+  let i = 0;
+  let sawNoise = false;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) {
+      i += 1;
+      continue;
+    }
+    const branding = isHeadingLine(line) && isOnlyLink(line.replace(/^\s*#+\s*/, ''));
+    if (isLinkSoup(line) || isLabel(line) || isLinkBullet(line) || isOnlyImage(line) || isLabelLink(line) || branding) {
+      sawNoise = true;
+      i += 1;
+      continue;
+    }
+    if (isHeadingLine(line)) {
+      if (sawNoise) {
+        i += 1;
+        continue;
+      }
+      break;
+    }
+    break; // 第一段正文：到此为止
+  }
+  return sawNoise ? { lines: lines.slice(i), dropped: i } : { lines, dropped: 0 };
+}
+
+/** 砍掉结尾的样板：页脚链接、栏目名、备案号、以及它们上面的那几个小标题 */
+function stripTail(lines: string[]): { lines: string[]; dropped: number } {
+  let end = lines.length;
+  let sawNoise = false;
+  while (end > 0) {
+    const line = lines[end - 1];
+    if (!line.trim()) {
+      end -= 1;
+      continue;
+    }
+    if (isNoise(line) || isLinkSoup(line) || isLabel(line) || isLinkBullet(line) || isOnlyImage(line) || isLabelLink(line)) {
+      sawNoise = true;
+      end -= 1;
+      continue;
+    }
+    if (isHeadingLine(line)) {
+      if (sawNoise) {
+        end -= 1;
+        continue;
+      }
+      break;
+    }
+    break;
+  }
+  return sawNoise ? { lines: lines.slice(0, end), dropped: lines.length - end } : { lines, dropped: 0 };
+}
+
+/**
+ * 摘要：优先用页面 meta，其次正文首段。按句末标点截断——
+ * 硬截断会切出"…它不仅"这种半句（导入 runoob 那篇就是这样）。
+ */
+export function clipDescription(text: string, max = 160): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  const head = clean.slice(0, max);
+  const cut = Math.max(
+    head.lastIndexOf('。'),
+    head.lastIndexOf('！'),
+    head.lastIndexOf('？'),
+    head.lastIndexOf('. '),
+    head.lastIndexOf('! '),
+    head.lastIndexOf('? ')
+  );
+  if (cut >= max * 0.4) return head.slice(0, cut + 1).trim();
+  const space = head.lastIndexOf(' ');
+  return `${(space > 0 ? head.slice(0, space) : head).trimEnd()}…`;
 }
 
 /** 中日韩字符（含假名与全角标点区间）：判断拼接时要不要加空格 */
@@ -83,6 +268,10 @@ export interface CleanResult {
   removed: string[];
   /** 合并了多少个软换行 */
   merged: number;
+  /** 页头样板去掉的行数（导航、栏目名、站点 banner） */
+  head: number;
+  /** 页脚样板去掉的行数（页脚链接、备案号、相关阅读） */
+  tail: number;
 }
 
 /**
@@ -133,10 +322,21 @@ export function cleanMarkdown(input: string): CleanResult {
       removed.push(line.trim());
       continue;
     }
+    // 正文中间也砍「链接堆」，但门槛更高（≥4 个链接且基本只有标签）：导航/相关阅读
+    // 常被 crawl4ai 压成这样一行，靠首尾裁剪够不着（它会卡在某一行"文本"上）。
+    // 门槛不放低是怕误伤「延伸阅读：[A](…) [B](…) [C](…)」这种正经行。
+    if (isLinkSoup(line, 4, 0.7)) {
+      removed.push(line.trim());
+      continue;
+    }
     kept.push(line);
   }
 
-  const { lines, merged } = mergeSoftWraps(kept);
+  // 页头/页脚必须在合并软换行之前砍：导航那一行会被 mergeSoftWraps 和紧邻的正文
+  // 粘成一行（"AI Agent 教程" + 21 个链接 + 正文），粘上之后就再也认不出来了
+  const headTrim = stripHead(kept);
+  const tailTrim = stripTail(headTrim.lines);
+  const { lines, merged } = mergeSoftWraps(tailTrim.lines);
 
   // 连续重复行（同一个"订阅"按钮出现两次之类）
   const dedup: string[] = [];
@@ -166,7 +366,7 @@ export function cleanMarkdown(input: string): CleanResult {
   const fences = (text.match(/^\s{0,3}(?:```|~~~)/gm) ?? []).length;
   if (fences % 2 === 1) text += '\n```';
 
-  return { text, removed, merged };
+  return { text, removed, merged, head: headTrim.dropped, tail: tailTrim.dropped };
 }
 
 // ---------------------------------------------------------------- 结构提取
