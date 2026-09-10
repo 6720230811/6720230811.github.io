@@ -4,6 +4,7 @@ description: "内容集合的 id 规则、i18n 路由下的动态路径、Markdo
 date: 2026-09-08
 category: "技术"
 tags: ["Astro", "前端", "建站"]
+cover: "/illustrations/cover-20260910-1309.webp"
 ---
 
 这次把单页主页改成博客，真正卡住我的不是布局，而是下面三件小事。
