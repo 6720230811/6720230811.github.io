@@ -2,6 +2,7 @@ import { initTokenPanel } from './token';
 import { initPost, refreshPostList } from './post';
 import { initProfile } from './profile';
 import { initFriends } from './friends';
+import { initAssets } from './assets';
 import { initUnsavedGuard } from './unsaved';
 import { pruneDrafts } from './drafts';
 import { initDropGuard } from './upload';
@@ -94,6 +95,7 @@ $('shortcut-help-close').addEventListener('click', () => {
 initPost();
 initProfile();
 initFriends();
+initAssets();
 initUnsavedGuard('有未保存的改动，确定离开吗？');
 
 showTab('post');

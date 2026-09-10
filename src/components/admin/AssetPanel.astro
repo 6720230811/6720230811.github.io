@@ -1,0 +1,76 @@
+---
+import Icon from '../Icon.astro';
+
+/**
+ * 「素材」分区：public/illustrations 的目录页。
+ * 逻辑在 lib/admin/assets.ts（列目录 / 扫引用 / 批量删除 / 复原）。
+ * 这里只有骨架，网格由 TS 按数据生成。
+ */
+---
+
+<section class="panel">
+  <div class="panel__head">
+    <h2>素材（public/illustrations）</h2>
+    <div class="panel__tools">
+      <button id="asset-reload" class="btn" type="button">
+        <Icon name="refresh" />
+        重新载入
+      </button>
+    </div>
+  </div>
+
+  <p class="panel__hint">
+    缩略图直连仓库原文，刚上传的不用等部署就能看到。「未引用」= 所有文章、画廊数据与个人资料里都没有提到这张图。
+  </p>
+
+  <div id="asset-drop" class="assets__drop">
+    <input id="asset-file" type="file" accept="image/*" multiple hidden />
+    <span class="assets__drop-icon" aria-hidden="true">🖼</span>
+    <span class="assets__drop-text">拖入图片即上传（自动压至长边 1600px WebP），或点击选择文件</span>
+  </div>
+
+  <div class="assets__bar">
+    <div class="seg" role="group" aria-label="按引用情况筛选">
+      <button class="seg__btn" type="button" data-asset-mode="all" aria-pressed="true">全部</button>
+      <button class="seg__btn" type="button" data-asset-mode="unused" aria-pressed="false">未引用</button>
+      <button class="seg__btn" type="button" data-asset-mode="used" aria-pressed="false">已引用</button>
+    </div>
+
+    <label class="search search--inline">
+      <Icon name="search" />
+      <input id="asset-filter" class="search__input" type="search" placeholder="过滤文件名" spellcheck="false" />
+    </label>
+
+    <label class="inline">
+      排序
+      <select id="asset-sort" class="input input--xs">
+        <option value="time">按上传时间</option>
+        <option value="name">按文件名</option>
+        <option value="size">按体积</option>
+      </select>
+    </label>
+
+    <label class="assets__all">
+      <input id="asset-all" type="checkbox" />
+      <span>全选当前筛选</span>
+    </label>
+
+    <button id="asset-delete" class="btn btn--xs btn--danger" type="button" disabled>删除所选</button>
+  </div>
+
+  <p id="asset-meta" class="assets__meta"></p>
+
+  <ul id="asset-grid" class="assets__grid"></ul>
+  <div id="asset-more" class="assets__more" hidden>向下滚动加载更多…</div>
+
+  <details id="asset-trash" class="assets__trash" hidden>
+    <summary class="assets__trash-sum">
+      最近删除（可撤销）
+      <span id="asset-trash-count" class="assets__trash-count">0</span>
+    </summary>
+    <ul id="asset-trash-list" class="assets__trash-list"></ul>
+    <p class="assets__trash-hint">
+      删除时小于 2MB 的图会在这台浏览器里留一份副本，7 天内可还原；超过 2MB 的删掉就没了。
+    </p>
+  </details>
+</section>

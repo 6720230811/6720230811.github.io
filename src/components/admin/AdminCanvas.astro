@@ -1,6 +1,7 @@
 ---
 import ProfileEditor from './ProfileEditor.astro';
 import FriendsEditor from './FriendsEditor.astro';
+import AssetPanel from './AssetPanel.astro';
 
 /**
  * 中间：沉浸式写作主控台。
@@ -94,5 +95,9 @@ import FriendsEditor from './FriendsEditor.astro';
 
   <section class="canvas__panel canvas__panel--doc" data-panel="friends" hidden>
     <FriendsEditor />
+  </section>
+
+  <section class="canvas__panel canvas__panel--doc" data-panel="assets" hidden>
+    <AssetPanel />
   </section>
 </main>

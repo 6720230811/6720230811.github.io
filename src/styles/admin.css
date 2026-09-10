@@ -359,12 +359,14 @@ body.admin-shell {
 
 /* 非文章分区不需要右栏 */
 .workbench[data-section='profile'],
-.workbench[data-section='friends'] {
+.workbench[data-section='friends'],
+.workbench[data-section='assets'] {
   grid-template-columns: var(--adm-sb-w) minmax(0, 1fr) 0;
 }
 
 .workbench[data-section='profile'] [data-only='post'],
-.workbench[data-section='friends'] [data-only='post'] {
+.workbench[data-section='friends'] [data-only='post'],
+.workbench[data-section='assets'] [data-only='post'] {
   display: none;
 }
 
@@ -2646,6 +2648,292 @@ select.input {
 }
 
 /* ============================================================
+   素材（public/illustrations）
+   ============================================================ */
+
+.assets__drop {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--adm-line);
+  border-radius: var(--adm-r);
+  cursor: pointer;
+  color: var(--adm-faint);
+  font-size: 0.78rem;
+}
+
+.assets__drop:hover,
+.assets__drop.is-dropping {
+  border-color: var(--adm-accent);
+  background: var(--adm-accent-soft);
+  color: var(--adm-accent);
+}
+
+.assets__drop-icon {
+  font-size: 1rem;
+}
+
+.assets__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.search--inline {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.assets__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.assets__all input {
+  width: 0.85rem;
+  height: 0.85rem;
+  accent-color: var(--adm-accent);
+  cursor: pointer;
+}
+
+.assets__meta {
+  margin: 0.7rem 0 0.35rem;
+  font-size: 0.72rem;
+  color: var(--adm-faint);
+}
+
+.assets__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assets__empty {
+  grid-column: 1 / -1;
+  padding: 1.4rem 0.5rem;
+  border: 1px dashed var(--adm-line);
+  border-radius: var(--adm-r);
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--adm-faint);
+}
+
+.asset {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r);
+  background: var(--adm-surface);
+}
+
+.asset.is-picked {
+  border-color: var(--adm-accent);
+  box-shadow: 0 0 0 3px var(--adm-ring);
+}
+
+.asset__pick {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  z-index: 1;
+  width: 0.9rem;
+  height: 0.9rem;
+  accent-color: var(--adm-accent);
+  cursor: pointer;
+}
+
+.asset__thumb {
+  display: block;
+  width: 100%;
+  height: 7rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--adm-bg, transparent);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.asset__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.asset__thumb.is-broken {
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  color: var(--adm-faint);
+  border: 1px dashed var(--adm-line);
+}
+
+.asset__info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.asset__name {
+  font-family: var(--font-code);
+  font-size: 0.7rem;
+  color: var(--adm-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset__sub {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  color: var(--adm-faint);
+}
+
+.asset__ref {
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  background: var(--adm-accent-soft);
+  color: var(--adm-accent);
+  font-weight: 600;
+}
+
+.asset__ref--unused {
+  background: var(--adm-warn-soft);
+  color: #b45309;
+}
+
+::root[data-theme='dark'] .asset__ref--unused {
+  color: var(--adm-warn);
+}
+
+.asset__ref--scan {
+  background: var(--adm-line-soft);
+  color: var(--adm-faint);
+  font-weight: 400;
+}
+
+.asset__acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.asset__act {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.68rem;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.asset__act:hover {
+  color: var(--adm-accent);
+}
+
+.asset__act--danger:hover {
+  color: var(--adm-danger);
+}
+
+.assets__more {
+  padding: 0.8rem 0;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--adm-faint);
+}
+
+/* ---- 素材回收站 ---- */
+
+.assets__trash {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--adm-line);
+}
+
+.assets__trash-sum {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.assets__trash-sum:hover {
+  color: var(--adm-text);
+}
+
+.assets__trash-count {
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--adm-surface);
+  font-size: 0.66rem;
+}
+
+.assets__trash-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.assets__trash-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r);
+  background: var(--adm-surface);
+}
+
+.assets__trash-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  color: var(--adm-text);
+}
+
+.assets__trash-meta {
+  flex: none;
+  font-size: 0.66rem;
+  color: var(--adm-faint);
+}
+
+.assets__trash-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.66rem;
+  line-height: 1.6;
+  color: var(--adm-faint);
+}
+
+/* ============================================================
    个人信息编辑器：模块卡片 + 实时镜像
    ============================================================ */
 
@@ -3189,7 +3477,8 @@ select.input {
   .workbench[data-inspector='closed'],
   .workbench[data-sidebar='closed'][data-inspector='closed'],
   .workbench[data-section='profile'],
-  .workbench[data-section='friends'] {
+  .workbench[data-section='friends'],
+  .workbench[data-section='assets'] {
     grid-template-columns: 0 minmax(0, 1fr) 0;
   }
 

@@ -123,6 +123,9 @@ export interface DirectoryEntry {
   name: string;
   path: string;
   type: 'file' | 'dir';
+  /** 目录列表里就带着体积与 sha，素材页展示体积不用再逐张发请求 */
+  size?: number;
+  sha?: string;
 }
 
 /** 读取文件；不存在返回 null（表示这是新建） */
@@ -337,6 +340,70 @@ export async function deleteFile(
 /** 保存后跳转去查看构建进度 */
 export function actionsUrl(r: Repo): string {
   return `https://github.com/${r.owner}/${r.repo}/actions`;
+}
+
+/** ref 路径：分支名可能带斜杠，逐段编码 */
+const refPath = (branch: string) => `heads/${branch.split('/').map(encodeURIComponent).join('/')}`;
+
+/**
+ * 一次提交删掉多个文件。
+ *
+ * 逐个 DELETE 是「N 个文件 = N 次提交 = N 次 Actions 构建」——清一批孤儿图能刷出十几条
+ * 记录、十几轮构建。这里走 Git Data API：取 head → 在树上把路径标记为删除 →
+ * 建提交 → 移动 ref，全程 4 个请求一条提交。
+ *
+ * 前提：路径必须真实存在（调用方用目录列表的结果保证），否则建树会被拒。
+ * 分支在中间被推了新提交（非快进）时重取一次 head 再试。
+ */
+export async function deletePathsBatch(
+  r: Repo,
+  paths: string[],
+  token: string,
+  message: string
+): Promise<string | null> {
+  const unique = [...new Set(paths.filter(Boolean))];
+  if (!unique.length) return null;
+
+  const api = `${API}/repos/${r.owner}/${r.repo}`;
+  const json = { 'Content-Type': 'application/json' };
+
+  return enqueue(async () => {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const ref = await request<{ object: { sha: string } }>(`${api}/git/ref/${refPath(r.branch)}`, token);
+        const head = ref.object.sha;
+        const commit = await request<{ tree: { sha: string } }>(`${api}/git/commits/${head}`, token);
+
+        const tree = await request<{ sha: string }>(`${api}/git/trees`, token, {
+          method: 'POST',
+          headers: json,
+          // sha: null = 从这棵树里删掉该路径
+          body: JSON.stringify({
+            base_tree: commit.tree.sha,
+            tree: unique.map((path) => ({ path, mode: '100644', type: 'blob', sha: null })),
+          }),
+        });
+
+        const created = await request<{ sha: string }>(`${api}/git/commits`, token, {
+          method: 'POST',
+          headers: json,
+          body: JSON.stringify({ message, tree: tree.sha, parents: [head] }),
+        });
+
+        await request<unknown>(`${api}/git/refs/${refPath(r.branch)}`, token, {
+          method: 'PATCH',
+          headers: json,
+          body: JSON.stringify({ sha: created.sha, force: false }),
+        });
+
+        return created.sha;
+      } catch (e) {
+        // 422 / 409：大多是这中间分支动了，重取一次 head 再来
+        const retriable = e instanceof GhError && (e.status === 422 || e.status === 409);
+        if (!retriable || attempt >= 1) throw e;
+      }
+    }
+  });
 }
 
 // ---------------------------------------------------------------- 连通性自检
