@@ -29,6 +29,12 @@ export interface PostFrontmatter {
    * 每个别名会生成一个跳转页，旧地址不会 404。改名时自动把旧 slug 加进来。
    */
   aliases?: string[];
+  /**
+   * 原文地址（转载/摘录型文章）。
+   * 文章页会据此把 canonical 指回原文——这是"收藏他人文章"该有的诚实，
+   * 也避免自己站点被判重复内容。自己的原创文章不要填。
+   */
+  source?: string;
   draft: boolean;
 }
 
@@ -73,6 +79,7 @@ export function buildPostFile(post: PostFile): string {
   lines.push(`tags: [${data.tags.map((t) => quote(t)).join(', ')}]`);
   if (data.cover) lines.push(`cover: ${quote(data.cover)}`);
   if (data.aliases?.length) lines.push(`aliases: [${data.aliases.map((a) => quote(a)).join(', ')}]`);
+  if (data.source) lines.push(`source: ${quote(data.source)}`);
   if (data.draft) lines.push('draft: true');
   lines.push('---', '');
 
@@ -118,6 +125,7 @@ export function parsePostFile(text: string): PostFile {
       tags: list(parsed.tags),
       cover: parsed.cover ? unquote(parsed.cover) : undefined,
       aliases: list(parsed.aliases),
+      source: parsed.source ? unquote(parsed.source) : undefined,
       draft: parsed.draft === 'true',
     },
     body: body ?? '',

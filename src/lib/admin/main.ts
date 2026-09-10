@@ -4,6 +4,8 @@ import { initProfile } from './profile';
 import { initFriends } from './friends';
 import { initAssets } from './assets';
 import { initResize } from './resize';
+import { initCrawlSettings } from './crawl';
+import { initImportDialog } from './importDialog';
 import { initUnsavedGuard } from './unsaved';
 import { pruneDrafts } from './drafts';
 import { initDropGuard } from './upload';
@@ -103,6 +105,9 @@ $('shortcut-help-btn').addEventListener('click', openShortcutHelp);
 $('shortcut-help-close').addEventListener('click', () => {
   $<HTMLDialogElement>('shortcut-help').close();
 });
+
+initCrawlSettings();
+initImportDialog();
 
 initPost();
 initProfile();

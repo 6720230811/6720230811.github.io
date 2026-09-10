@@ -52,6 +52,53 @@
         </a>
       </div>
 
+      <hr class="drawer__divider" />
+
+      {/* 抓取服务：自托管 crawl4ai，「从网址导入」用它取正文。
+          没配置也能用后台，只是导入时要走「手动粘贴正文」。 */}
+      <h3 class="drawer__sub">抓取服务（可选）</h3>
+      <p class="drawer__meta">
+        自托管的 crawl4ai，供「从网址导入」抓取正文与元数据。地址必须能被这个页面访问到
+        （线上后台是 https，所以服务也要 https：本机跑服务时用 Tailscale Funnel / cloudflared 之类挂出去）。
+      </p>
+
+      <label class="field">
+        <span class="field__label">服务地址</span>
+        <span class="field__hint">形如 https://xxx.ts.net，不要带路径和结尾斜杠</span>
+        <input
+          id="crawl-url"
+          class="input"
+          type="url"
+          placeholder="https://xxx.ts.net"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field__label">API Token</span>
+        <span class="field__hint">服务端启动时设的 CRAWL4AI_API_TOKEN</span>
+        <div class="token-row">
+          <input
+            id="crawl-token"
+            class="input"
+            type="password"
+            placeholder="与 CRAWL4AI_API_TOKEN 一致"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="crawl-token-toggle" class="btn btn--sm" type="button">显示</button>
+          <button id="crawl-ping" class="btn btn--sm" type="button">测试连接</button>
+        </div>
+      </label>
+
+      <p id="crawl-ping-result" class="ping" hidden></p>
+
+      <div class="drawer__actions">
+        <button id="crawl-save" class="btn btn--sm" type="button">保存</button>
+        <button id="crawl-clear" class="btn btn--sm btn--ghost" type="button">清除</button>
+      </div>
+
       <details class="help">
         <summary>怎么申请这个 Token？</summary>
         <ol>

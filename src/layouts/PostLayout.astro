@@ -18,7 +18,9 @@ interface Props {
 
 const { entry, locale, profile, headings, prev, next } = Astro.props;
 const t = useTranslations(locale);
-const { title, description, date, updated, category, tags } = entry.data;
+// source 有值 = 这是转载/摘录来的文章：canonical 指回原文，
+// 搜索引擎就不会把两份内容当成"我的原创和别人重复"
+const { title, description, date, updated, category, tags, source } = entry.data;
 
 const pageTitle = `${title} · ${profile.name}`;
 
@@ -33,6 +35,7 @@ const hideLiftedCss = liftedImageCss(cover);
   title={pageTitle}
   description={description}
   toc={headings}
+  canonical={source}
 >
   {/* data-pagefind-body：只有文章页带这个标记，pagefind 便只索引文章 */}
   <article class="section post" data-pagefind-body>
@@ -53,6 +56,14 @@ const hideLiftedCss = liftedImageCss(cover);
         }
         <a href={categoryHref(locale, category)}>{category}</a>
         <span>{readingMinutes(entry)} {t('post.minRead')}</span>
+        {
+          /* 转载/摘录：把原文摆出来，读者一眼知道这是收藏而不是原创 */
+          source && (
+            <a href={source} target="_blank" rel="noreferrer nofollow" title={source}>
+              {locale === 'zh' ? '原文出处' : 'Original'}
+            </a>
+          )
+        }
       </div>
       {
         tags.length > 0 && (

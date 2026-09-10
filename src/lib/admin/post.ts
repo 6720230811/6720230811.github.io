@@ -388,6 +388,43 @@ function duplicatePost(): void {
   setStatus('已复制成一份新草稿，改好 slug 再发布。', 'ok');
 }
 
+/**
+ * 用「从网址导入」的结果开一篇新草稿（见 importDialog.ts）。
+ *
+ * 和"复制为新文章"同一套动作：清干净当前态 → 填好内容 → 标记未保存，
+ * 剩下的交给人工过目。导入的东西一律 draft: true，绝不自动发布。
+ */
+export async function startDraftFromImport(draft: {
+  frontmatter: PostFrontmatter;
+  body: string;
+}): Promise<void> {
+  currentSlug = '';
+  slugInput.value = '';
+  overwriteAck = false;
+  slugOverwrite.hidden = true;
+  // 新文章：仓库里没有对应版本，别让「与仓库对比」和 sha 预检指着上一篇
+  remote = null;
+  fillPost(draft.frontmatter, draft.body);
+
+  slugLocked = true;
+  paintLock();
+  hideDeleteConfirm();
+  deleteBtn.disabled = true;
+  duplicateBtn.disabled = true;
+  list?.setActive('');
+
+  // 文件名跟着标题走（中文标题会去拉拼音字典再回填）
+  const suggested = await suggestSlug(draft.frontmatter.title ?? '');
+  if (suggested) slugInput.value = suggested;
+  paintPath(
+    slugInput.value ? paths.post(postLang.value, slugInput.value) : paths.postsDir(postLang.value)
+  );
+
+  markDirty();
+  autosaveRef?.markDirty();
+  renderNow();
+}
+
 // ---------------------------------------------------------------- slug
 function paintLock(): void {
   slugLock.setAttribute('aria-pressed', String(slugLocked));

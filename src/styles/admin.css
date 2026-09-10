@@ -3816,6 +3816,181 @@ select.input {
 }
 
 /* ============================================================
+   「从网址导入」浮层 + 抓取服务配置
+   ============================================================ */
+
+.sidebar__import {
+  margin-top: 0.35rem;
+  color: var(--adm-muted);
+  font-weight: 600;
+}
+
+.sidebar__import svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.drawer__divider {
+  margin: 1rem 0 0.9rem;
+  border: none;
+  border-top: 1px solid var(--adm-line);
+}
+
+.drawer__sub {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--adm-text);
+}
+
+.ping[data-state='busy'] {
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+  color: var(--adm-faint);
+}
+
+.import {
+  width: min(42rem, 94vw);
+  padding: 0;
+  border: 1px solid var(--adm-line);
+  border-radius: 12px;
+  background: var(--adm-surface);
+  color: var(--adm-text);
+}
+
+.import::backdrop {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.import__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.95rem;
+  border-bottom: 1px solid var(--adm-line);
+  font-size: 0.85rem;
+}
+
+.import__close {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.import__close:hover {
+  color: var(--adm-danger);
+}
+
+.import__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.9rem 0.95rem;
+}
+
+.import__opts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r);
+  background: var(--adm-bg, transparent);
+}
+
+.import__opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--adm-muted);
+  cursor: pointer;
+}
+
+.import__opt input {
+  margin-top: 0.2rem;
+  accent-color: var(--adm-accent);
+}
+
+.import__paste {
+  border: 1px dashed var(--adm-line);
+  border-radius: var(--adm-r);
+  padding: 0.6rem 0.7rem;
+}
+
+.import__paste summary {
+  font-size: 0.76rem;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.import__paste textarea {
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.import__service,
+.import__target {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  color: var(--adm-faint);
+}
+
+.import__service[data-state='ok'] {
+  color: var(--adm-ok);
+}
+
+.import__service[data-state='warn'] {
+  color: var(--adm-warn);
+}
+
+.import__status {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--adm-r);
+  font-size: 0.74rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+}
+
+.import__status[data-state='busy'] {
+  color: var(--adm-faint);
+}
+
+.import__status[data-state='ok'] {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.08);
+  color: #047857;
+}
+
+:root[data-theme='dark'] .import__status[data-state='ok'] {
+  color: var(--adm-ok);
+}
+
+.import__status[data-state='error'] {
+  border-color: rgba(225, 29, 72, 0.35);
+  background: rgba(225, 29, 72, 0.07);
+  color: var(--adm-danger);
+}
+
+.import__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  padding: 0.7rem 0.95rem;
+  border-top: 1px solid var(--adm-line);
+}
+
+/* ============================================================
    可拖拽分隔条：三栏 + 写作区分栏 + 个人信息分栏
    ============================================================ */
 

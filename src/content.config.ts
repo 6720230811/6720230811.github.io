@@ -25,6 +25,9 @@ const posts = defineCollection({
     // 旧 slug：改过名的文章把旧文件名留在这里，构建时给每个别名生成一个跳转页，
     // 免得改一次名旧链接就 404（静态站没有服务端重定向，只能落地一个 HTML）
     aliases: z.array(z.string()).default([]),
+    // 原文地址：转载/摘录他人文章时填，文章页会把 canonical 指回这里
+    // （既是对原作者的交代，也避免自己的站点被判重复内容）
+    source: z.string().optional(),
     // 草稿：生产构建不输出，dev 下仍可见
     draft: z.boolean().default(false),
   }),
