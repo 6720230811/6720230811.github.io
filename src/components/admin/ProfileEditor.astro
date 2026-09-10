@@ -1,17 +1,23 @@
 ---
 import Icon from '../Icon.astro';
-import JsonEditor from './JsonEditor.astro';
 
-// 数组类字段：结构各异、条目会增减，用 JSON 编辑框比堆一堆表单省事
-const arrayFields = [
-  { id: 'news', label: 'news', hint: '动态；text 支持 <b>、<a href> 等行内 HTML，保存时会过滤白名单外的标签' },
-  { id: 'publications', label: 'publications', hint: '论文；selfIndex 是你在 authors 里的下标，从 0 开始' },
-  { id: 'research', label: 'research', hint: '科研经历' },
-  { id: 'skills', label: 'skills', hint: '技术栈分组' },
-  { id: 'projects', label: 'projects', hint: '项目' },
-  { id: 'internships', label: 'internships', hint: '实习经历' },
-  { id: 'education', label: 'education', hint: '教育背景' },
-  { id: 'awards', label: 'awards', hint: '荣誉奖项；text 是纯文本，不解析 HTML' },
+/**
+ * 「个人信息（About 页）」编辑器：左栏可视化卡片，右栏 1:1 实时镜像。
+ *
+ * 数据契约在 data/profile.schema.ts；编辑逻辑在 lib/admin/profile.ts（主控）+
+ * profileCards.ts（卡片）+ profilePreview.ts（镜像）+ profileState.ts（状态）。
+ * 这份模板只管骨架：模块的卡片内容由 TS 按 spec 动态生成。
+ */
+
+const arrayModules = [
+  { key: 'news', icon: '📰', title: '最新动态', hint: '支持行内 HTML，保存时过滤白名单' },
+  { key: 'publications', icon: '📝', title: '论文发表', hint: '可粘贴 BibTeX 批量导入；点作者名标记自己', bibtex: true },
+  { key: 'research', icon: '🔬', title: '科研经历', hint: '教育 / 科研 / 实习共用一套结构' },
+  { key: 'skills', icon: '🛠', title: '技术栈', hint: '分组胶囊，回车添加' },
+  { key: 'projects', icon: '🚀', title: '项目经历', hint: '技术栈用胶囊，亮点一行一条' },
+  { key: 'internships', icon: '💼', title: '实习经历', hint: '' },
+  { key: 'education', icon: '🎓', title: '教育背景', hint: '' },
+  { key: 'awards', icon: '🏅', title: '荣誉奖项', hint: '纯文本，不解析 HTML' },
 ];
 
 const baseFields = [
@@ -22,8 +28,8 @@ const baseFields = [
   { id: 'p-lab', label: 'lab', hint: '实验室/课题组，可留空' },
   { id: 'p-location', label: 'location', hint: '所在地' },
   { id: 'p-email', label: 'email', hint: '邮箱' },
-  { id: 'p-citationSummary', label: 'citationSummary', hint: '引用概览，如「Google Scholar 引用 120+」，留空不显示' },
-  { id: 'p-cvFile', label: 'cvFile', hint: '简历文件名，放在 public/cv/ 下' },
+  { id: 'p-citationSummary', label: 'citationSummary', hint: '引用概览，留空不显示' },
+  { id: 'p-cvFile', label: 'cvFile', hint: '简历文件名（public/cv/ 下），拖 PDF 自动填' },
 ];
 
 const linkFields = [
@@ -34,7 +40,7 @@ const linkFields = [
 ];
 ---
 
-<section class="panel">
+<section class="panel panel--profile">
   <div class="panel__head">
     <h2>个人信息（About 页）</h2>
     <div class="panel__tools">
@@ -45,6 +51,10 @@ const linkFields = [
           <option value="en">English</option>
         </select>
       </label>
+      <button id="profile-bilingual" class="btn" type="button" title="对比中英两份数据，找出漏译 / 缺条目">
+        <Icon name="doc" />
+        双语对照
+      </button>
       <button id="profile-reload" class="btn" type="button">
         <Icon name="refresh" />
         重新载入
@@ -57,59 +67,141 @@ const linkFields = [
   </div>
 
   <p class="panel__hint">
-    写回 <code id="profile-path">src/data/profile.zh.json</code>；保存前会按 schema 校验，字段不对会直接拦下。
+    写回 <code id="profile-path">src/data/profile.zh.json</code>；右侧预览与线上同款样式，改动即时生效。
   </p>
 
-  <h3 class="panel__sub">基本信息</h3>
-  <div class="grid">
-    {
-      baseFields.map((f) => (
-        <label class="field">
-          <span class="field__label">
-            <code>{f.label}</code>
-            <span class="field__hint">{f.hint}</span>
-          </span>
-          <input id={f.id} class="input" type="text" spellcheck="false" />
-        </label>
-      ))
-    }
+  <pre id="profile-issues" class="panel-issues" hidden></pre>
+
+  <div class="profile-workbench">
+    {/* ---------------- 左栏：模块化编辑流 ---------------- */}
+    <div class="profile-editor">
+      <details class="mod" data-mod="basic" open>
+        <summary class="mod__head">
+          <span class="mod__icon">👤</span>
+          <span class="mod__title">个人名片与基础档案</span>
+          <span class="mod__chevron" aria-hidden="true">▾</span>
+        </summary>
+        <div class="mod__body">
+          <div class="grid">
+            {
+              baseFields.map((f) => (
+                <label class="field">
+                  <span class="field__label">
+                    <code>{f.label}</code>
+                    <span class="field__hint">{f.hint}</span>
+                  </span>
+                  <input id={f.id} class="input" type="text" spellcheck="false" />
+                </label>
+              ))
+            }
+          </div>
+
+          <div class="cvdrop" id="cv-drop" title="点击选择或直接拖入 PDF">
+            <input id="cv-file" type="file" accept="application/pdf" hidden />
+            <span class="cvdrop__icon" aria-hidden="true">📄</span>
+            <span class="cvdrop__text" id="cv-text">拖入 PDF 或点击上传，写入 public/cv/</span>
+          </div>
+
+          <h4 class="mod__subtitle">社交与学术网络（links）</h4>
+          <div class="grid">
+            {
+              linkFields.map((f) => (
+                <label class="field">
+                  <span class="field__label">
+                    <code>{f.label}</code>
+                    <span class="field__hint">留空则隐藏该图标</span>
+                  </span>
+                  <input id={f.id} class="input" type="text" spellcheck="false" />
+                </label>
+              ))
+            }
+          </div>
+
+          <div class="grid">
+            <label class="field">
+              <span class="field__label">
+                <code>bio</code>
+                <span class="field__hint">个人简介，一行一段</span>
+              </span>
+              <textarea id="p-bio" class="input input--code" rows="5" spellcheck="false"></textarea>
+            </label>
+            <label class="field">
+              <span class="field__label">
+                <code>interests</code>
+                <span class="field__hint">研究方向，一行一条</span>
+              </span>
+              <textarea id="p-interests" class="input input--code" rows="5" spellcheck="false"></textarea>
+            </label>
+          </div>
+        </div>
+      </details>
+
+      {
+        arrayModules.map((m) => (
+          <details class="mod" data-mod={m.key}>
+            <summary class="mod__head">
+              <span class="mod__icon">{m.icon}</span>
+              <span class="mod__title">{m.title}</span>
+              <span class="mod__count" data-count={m.key}>
+                0
+              </span>
+              <span class="mod__chevron" aria-hidden="true">
+                ▾
+              </span>
+            </summary>
+            <div class="mod__body">
+              <div class="mod__bar">
+                <button class="btn btn--xs" type="button" data-add={m.key}>
+                  ＋ 新增
+                </button>
+                {m.bibtex && (
+                  <button class="btn btn--xs" type="button" data-bibtex title="粘贴 BibTeX 文本，自动解析出标题 / 作者 / 会议 / 年份">
+                    📋 粘贴 BibTeX
+                  </button>
+                )}
+                <span class="mod__hint">{m.hint}</span>
+                <button class="btn btn--xs btn--ghost mod__jsonbtn" type="button" data-jsonbtn={m.key} aria-pressed="false">
+                  JSON 源码
+                </button>
+              </div>
+              <div class="mod__cards" data-cards={m.key}></div>
+              <div class="field mod__jsonfield" data-jsonfield={m.key} hidden>
+                <textarea id={m.key} class="input input--code" rows="14" spellcheck="false"></textarea>
+                <p class="field__error" id={`e-${m.key}`} hidden />
+              </div>
+            </div>
+          </details>
+        ))
+      }
+    </div>
+
+    {/* ---------------- 右栏：主页实时镜像 ---------------- */}
+    <aside class="profile-mirror">
+      <div class="profile-mirror__head">
+        <span>实时预览</span>
+        <span class="profile-mirror__hint">About 页 1:1 渲染 · 跟随主题</span>
+      </div>
+      <iframe id="profile-preview" class="profile-mirror__frame" title="About 页预览" sandbox="allow-same-origin"></iframe>
+      <div id="bilingual-report" class="bilingual" hidden>
+        <div class="bilingual__bar">
+          <b>双语对照</b>
+          <button id="bilingual-close" class="bilingual__close" type="button" aria-label="关闭">×</button>
+        </div>
+        <div id="bilingual-body"></div>
+      </div>
+    </aside>
   </div>
 
-  <h3 class="panel__sub">社交链接（links）</h3>
-  <div class="grid">
-    {
-      linkFields.map((f) => (
-        <label class="field">
-          <span class="field__label">
-            <code>{f.label}</code>
-            <span class="field__hint">留空则隐藏该图标</span>
-          </span>
-          <input id={f.id} class="input" type="text" spellcheck="false" />
-        </label>
-      ))
-    }
-  </div>
-
-  <div class="grid">
-    <label class="field">
-      <span class="field__label">
-        <code>bio</code>
-        <span class="field__hint">个人简介，一行一段</span>
-      </span>
-      <textarea id="p-bio" class="input input--code" rows="5" spellcheck="false"></textarea>
-    </label>
-
-    <label class="field">
-      <span class="field__label">
-        <code>interests</code>
-        <span class="field__hint">研究方向，一行一条</span>
-      </span>
-      <textarea id="p-interests" class="input input--code" rows="5" spellcheck="false"></textarea>
-    </label>
-  </div>
-
-  <h3 class="panel__sub">板块内容（JSON 编辑）</h3>
-  <div class="json-grid">
-    {arrayFields.map((f) => <JsonEditor id={f.id} label={f.label} hint={f.hint} />)}
-  </div>
+  {/* BibTeX 快捷导入浮层 */}
+  <dialog id="bibtex-dialog" class="bibtex">
+    <div class="bibtex__head">
+      <b>粘贴 BibTeX 导入</b>
+      <span class="bibtex__hint">支持多条目；解析出标题 / 作者 / 会议 / 年份 / 链接，导入后逐篇点作者名标记自己</span>
+    </div>
+    <textarea class="bibtex__area" rows="12" spellcheck="false" placeholder={`@inproceedings{zhang2025kv,\n  title = {Efficient KV Cache Management for Long-Context LLM Inference},\n  author = {San Zhang and Si Li and Wu Wang},\n  booktitle = {MLSys},\n  year = {2025},\n  url = {https://arxiv.org/abs/2501.00001}\n}`}></textarea>
+    <div class="bibtex__actions">
+      <button class="btn btn--xs" type="button" data-bibtex-import>解析并导入</button>
+      <button class="btn btn--xs btn--ghost" type="button" data-bibtex-cancel>取消</button>
+    </div>
+  </dialog>
 </section>
