@@ -5,7 +5,6 @@ date: 2026-09-11
 category: "tailscale"
 tags: ["vpn", "组网"]
 source: "https://www.uuaihub.com/blog/tailscale-complete-guide"
-draft: true
 ---
 
 > **原文**：[Tailscale 完全指南：零基础搭建属于你自己的私有网络（保姆级教程 2026） | UU AI Hub](https://www.uuaihub.com/blog/tailscale-complete-guide) · uuaihub.com
