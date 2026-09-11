@@ -67,13 +67,3 @@ Agent = LLM (大脑) + Planning (规划) + Tool use (执行) + Memory (记忆)�
 
 ![](https://www.runoob.com/wp-content/uploads/2025/12/75e97117-0606-41cb-a044-bb38a4858735.jpg)
 * * *
-
-## 学习资源
-现有平台及流行框架：
-| 核心需求  | 推荐工具  | 关键优势  |
-| --- | --- | --- |
-|  [QoderWork](https://www.runoob.com/ai-agent/qoderwork.html) ，桌面级 AI Agent  |  [QoderWork](https://www.runoob.com/ai-agent/qoderwork.html)  | 你说需求，它交付结果。  |
-以下是其他流行的 AI Agent 开源框架，这些项目大多围绕工具调用（Tool Calling）、记忆（Memory）、工作流（Workflow）、多 Agent 协作（Multi-Agent）和长期任务执行能力展开。
-| 项目  | 定位  | 特点  |
-| --- | --- | --- |
-AI 思考中... [AI Agent 简介](https://www.runoob.com/ai-agent/ai-agent-intro.html "AI Agent 简介") [](https://www.runoob.com/ai-agent/ai-agent-intro.html)
