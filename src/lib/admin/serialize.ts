@@ -145,7 +145,15 @@ function unquote(value: string): string {
 }
 
 export function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  /*
+    用本地时区，不用 toISOString()：那是 UTC，东八区早上会算成昨天、西半球晚上会
+    算成明天。日期选择器（<input type="date">）里的日历是按**本地**日期画的，
+    它的 max 和新建文章的默认日期必须是同一个口径，否则默认值会超过 max、一进
+    后台就红着。
+  */
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 // ---------------------------------------------------------------- JSON 输出

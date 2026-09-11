@@ -508,6 +508,22 @@ async function checkConflict(): Promise<void> {
 
 // ---------------------------------------------------------------- 初始化
 export function initPost(): void {
+  /**
+   * 日期选择器的上限＝今天：日历里未来的日子是灰的、点不动（原生日历改不了样式，
+   * 但它认 max）。每次打开日历前重设一次，免得后台开着过夜后上限还停在昨天。
+   * 发布/修改时间都得是今天或以前；绕过选择器的情形由 validatePost 兜底。
+   */
+  const capDatesToToday = () => {
+    const limit = today();
+    dateInput.max = limit;
+    updatedInput.max = limit;
+  };
+  capDatesToToday();
+  for (const el of [dateInput, updatedInput]) {
+    el.addEventListener('focus', capDatesToToday);
+    el.addEventListener('click', capDatesToToday);
+  }
+
   // 左侧列表：点一篇就载入它，点「新建」就清空；勾选后可批量操作
   list = initPostList((slug) => run(() => loadPost(slug)), {
     onBulk: (slugs, action) => applyBulk(slugs, action),

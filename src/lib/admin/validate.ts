@@ -1,4 +1,4 @@
-import { isValidSlug } from './serialize';
+import { isValidSlug, today } from './serialize';
 import type { PostFrontmatter } from './serialize';
 
 /**
@@ -8,7 +8,7 @@ import type { PostFrontmatter } from './serialize';
  * 现在独立出来，输入过程中也跑（改过之后才跑，避免刚载入就一片红）。
  */
 
-export type FieldId = 'post-slug' | 'post-title' | 'post-category';
+export type FieldId = 'post-slug' | 'post-title' | 'post-category' | 'post-date' | 'post-updated';
 
 export interface Issue {
   field: FieldId;
@@ -56,11 +56,30 @@ export function validatePost(input: ValidateInput): Issue[] {
 
   // 不校验 date 格式：<input type="date"> 里拿不到非法字符串，
   // 清空时 collectPost 会退回今天，所以这里是死路，别写假校验。
+  //
+  // 但要拦未来的日期：选择器那边已经用 max 把未来的日子置灰了，这里兜住
+  // 「手动改 value」「从网址导入带进来一个未来日期」这些绕过选择器的情形。
+  const limit = today();
+  if (data.date && data.date > limit) {
+    issues.push({
+      field: 'post-date',
+      message: `发布日期不能是未来的日子（今天是 ${limit}），日历里未来的日子是灰的、点不动。`,
+    });
+  }
+  if (data.updated && data.updated > limit) {
+    issues.push({ field: 'post-updated', message: '修改时间不能是未来的日子。' });
+  }
 
   return issues;
 }
 
-const ALL_FIELDS: readonly FieldId[] = ['post-slug', 'post-title', 'post-category'];
+const ALL_FIELDS: readonly FieldId[] = [
+  'post-slug',
+  'post-title',
+  'post-category',
+  'post-date',
+  'post-updated',
+];
 
 /**
  * 把问题显示在第一个出错的字段上并聚焦过去。
