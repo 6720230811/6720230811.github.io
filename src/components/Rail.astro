@@ -86,6 +86,8 @@ const heatCells = Array.from({ length: rowCount * 7 }, (_, i) => {
 });
 
 const monthPosts = heatCells.reduce((n, cell) => n + cell.count, 0);
+/** 一天多篇的日子（点格子展开当天列表，而不是跳某一篇） */
+const multiDays = heatCells.filter((cell) => cell.count > 1);
 const monthLabel = new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', {
   year: 'numeric',
   month: 'long',
@@ -176,6 +178,35 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
                   · {monthPosts} {t('rail.postsUnit')}
                 </span>
               </span>
+
+              {/*
+                一天多篇时的当天列表：默认 hidden，点那天的格子才展开
+                （单篇的日子不经过这里，直接跳文章）。字都在这块里，所以展开
+                只会让卡片长高一点，不会动日历本身。
+              */}
+              {
+                multiDays.map((cell) => (
+                  <div class="heat__day" id={`heat-day-${cell.key}`} data-day={cell.key} hidden>
+                    <span class="heat__day-head">
+                      <b>{cell.key}</b>
+                      <span class="heat__info-meta">
+                        {cell.count} {t('rail.postsUnit')}
+                      </span>
+                    </span>
+                    <ul class="heat__day-list">
+                      {cell.posts.map((p) => (
+                        /* 只放一行标题：栏宽只有 ~140px，带上分类/时长会折成两行，
+                           展开时把日历往下顶太多。完整标题在 title 里 */
+                        <li>
+                          <a href={p.href} title={`${p.title} · ${p.category} · ${p.minutes} ${t('post.minRead')}`}>
+                            {p.title}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))
+              }
             </div>
 
             <div class="heat__head" aria-hidden="true">
@@ -187,26 +218,38 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
             <div class="heat__grid" aria-label={t('rail.footprintHint')}>
               {
                 heatCells.map((cell) =>
-                  cell.href ? (
-                    /* 有文章的日子是链接：点进那天最新的一篇，悬停/聚焦在信息条里显示详情 */
+                  cell.count > 1 ? (
+                    /* 一天多篇：不跳某一篇，点开当天列表让读者自己挑
+                       （无 JS 时它仍是普通链接，落到 href 那篇） */
                     <a
-                      class="heat__cell"
+                      class="heat__cell heat__cell--multi"
                       href={cell.href}
-                      aria-label={`${cell.key} ${cell.posts.map((p) => p.title).join(' / ')}`}
+                      data-day={cell.key}
+                      aria-expanded="false"
+                      aria-controls={`heat-day-${cell.key}`}
+                      aria-label={`${cell.key} ${cell.count} ${t('rail.postsUnit')} ${t('rail.expandHint')}`}
                     >
                       {cell.day}
                       <span class="heat__info-item">
                         <b>{cell.key.slice(5)}</b>
                         <span class="heat__info-meta">
-                          {[
-                            cell.posts[0].category,
-                            `${cell.posts[0].minutes} ${t('post.minRead')}`,
-                            cell.count > 1 ? `×${cell.count}` : '',
-                          ]
+                          {[`${cell.count} ${t('rail.postsUnit')}`, t('rail.expandHint')].join(' · ')}
+                        </span>
+                        <span class="heat__info-title">{cell.posts[0].title}</span>
+                      </span>
+                    </a>
+                  ) : cell.href ? (
+                    /* 一天一篇：点进去，悬停/聚焦在信息条里显示详情 */
+                    <a class="heat__cell" href={cell.href} aria-label={`${cell.key} ${cell.posts[0].title}`}>
+                      {cell.day}
+                      <span class="heat__info-item">
+                        <b>{cell.key.slice(5)}</b>
+                        <span class="heat__info-meta">
+                          {[cell.posts[0].category, `${cell.posts[0].minutes} ${t('post.minRead')}`]
                             .filter(Boolean)
                             .join(' · ')}
                         </span>
-                        <span class="heat__info-title">{cell.posts.map((p) => p.title).join(' / ')}</span>
+                        <span class="heat__info-title">{cell.posts[0].title}</span>
                       </span>
                     </a>
                   ) : (
@@ -293,4 +336,62 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
 
   initRandom();
   document.addEventListener('astro:page-load', initRandom);
+
+  /**
+   * 「写作足迹」里一天多篇的格子：点开当天的文章列表，而不是跳进某一篇。
+   *
+   * 用 <a> 而不是 <button>：没有 JS 时它就是个正常链接（落到 href 里那篇），
+   * 只是没法展开。点别处 / 按 Esc 收起。
+   */
+  const closeDay = (heat: Element) => {
+    heat.classList.remove('is-open');
+    heat.querySelectorAll<HTMLElement>('.heat__day').forEach((el) => {
+      el.hidden = true;
+    });
+    heat.querySelectorAll<HTMLElement>('.heat__cell--multi').forEach((el) => {
+      el.classList.remove('is-open');
+      el.setAttribute('aria-expanded', 'false');
+    });
+  };
+
+  const closeAllDays = () => {
+    document.querySelectorAll('.heat').forEach(closeDay);
+  };
+
+  const initHeat = () => {
+    document.querySelectorAll<HTMLElement>('.heat__cell--multi').forEach((cell) => {
+      if (cell.dataset.bound === '1') return;
+      cell.dataset.bound = '1';
+      cell.addEventListener('click', (event) => {
+        const heat = cell.closest('.heat');
+        const day = heat?.querySelector<HTMLElement>(`.heat__day[data-day="${cell.dataset.day}"]`);
+        if (!heat || !day) return; // 找不到列表就让它正常跳转
+        const wasOpen = cell.classList.contains('is-open');
+        event.preventDefault(); // 多篇：不跳具体文章
+        closeDay(heat);
+        if (wasOpen) return; // 再点一次＝收起
+        day.hidden = false;
+        cell.classList.add('is-open');
+        cell.setAttribute('aria-expanded', 'true');
+        heat.classList.add('is-open');
+      });
+    });
+  };
+
+  // 点别处 / Esc 收起。只绑一次：ClientRouter 导航时模块不重跑，但 document 一直在
+  let outsideBound = false;
+  if (!outsideBound) {
+    outsideBound = true;
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.heat')) return;
+      closeAllDays();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeAllDays();
+    });
+  }
+
+  initHeat();
+  document.addEventListener('astro:page-load', initHeat);
 </script>

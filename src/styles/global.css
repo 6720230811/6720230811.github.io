@@ -1618,6 +1618,82 @@ a.heat__cell:focus-visible {
   box-shadow: 0 0 0 2px var(--c-accent);
 }
 
+/* 一天多篇：点格子展开当天列表，所以给个角上的小点做区分。
+   用 background-image 画点而不是 <span> 绝对定位：给格子加 position 会把它变成
+   绝对定位后代的包含块，信息条又会跳（见上面的说明） */
+a.heat__cell--multi {
+  background-image: radial-gradient(circle at 77% 23%, currentColor 0 1.2px, transparent 2px);
+}
+
+/* 展开中的格子保留描边，表示"这个列表是从它开的" */
+a.heat__cell.is-open {
+  box-shadow: 0 0 0 2px var(--c-accent);
+}
+
+/* ---------- 展开的当天列表 ---------- */
+.heat.is-open .heat__info {
+  height: auto; /* 点开才长高：悬停时仍然是定高，不会抖 */
+}
+
+/* 展开时屏蔽悬停预览，免得那块定高的预览盖住列表 */
+.heat.is-open .heat__cell:hover .heat__info-item,
+.heat.is-open .heat__cell:focus-visible .heat__info-item {
+  opacity: 0;
+}
+
+.heat__day[hidden] {
+  display: none;
+}
+
+.heat__day {
+  color: var(--c-text);
+}
+
+.heat__day-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-bottom: 0.15rem;
+}
+
+.heat__day-head b {
+  font-weight: 600;
+  color: var(--c-accent);
+}
+
+.heat__day-list {
+  margin: 0;
+  padding: 0;
+  max-height: 7rem; /* 一天很多篇时内部滚动，展开高度不至于失控 */
+  overflow-y: auto;
+  list-style: none;
+}
+
+.heat__day-list li {
+  padding: 0.18rem 0;
+  border-top: 1px solid var(--c-border);
+}
+
+.heat__day-list li:first-child {
+  border-top: 0;
+}
+
+.heat__day-list a {
+  display: block; /* 一行一条：长标题省略号收尾 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.heat__day-list a:hover,
+.heat__day-list a:focus-visible {
+  color: var(--c-accent);
+  text-decoration: underline;
+}
+
 /* ---------- 本站速览 ---------- */
 .rail__stats {
   display: flex;
