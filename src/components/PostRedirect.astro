@@ -34,7 +34,12 @@ const canonical = origin ? new URL(href, origin).toString() : href;
     <link rel="canonical" href={canonical} />
     {/* 0 秒跳转；下面再给一条可点的链接，禁了 meta refresh 也走得到 */}
     <meta http-equiv="refresh" content={`0; url=${href}`} />
-    <style>
+    {/* is:inline 必须加：这是整份独立文档，样式要留在自己的 head 里。
+        不加的话 Astro 会把它**提升到渲染它的那个页面的 head**——而 PostRedirect 是在
+        [...slug].astro 里按别名条件渲染的，于是它那套 body{background:#fff;color:#0f172a;
+        display:grid;place-items:center;min-height:100vh;padding:1.5rem} 会泄漏到
+        **所有文章页**：暗色模式下外围背景仍是白的（踩过一次）。 */}
+    <style is:inline>
       body {
         margin: 0;
         min-height: 100vh;
