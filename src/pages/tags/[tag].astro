@@ -24,7 +24,7 @@ const posts = (await postsOf(locale)).filter((post) => post.data.tags.includes(t
 const title = `${t('tag.label')}：${tag} · ${p.name}`;
 ---
 
-<BaseLayout profile={p} locale={locale} title={title} description={title}>
+<BaseLayout profile={p} locale={locale} title={title} description={title} rail>
   <Section title={`${t('tag.label')}：${tag}`} icon="🏷">
     <p class="list-summary">{posts.length} {t('archive.count')}</p>
     <PostList posts={posts} locale={locale} />

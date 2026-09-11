@@ -1481,6 +1481,7 @@ h4 {
 
 /* ---------- 写作足迹 ---------- */
 .heat {
+  position: relative; /* 单元格里的信息卡以它为基准定位（见 .heat__pop） */
   display: grid;
   grid-template-rows: repeat(7, 1fr);
   grid-auto-flow: column;
@@ -1489,9 +1490,71 @@ h4 {
 }
 
 .heat__cell {
+  display: block;
   aspect-ratio: 1;
   border-radius: 0.15rem;
   background: var(--c-bg-soft);
+}
+
+a.heat__cell {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+a.heat__cell:hover,
+a.heat__cell:focus-visible {
+  transform: scale(1.4);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--c-accent);
+}
+
+/**
+ * 悬停/聚焦时显示这一天写了什么。
+ *
+ * 绝对定位到「网格下方」而不是跟随鼠标：.rail__inner 是 overflow: auto，
+ * 超出栏宽的内容会被裁掉，信息卡只能留在栏内。所有格子共用同一块位置，
+ * 谁被悬停谁浮现（pointer-events 关掉，免得挡住格子的 hover）。
+ */
+.heat__pop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.4rem;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-card);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.4);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, visibility 0.12s;
+  pointer-events: none;
+}
+
+.heat__cell:hover .heat__pop,
+.heat__cell:focus-visible .heat__pop {
+  opacity: 1;
+  visibility: visible;
+}
+
+.heat__pop-date {
+  display: block;
+  color: var(--c-text-faint);
+}
+
+.heat__pop-item {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.heat__pop-item b {
+  display: block;
+  font-weight: 600;
+  color: var(--c-text);
 }
 
 /* 用透明度而不是 color-mix：后者 Safari 16.2 才有，掉色会让格子直接看不见 */

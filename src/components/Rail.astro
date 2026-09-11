@@ -2,7 +2,7 @@
 import type { Locale } from '../i18n/ui';
 import { useTranslations } from '../i18n/ui';
 import type { Profile } from '../data/profile';
-import { postsOf, postHref } from '../lib/posts';
+import { postsOf, postHref, readingMinutes } from '../lib/posts';
 import { resolveAvatar } from '../lib/avatar';
 import { countContentLength } from '../lib/format';
 import { getRelativeLocaleUrl } from 'astro:i18n';
@@ -43,24 +43,38 @@ const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDat
 const mondayOffset = (new Date(todayUtc).getUTCDay() + 6) % 7; // 周一记 0
 const startUtc = todayUtc - (WINDOW - 1 - (6 - mondayOffset)) * DAY;
 
-const byDay = new Map<string, string[]>();
+interface DayPost {
+  title: string;
+  href: string;
+  minutes: number;
+  category: string;
+}
+
+const byDay = new Map<string, DayPost[]>();
 for (const post of posts) {
   const key = post.data.date.toISOString().slice(0, 10);
+  const item: DayPost = {
+    title: post.data.title,
+    href: postHref(locale, post.slug),
+    minutes: readingMinutes(post),
+    category: post.data.category,
+  };
   const list = byDay.get(key);
-  if (list) list.push(post.data.title);
-  else byDay.set(key, [post.data.title]);
+  if (list) list.push(item);
+  else byDay.set(key, [item]);
 }
 
 const heatCells = Array.from({ length: WINDOW }, (_, i) => {
   const utc = startUtc + i * DAY;
   const key = new Date(utc).toISOString().slice(0, 10);
-  const titles = byDay.get(key) ?? [];
-  const count = titles.length;
+  const dayPosts = byDay.get(key) ?? [];
   return {
     key,
-    count,
+    posts: dayPosts,
+    count: dayPosts.length,
     future: utc > todayUtc,
-    title: count ? `${key} · ${titles.join(' / ')}` : key,
+    /** 同一天多篇时，格子指向最新那篇；hover 会把这一天全部列出来 */
+    href: dayPosts[0]?.href,
   };
 });
 const maxCount = Math.max(1, ...heatCells.map((c) => c.count));
@@ -136,13 +150,34 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
       heatCells.some((c) => c.count) && (
         <div class="card rail__card">
           <div class="rail__title">{t('rail.footprint')}</div>
-          <div class="heat" role="img" aria-label={t('rail.footprintHint')}>
-            {heatCells.map((cell) => (
-              <span
-                class:list={['heat__cell', `heat__cell--l${heatLevel(cell.count)}`, { 'is-future': cell.future }]}
-                title={cell.title}
-              />
-            ))}
+          <div class="heat">
+            {
+              heatCells.map((cell) =>
+                cell.href ? (
+                  /* 有文章的日子是链接：点进那天最新的一篇，悬停/聚焦出信息卡 */
+                  <a
+                    class:list={['heat__cell', `heat__cell--l${heatLevel(cell.count)}`]}
+                    href={cell.href}
+                    aria-label={`${cell.key} ${cell.posts.map((p) => p.title).join(' / ')}`}
+                  >
+                    <span class="heat__pop">
+                      <span class="heat__pop-date">{cell.key}</span>
+                      {cell.posts.map((p) => (
+                        <span class="heat__pop-item">
+                          <b>{p.title}</b>
+                          <span>{[p.category, `${p.minutes} ${t('post.minRead')}`].filter(Boolean).join(' · ')}</span>
+                        </span>
+                      ))}
+                    </span>
+                  </a>
+                ) : (
+                  <span
+                    class:list={['heat__cell', 'heat__cell--l0', { 'is-future': cell.future }]}
+                    title={cell.key}
+                  />
+                )
+              )
+            }
           </div>
           <div class="rail__hint">{t('rail.footprintHint')}</div>
         </div>

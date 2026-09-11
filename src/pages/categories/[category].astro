@@ -27,7 +27,7 @@ const posts = (await postsOf(locale)).filter((post) => post.data.category === ca
 const title = `${t('category.label')}：${category} · ${p.name}`;
 ---
 
-<BaseLayout profile={p} locale={locale} title={title} description={title}>
+<BaseLayout profile={p} locale={locale} title={title} description={title} rail>
   <Section title={`${t('category.label')}：${category}`} icon="📚">
     <p class="list-summary">{posts.length} {t('archive.count')}</p>
     <PostList posts={posts} locale={locale} />
