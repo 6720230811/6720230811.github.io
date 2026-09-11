@@ -12,7 +12,8 @@ import type { Profile } from '../../data/profile.schema';
 import { loadSchemas } from './schemas';
 import { getProfile, getLang, setLang, setState, mutate, subscribe } from './profileState';
 import { initProfileCards } from './profileCards';
-import { updateMirror } from './profilePreview';
+import { updateMirror, registerLocalAvatar, avatarUrlFor } from './profilePreview';
+import { compressToWebp, stamp } from './upload';
 import type { Locale } from '../../i18n/ui';
 
 /**
@@ -28,6 +29,7 @@ const profileLang = $<HTMLSelectElement>('profile-lang');
 const previewFrame = $<HTMLIFrameElement>('profile-preview');
 
 const BASE_FIELDS = [
+  'avatar',
   'name',
   'title',
   'affiliation',
@@ -39,7 +41,7 @@ const BASE_FIELDS = [
   'cvFile',
 ] as const;
 
-const OPTIONAL_BASE = new Set(['affiliationLink', 'lab', 'citationSummary']);
+const OPTIONAL_BASE = new Set(['avatar', 'affiliationLink', 'lab', 'citationSummary']);
 
 const LINK_FIELDS = ['github', 'scholar', 'linkedin', 'blog'] as const;
 
@@ -130,6 +132,16 @@ function fillBaseInputs(): void {
   $<HTMLTextAreaElement>('p-interests').value = p.interests.join('\n');
   const cvText = $('cv-text');
   cvText.textContent = p.cvFile ? `当前：public/cv/${p.cvFile}，拖入新 PDF 可替换` : '拖入 PDF 或点击上传，写入 public/cv/';
+
+  // 头像缩略图与当前值说明：刚上传的那张用本地 blob，站点重建前也看得见
+  const thumb = document.getElementById('avatar-thumb') as HTMLImageElement | null;
+  if (thumb) thumb.src = avatarUrlFor(p.avatar);
+  const avatarText = document.getElementById('avatar-text');
+  if (avatarText) {
+    avatarText.textContent = p.avatar
+      ? `当前：${p.avatar}，拖入新图可替换`
+      : '拖入图片或点击更换头像（留空用 avatar.jpg）';
+  }
 }
 
 function bindBaseInputs(): void {
@@ -209,6 +221,71 @@ function bindCvDrop(): void {
   const handle = (files: FileList | null) => {
     const file = files?.[0];
     if (file) void uploadCv(file);
+  };
+
+  zone.addEventListener('click', () => input.click());
+  // div 不是原生按钮：补上键盘路径，Tab 到它 + 回车/空格也能选文件
+  zone.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    input.click();
+  });
+  input.addEventListener('change', () => handle(input.files));
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    zone.classList.add('is-dropping');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('is-dropping'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('is-dropping');
+    handle(e.dataTransfer?.files ?? null);
+  });
+}
+
+// ---------------------------------------------------------------- 头像上传
+/** 头像压到长边 512 就够（资料卡显示量级就这么大），别把几 MB 的原图塞进仓库 */
+const AVATAR_EDGE = 512;
+
+/**
+ * 换头像：压缩后写进 public/，并把 avatar 字段指向新文件名。
+ *
+ * 文件名带时间戳（avatar-20260911-0935.webp）而不是覆盖 avatar.jpg：
+ * 一来浏览器/CDN 的缓存自然失效，二来外链地址也能直接填在 avatar 字段里。
+ */
+async function uploadAvatar(file: File): Promise<void> {
+  if (!file.type.startsWith('image/')) {
+    setStatus('头像只收图片（png / jpg / webp）。', 'error');
+    return;
+  }
+  const token = requireToken();
+  if (!token) return;
+
+  setStatus('正在压缩并上传头像…', 'busy');
+  try {
+    const { blob, ext } = await compressToWebp(file, AVATAR_EDGE);
+    const name = `avatar-${stamp()}.${ext}`;
+    const path = paths.avatar(name);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    await saveBinaryFile(repo as Repo, path, token, bytes, `update avatar: ${name}`);
+    // 站点还没重建：镜像预览和缩略图先用本地 blob 顶上，否则会显示 404
+    registerLocalAvatar(name, URL.createObjectURL(blob));
+    mutate((p) => {
+      p.avatar = name;
+    });
+    fillBaseInputs();
+    setStatus(`头像已上传为 ${name}，保存后站点就用它。旧图仍在仓库里，可自行清理。`, 'ok');
+  } catch (e) {
+    setStatus(e instanceof GhError ? e.hint : `头像上传失败：${(e as Error).message}`, 'error');
+  }
+}
+
+function bindAvatarDrop(): void {
+  const zone = $('avatar-drop');
+  const input = $<HTMLInputElement>('avatar-file');
+  const handle = (files: FileList | null) => {
+    const file = files?.[0];
+    if (file) void uploadAvatar(file);
   };
 
   zone.addEventListener('click', () => input.click());
@@ -424,6 +501,7 @@ async function saveProfile(): Promise<void> {
 export function initProfile(): void {
   bindBaseInputs();
   bindCvDrop();
+  bindAvatarDrop();
   initProfileCards();
 
   // 本地暂存：和文章共用一套（IndexedDB + localStorage 镜像），刷新不再丢半份档案

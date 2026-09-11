@@ -116,6 +116,11 @@ export const ProfileSchema = z.object({
   citationSummary: z.string().optional(),
   /** 该语言对应的简历文件名（放在 public/cv/ 下） */
   cvFile: z.string(),
+  /**
+   * 头像：public/ 下的文件名（如 avatar-20260911-0930.webp），或完整外链。
+   * 留空回落到 public/avatar.jpg。换图时上传会用新文件名，顺带绕开浏览器/CDN 缓存。
+   */
+  avatar: z.string().optional(),
   news: z.array(NewsItemSchema),
   publications: z.array(PublicationSchema),
   research: z.array(TimelineEntrySchema),

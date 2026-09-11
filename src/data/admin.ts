@@ -22,6 +22,8 @@ export const paths = {
   illustration: (name: string) => `public/illustrations/${name}`,
   /** 简历：profile.cvFile 只是文件名，实际放在 public/cv/ 下 */
   cv: (name: string) => `public/cv/${name}`,
+  /** 头像放 public/ 根下（页面用 /<文件名> 引用）；换图时换个文件名就能绕开缓存 */
+  avatar: (name: string) => `public/${name}`,
   /** 画廊数据（素材页扫引用时要用它，见 lib/admin/assets.ts） */
   gallery: () => 'src/data/gallery.json',
   /**

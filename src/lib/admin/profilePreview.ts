@@ -2,6 +2,7 @@ import type { Locale } from '../../i18n/ui';
 import { useTranslations } from '../../i18n/ui';
 import { visibleSections } from '../../data/sections';
 import type { Profile, Publication, TimelineEntry, Project } from '../../data/profile.schema';
+import { resolveAvatar } from '../avatar';
 
 /**
  * 「个人信息」的实时镜像预览。
@@ -51,14 +52,33 @@ function section(title: string, icon: string, inner: string): string {
   return `<section class="section"><h2 class="section__title"><span class="icon">${icon}</span><span>${e(title)}</span></h2>${inner}</section>`;
 }
 
-function profileCard(p: Profile): string {
+/**
+ * 刚上传、站点还没重建的头像：用 blob URL 顶上，否则镜像里看到的是一张 404
+ * （和正文预览的 registerLocalImage 一个思路）。
+ */
+const localAvatars = new Map<string, string>();
+
+export function registerLocalAvatar(name: string, blobUrl: string): void {
+  localAvatars.set(name, blobUrl);
+}
+
+/** 头像最终地址：文件名优先取刚上传的 blob，其余交给前台同一套规则 */
+export function avatarUrlFor(avatar?: string): string {
   const base = import.meta.env.BASE_URL || '/';
+  if (avatar && !/^https?:\/\//i.test(avatar)) {
+    const local = localAvatars.get(avatar);
+    if (local) return local;
+  }
+  return resolveAvatar(avatar, base);
+}
+
+function profileCard(p: Profile): string {
   const { links } = p;
   const link = (label: string, href?: string) =>
     href ? `<a class="icon-link" href="${e(href)}" target="_blank" rel="noopener noreferrer" title="${label}">${label}</a>` : '';
 
   return `<div class="card card--profile">
-    <img class="sidebar__avatar" src="${e(`${base}avatar.jpg`)}" alt="${e(p.name)}" width="512" height="512" />
+    <img class="sidebar__avatar" src="${e(avatarUrlFor(p.avatar))}" alt="${e(p.name)}" width="512" height="512" />
     <div class="sidebar__name">${e(p.name)}</div>
     <div class="profile__divider"></div>
     <div class="sidebar__title">${e(p.title)}</div>

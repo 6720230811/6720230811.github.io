@@ -36,7 +36,7 @@ const MIME_EXT: Record<string, string> = {
 /** 动图与矢量图不压：GIF 压成 WebP 会丢动画，SVG 走 canvas 没有意义 */
 const KEEP_AS_IS = new Set(['image/gif', 'image/svg+xml']);
 
-function stamp(): string {
+export function stamp(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
@@ -53,14 +53,20 @@ export function humanSize(bytes: number): string {
     : `${Math.max(1, Math.round(bytes / 1024))}KB`;
 }
 
-/** 压到长边 MAX_EDGE 并转 WebP；压不了（老浏览器 / 动图 / 矢量图）就原样返回 */
-export async function compressToWebp(file: File): Promise<{ blob: Blob; ext: string }> {
+/**
+ * 压到长边 maxEdge 并转 WebP；压不了（老浏览器 / 动图 / 矢量图）就原样返回。
+ * 头像那种用不到 1600px 的地方传个小值，省仓库体积（正文配图保持默认）。
+ */
+export async function compressToWebp(
+  file: File,
+  maxEdge = MAX_EDGE
+): Promise<{ blob: Blob; ext: string }> {
   const ext = MIME_EXT[file.type] ?? 'png';
   if (KEEP_AS_IS.has(file.type)) return { blob: file, ext };
 
   try {
     const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));

@@ -3545,6 +3545,15 @@ select.input {
   background: var(--adm-accent-soft);
 }
 
+/* 头像拖拽区里的缩略图：圆的，和资料卡上的观感一致 */
+.cvdrop__thumb {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
 /* ---- 右栏：镜像预览 ---- */
 
 .profile-mirror {

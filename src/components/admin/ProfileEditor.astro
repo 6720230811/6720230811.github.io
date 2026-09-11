@@ -21,6 +21,7 @@ const arrayModules = [
 ];
 
 const baseFields = [
+  { id: 'p-avatar', label: 'avatar', hint: '头像文件名或外链，留空用 avatar.jpg；也可直接拖图' },
   { id: 'p-name', label: 'name', hint: '姓名' },
   { id: 'p-title', label: 'title', hint: '身份头衔' },
   { id: 'p-affiliation', label: 'affiliation', hint: '单位' },
@@ -94,6 +95,15 @@ const linkFields = [
           <span class="mod__chevron" aria-hidden="true">▾</span>
         </summary>
         <div class="mod__body">
+          {/* 换头像放在最前面：这是这张卡片里最常改的东西，
+              拖图/点击都会上传到 public/ 并把 avatar 字段换成新文件名 */}
+          <div class="cvdrop" id="avatar-drop" role="button" tabindex="0" title="点击选择或直接拖入图片">
+            <input id="avatar-file" type="file" accept="image/*" hidden />
+            {/* 初始就指到默认头像：载入 profile 前这一格也不该是空的 */}
+            <img id="avatar-thumb" class="cvdrop__thumb" src="/avatar.jpg" alt="" width="36" height="36" />
+            <span class="cvdrop__text" id="avatar-text">拖入图片或点击更换头像</span>
+          </div>
+
           <div class="grid">
             {
               baseFields.map((f) => (
