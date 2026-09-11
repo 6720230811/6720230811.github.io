@@ -299,7 +299,14 @@ export async function crawlUrl(url: string, timeoutMs = DEFAULT_TIMEOUT): Promis
   return { ok: false, failure: full.ok ? { kind: 'empty' } : full.failure };
 }
 
-/** 健康检查（同时当预热用：叫醒容器里的浏览器） */
+/**
+ * 健康检查（同时当预热用：叫醒容器里的浏览器）。
+ *
+ * 注意 /health 是**公开**端点：不带 token 也返回 200，所以它只能证明"服务在线"，
+ * 证明不了 token 对不对。这里再打一个需要认证的端点（/metrics，认证闸门后面），
+ * 401/403 才算拿到"token 不对"的结论——否则"测试连接"通过≠能抓取，
+ * 用户会把连不上误当成 token 失效（踩过一次）。
+ */
 export async function pingCrawl(
   base: string,
   token: string
@@ -314,10 +321,45 @@ export async function pingCrawl(
     if (!response.ok) return { ok: false, error: `HTTP ${response.status}` };
     const data = (await response.json()) as { status?: string; version?: string };
     if (data.status && data.status !== 'ok') return { ok: false, error: `服务状态 ${data.status}` };
+
+    // 认证端点打不通（网络抖动/该端点被关）不改变结论：至少服务是在线的
+    let authStatus = 0;
+    try {
+      const authed = await fetch(`${clean}/metrics`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: AbortSignal.timeout(15_000),
+      });
+      authStatus = authed.status;
+    } catch {
+      authStatus = 0;
+    }
+    if (authStatus === 401 || authStatus === 403) return { ok: false, error: `HTTP ${authStatus}` };
     return { ok: true, version: data.version ?? '未知' };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+}
+
+/**
+ * 把 ping 的原始错误翻成能对症下药的话。
+ *
+ * "连不上"和"token 不对"在界面上长得像、处理方式完全不同，之前只显示英文的
+ * `Failed to fetch`，人被误导去重新生成 token（其实隧道断了）。
+ */
+export function describePingError(error: string): string {
+  if (/HTTP 40[13]/.test(error)) {
+    return '地址通了，但 token 不对（401）。要填服务端启动时设的 CRAWL4AI_API_TOKEN，改完记得重启服务。';
+  }
+  if (/HTTP 40[04]/.test(error)) {
+    return `地址通了但路径不对（${error}）。只填到域名，不要带路径和结尾斜杠。`;
+  }
+  if (/HTTP 5\d\d/.test(error)) {
+    return `服务在线但内部报错了（${error}），看一下服务端日志。`;
+  }
+  if (/fetch|network|timeout|abort|Failed/i.test(error)) {
+    return '连不上这个地址：先确认服务与隧道都在跑。如果是 cloudflared 临时隧道，重启后域名会变，要把新地址重新填进来。';
+  }
+  return `连接失败：${error}`;
 }
 
 // ---------------------------------------------------------------- 配置界面
@@ -366,7 +408,7 @@ export function initCrawlSettings(): void {
         say(`连接正常，服务版本 ${outcome.version}。已保存。`, 'ok');
         setStatus(`抓取服务连通（crawl4ai ${outcome.version}）。`, 'ok');
       } else {
-        say(`连接失败：${outcome.error}`, 'error');
+        say(describePingError(outcome.error ?? ''), 'error');
       }
     })();
   });
