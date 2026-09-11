@@ -31,7 +31,8 @@ const { links } = profile;
 
     <div class="sidebar__name">{profile.name}</div>
     <div class="profile__divider"></div>
-    <div class="sidebar__title">{profile.title}</div>
+    {/* 头衔留空就整行不渲染（后台个人信息里可以清空），免得留一条空行 */}
+    {profile.title && <div class="sidebar__title">{profile.title}</div>}
 
     <div><span class="sidebar__status">{t('sidebar.status')}</span></div>
 

@@ -127,7 +127,7 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
         <img src={resolveAvatar(profile.avatar, base)} alt="" width="512" height="512" />
       </a>
       <div class="mini-profile__name">{profile.name}</div>
-      <div class="mini-profile__title">{profile.title}</div>
+      {/* 这里原本还有一行 profile.title（计算机科学与技术 · 硕士研究生），按要求去掉了 */}
       <div class="mini-profile__links">
         {
           (

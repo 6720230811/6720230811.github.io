@@ -1480,13 +1480,6 @@ h4 {
   color: var(--c-text);
 }
 
-.mini-profile__title {
-  margin-top: 0.15rem;
-  font-size: 0.72rem;
-  line-height: 1.5;
-  color: var(--c-text-muted);
-}
-
 .mini-profile__links {
   display: flex;
   flex-wrap: wrap;

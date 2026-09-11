@@ -8,7 +8,8 @@ import { toLocale } from '../i18n/ui';
 const locale = toLocale(Astro.currentLocale);
 const p = profile[locale];
 
-const title = `${p.name} · ${p.title}`;
+// 头衔留空时别留个孤零零的「名字 · 」（后台个人信息里可以清空）
+const title = p.title ? `${p.name} · ${p.title}` : p.name;
 const description = p.bio[0]?.slice(0, 160) ?? '';
 ---
 
