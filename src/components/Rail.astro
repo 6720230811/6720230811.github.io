@@ -4,7 +4,6 @@ import { useTranslations } from '../i18n/ui';
 import type { Profile } from '../data/profile';
 import { postsOf, postHref, readingMinutes } from '../lib/posts';
 import { resolveAvatar } from '../lib/avatar';
-import { countContentLength } from '../lib/format';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
 /**
@@ -98,15 +97,8 @@ const weekdays = Array.from({ length: 7 }, (_, i) =>
   )
 );
 // ---------------------------------------------------------------- 本站速览
-const totalChars = posts.reduce((sum, p) => sum + countContentLength(p.body ?? ''), 0);
-const charsLabel =
-  locale === 'zh'
-    ? totalChars >= 10_000
-      ? `${(totalChars / 10_000).toFixed(1)} 万`
-      : String(totalChars)
-    : totalChars >= 1_000
-      ? `${(totalChars / 1_000).toFixed(1)}k`
-      : String(totalChars);
+// 「N 字」这一项已去掉（要加回来：format.ts 的 countContentLength 还在，
+// i18n 的 rail.charsUnit 也还在，这里补回统计 + 列表里补一个 <li> 即可）
 
 const tags = new Set<string>();
 for (const post of posts) for (const tag of post.data.tags) tags.add(tag);
@@ -272,9 +264,6 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
       <ul class="rail__stats">
         <li>
           <b>{posts.length}</b> {t('rail.postsUnit')}
-        </li>
-        <li>
-          <b>{charsLabel}</b> {t('rail.charsUnit')}
         </li>
         <li>
           <b>{tags.size}</b> {t('rail.tagsUnit')}
