@@ -714,6 +714,28 @@ body.admin-shell {
   padding: 0 0.4rem;
 }
 
+/* 侧栏底部的主题按钮：对齐旁边那个「查看线上」链接（不用灰底方块，悬停只换颜色）。
+   尺寸也跟着链接收成 2rem：44px 的按钮去掉底色后，图标周围那圈空白会把这一行撑松 */
+.sidebar__sys .theme-toggle {
+  width: 2rem;
+  height: 2rem;
+  color: var(--adm-muted);
+}
+
+.sidebar__sys .theme-toggle svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.sidebar__sys .theme-toggle:hover {
+  color: var(--adm-accent);
+}
+
+.sidebar__sys .theme-toggle:focus-visible {
+  outline: 2px solid var(--adm-ring);
+  outline-offset: 2px;
+}
+
 .sidebar__repo {
   font-size: 0.66rem;
   color: var(--adm-faint);

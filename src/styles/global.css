@@ -1278,6 +1278,16 @@ h4 {
   padding: 0;
   cursor: pointer;
   border: none;
+  /*
+    清掉浏览器给 <button> 的默认外观：不写这几条，按钮会带着系统的灰底
+    （亮色 rgb(239,239,239)、暗色 rgb(107,107,107)）出现——后台侧栏那个
+    「月亮带个灰色小方块」就是这么来的（顶栏看不出来是因为下面那条
+    .navbar .theme-toggle 规则顺手把底色设成了 none）。放在这里一次解决，
+    不依赖按钮被放在哪儿。
+  */
+  appearance: none;
+  background: none;
+  box-shadow: none;
 }
 
 .theme-toggle svg {
