@@ -26,10 +26,15 @@ const t = useTranslations(locale);
 </button>
 
 <script>
-  // 换页后按钮是新元素，每次 astro:page-load 重新绑一次
+  // 换页后按钮是新元素，每次 astro:page-load 都要重新绑一次。
+  // 但**首屏这两条路都会跑到**（脚本执行一次 + astro:page-load 首屏也触发），
+  // 同一个元素上绑两遍，点一下就会切两次——净效果是"点了没反应"（踩过这个）。
+  // 所以给元素打标记：同一个按钮只绑一次。
   const initThemeToggle = () => {
     const btn = document.getElementById('theme-toggle');
-    btn?.addEventListener('click', () => {
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
       const root = document.documentElement;
       const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
       root.dataset.theme = next;

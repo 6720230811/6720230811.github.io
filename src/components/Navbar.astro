@@ -96,13 +96,21 @@ const isCurrent = (path: string) => current === path;
       menuBtn?.setAttribute('aria-expanded', String(open));
     };
 
-    menuBtn?.addEventListener('click', () => {
-      setMenu(menuPanel?.classList.contains('float-panel--closed') ?? false);
-    });
+    // 每个元素只绑一次：首屏"脚本执行 + astro:page-load"会让它们各绑两遍，
+    // 汉堡按钮点一下开、紧接着又被关掉——看起来就是没反应（ThemeToggle 同款问题）
+    if (menuBtn && menuBtn.dataset.bound !== '1') {
+      menuBtn.dataset.bound = '1';
+      menuBtn.addEventListener('click', () => {
+        setMenu(menuPanel?.classList.contains('float-panel--closed') ?? false);
+      });
+    }
 
     // 选中某一项后收起菜单
-    for (const link of menuPanel?.querySelectorAll('a') ?? []) {
-      link.addEventListener('click', () => setMenu(false));
+    if (menuPanel && menuPanel.dataset.bound !== '1') {
+      menuPanel.dataset.bound = '1';
+      for (const link of menuPanel.querySelectorAll('a')) {
+        link.addEventListener('click', () => setMenu(false));
+      }
     }
   };
 
