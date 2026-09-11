@@ -174,7 +174,7 @@ const zh = {
   'rail.postsUnit': '篇文章',
   'rail.charsUnit': '字',
   'rail.tagsUnit': '个标签',
-  'rail.collectedUnit': '篇收藏',
+  'rail.collectedUnit': '篇摘录',
   'rail.sourcesUnit': '个来源站',
   'rail.random': '随便看看',
 
@@ -383,7 +383,7 @@ const en: Record<keyof typeof zh, string> = {
   'rail.postsUnit': 'posts',
   'rail.charsUnit': 'chars',
   'rail.tagsUnit': 'tags',
-  'rail.collectedUnit': 'collected',
+  'rail.collectedUnit': 'digests',
   'rail.sourcesUnit': 'sources',
   'rail.random': 'Surprise me',
 

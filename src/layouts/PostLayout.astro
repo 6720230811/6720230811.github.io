@@ -58,7 +58,7 @@ const hideLiftedCss = liftedImageCss(cover);
         <a href={categoryHref(locale, category)}>{category}</a>
         <span>{readingMinutes(entry)} {t('post.minRead')}</span>
         {
-          /* 转载/摘录：把原文摆出来，读者一眼知道这是收藏而不是原创 */
+          /* 转载/摘录：把原文摆出来，读者一眼知道这是摘录而不是原创 */
           source && (
             <a href={source} target="_blank" rel="noreferrer nofollow" title={source}>
               {locale === 'zh' ? '原文出处' : 'Original'}
