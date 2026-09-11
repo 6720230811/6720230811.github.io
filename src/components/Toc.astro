@@ -53,11 +53,29 @@ const links: readonly TocLink[] =
 
 <script>
   /**
-   * 滚动高亮：视口上部的窄带内、文档顺序最靠前的标题即为当前标题。
-   * 换页后 DOM 整批换掉，旧的 observer 观察的是已被移除的节点，
-   * 所以每次 astro:page-load 都要重来一遍，并在重来前断开上一个。
+   * 滚动高亮：视口 30% 线以上、文档顺序里最后一个标题就是"正在读的那一节"
+   * （规则与原因见 init 内的注释）。
+   * 换页后 DOM 整批换掉，事件监听要清理，否则每次换页都会多挂一层，
+   * 所以每次 astro:page-load 都要重来一遍，并在重来前清理上一个。
    */
   let cleanup: () => void = () => {};
+
+  /**
+   * 从链接的 hash 里取出目标 id。
+   *
+   * 必须 decodeURIComponent：a.hash 返回的是**序列化后**的片段，非 ASCII 会被百分号
+   * 编码——`href="#原文"` 读出来是 `#%E5%8E%9F%E6%96%87`，拿它去和 DOM 里的 id（"原文"）
+   * 比较永远不相等。这曾让中文标题的目录彻底不追踪（About 页 id 是英文，所以那边一直正常）。
+   */
+  const hashId = (link: HTMLAnchorElement): string => {
+    const raw = link.hash.slice(1);
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      // 畸形片段（比如带裸 %）不该让整个目录挂掉
+      return raw;
+    }
+  };
 
   const init = () => {
     cleanup();
@@ -70,32 +88,50 @@ const links: readonly TocLink[] =
 
     const setActive = (id: string) => {
       for (const link of links) {
-        if (link.hash.slice(1) === id) link.setAttribute('aria-current', 'location');
+        if (hashId(link) === id) link.setAttribute('aria-current', 'location');
         else link.removeAttribute('aria-current');
       }
     };
 
     // 点击后立刻高亮，不等平滑滚动结束
     for (const link of links) {
-      link.addEventListener('click', () => setActive(link.hash.slice(1)));
+      link.addEventListener('click', () => setActive(hashId(link)));
     }
 
-    const inBand = new Set<string>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) inBand.add(entry.target.id);
-          else inBand.delete(entry.target.id);
-        }
-        const current = targets.find((el) => inBand.has(el.id));
-        // 都不在带内时保留上一次结果，避免高亮闪断
-        if (current) setActive(current.id);
-      },
-      { rootMargin: '-20% 0px -60% 0px' }
-    );
+    // 高亮按滚动位置判断，而不是 IntersectionObserver 的「命中带」：
+    // 带内判断在页面底部会失效——最后几个标题根本滚不到那么高，永远进不了带，
+    // 高亮会一直停在上一个（实测 6 个标题只能命中 4 个）。
+    // 现在的规则：视口 30% 线以上的**最后一个**标题就是正在读的那一节。
+    const LINE = 0.3;
+    let raf = 0;
+    const paint = () => {
+      raf = 0;
+      const line = window.innerHeight * LINE;
+      // 已经滚到底：末尾那几个标题下面没有足够内容可滚，永远够不到判定线
+      // （实测文末标题只到视口 471px 处），这时直接把高亮交给最后一个标题，
+      // 否则读到文末高亮还停在上一节。
+      const scrollable = document.documentElement.scrollHeight > window.innerHeight + 8;
+      const atBottom =
+        scrollable && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 8;
+      let current: HTMLElement | null = null;
+      for (const t of targets) {
+        if (atBottom || t.getBoundingClientRect().top <= line) current = t;
+      }
+      if (current) setActive(current.id);
+    };
+    const schedule = () => {
+      if (!raf) raf = window.requestAnimationFrame(paint);
+    };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    paint();
 
-    for (const target of targets) observer.observe(target);
-    cleanup = () => observer.disconnect();
+    cleanup = () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (raf) window.cancelAnimationFrame(raf);
+      raf = 0;
+    };
   };
 
   init();
