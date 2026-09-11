@@ -1430,7 +1430,7 @@ h4 {
   margin-top: 0.5rem;
   font-size: 0.68rem;
   line-height: 1.5;
-  color: var(--c-text-faint);
+  color: var(--c-text-muted);
 }
 
 /* ---------- 迷你资料卡 ---------- */
@@ -1479,102 +1479,143 @@ h4 {
   font-size: 0.72rem;
 }
 
-/* ---------- 写作足迹 ---------- */
+/* ---------- 写作足迹（当月日历） ---------- */
 .heat {
-  position: relative; /* 单元格里的信息卡以它为基准定位（见 .heat__pop） */
-  display: grid;
-  grid-template-rows: repeat(7, 1fr);
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  gap: 0.16rem;
+  /* 信息条高度：固定住，悬停时只换内容不换高度，不会抖动 */
+  --heat-strip: 2.7rem;
+  position: relative; /* 格子里的信息条以它为基准定位（见 .heat__info-item） */
+  font-size: 0.7rem;
+  line-height: 1.45;
 }
 
-.heat__cell {
-  display: block;
-  aspect-ratio: 1;
-  border-radius: 0.15rem;
-  background: var(--c-bg-soft);
-}
-
-a.heat__cell {
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-a.heat__cell:hover,
-a.heat__cell:focus-visible {
-  transform: scale(1.4);
-  outline: none;
-  box-shadow: 0 0 0 2px var(--c-accent);
-}
-
-/**
- * 悬停/聚焦时显示这一天写了什么。
- *
- * 绝对定位到「网格下方」而不是跟随鼠标：.rail__inner 是 overflow: auto，
- * 超出栏宽的内容会被裁掉，信息卡只能留在栏内。所有格子共用同一块位置，
- * 谁被悬停谁浮现（pointer-events 关掉，免得挡住格子的 hover）。
- */
-.heat__pop {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 0.4rem;
-  padding: 0.5rem 0.55rem;
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-sm);
-  background: var(--c-card);
-  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.4);
-  font-size: 0.68rem;
-  line-height: 1.5;
+.heat__info {
+  height: var(--heat-strip);
+  overflow: hidden;
   color: var(--c-text-muted);
-  text-align: left;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.12s ease, visibility 0.12s;
-  pointer-events: none;
 }
 
-.heat__cell:hover .heat__pop,
-.heat__cell:focus-visible .heat__pop {
-  opacity: 1;
-  visibility: visible;
+/* 信息条里的文字横向排：靠 gap 分隔，不依赖空格（JSX 会把换行处的空格吃掉） */
+.heat__info-default,
+.heat__info-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  transition: opacity 0.1s ease;
 }
 
-.heat__pop-date {
-  display: block;
-  color: var(--c-text-faint);
-}
-
-.heat__pop-item {
-  display: block;
-  margin-top: 0.25rem;
-}
-
-.heat__pop-item b {
-  display: block;
+.heat__info-default b {
   font-weight: 600;
   color: var(--c-text);
 }
 
-/* 用透明度而不是 color-mix：后者 Safari 16.2 才有，掉色会让格子直接看不见 */
-.heat__cell--l1 {
-  background: var(--c-accent);
-  opacity: 0.35;
+/* 悬停时把默认那行淡出：卡片底色是半透明的，不淡出会从信息卡底下透出来
+   （:has 不支持的浏览器只是没淡出，不至于坏掉） */
+.heat:has(.heat__cell:hover) .heat__info-default,
+.heat:has(.heat__cell:focus-visible) .heat__info-default {
+  opacity: 0;
 }
 
-.heat__cell--l2 {
-  background: var(--c-accent);
-  opacity: 0.65;
+/**
+ * 悬停某天时，把这一天的文章信息盖在信息条上。
+ *
+ * 为什么不跟随鼠标：.rail__inner 是 overflow: auto，超出栏宽的内容会被裁掉，
+ * 信息卡只能在栏内找位置。为什么不用 transform 放大格子：transform 会把格子
+ * 变成绝对定位后代的包含块，信息卡会瞬间从信息条跳到格子旁边、来回切＝闪烁
+ * （踩过一次）。所以放大改用 box-shadow 描边，只换内容不动几何。
+ */
+.heat__info-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--heat-strip);
+  overflow: hidden;
+  align-content: flex-start; /* 两行从顶部排 */
+  background: var(--c-card); /* 不透明底，正好压住默认那行 */
+  color: var(--c-text);
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  pointer-events: none; /* 不能挡住格子的悬停 */
 }
 
-.heat__cell--l3 {
-  background: var(--c-accent);
+/* 顺序：日期 → 分类·时长 → 标题单独一行（栏宽只有 ~140px，标题硬排会挤成
+   三行、被定高的信息条裁掉，所以让它独占一行并省略号收尾） */
+.heat__info-item b {
+  order: 1;
+}
+
+.heat__info-item .heat__info-meta {
+  order: 2;
+}
+
+.heat__info-title {
+  order: 3;
+  flex: 0 0 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--c-text);
+}
+
+.heat__cell:hover .heat__info-item,
+.heat__cell:focus-visible .heat__info-item {
   opacity: 1;
 }
 
-.heat__cell.is-future {
+.heat__info-item b {
+  font-weight: 600;
+  color: var(--c-accent);
+}
+
+.heat__info-meta {
+  color: var(--c-text-muted);
+}
+
+.heat__head,
+.heat__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.18rem;
+}
+
+.heat__head {
+  margin-bottom: 0.25rem;
+  font-size: 0.6rem;
+  color: var(--c-text-muted);
+  text-align: center;
+}
+
+.heat__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 0.2rem;
+  background: var(--c-bg-soft);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-muted);
+}
+
+/* 月初/月末补齐的占位格：不显示日期，也不参与视觉 */
+.heat__cell.is-outside {
   background: transparent;
+}
+
+/* 有文章的日子 */
+a.heat__cell {
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+  font-weight: 600;
+  transition: box-shadow 0.12s ease;
+}
+
+a.heat__cell:hover,
+a.heat__cell:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--c-accent);
 }
 
 /* ---------- 本站速览 ---------- */
