@@ -6,6 +6,7 @@ import Backdrop from '../components/Backdrop.astro';
 import NavProgress from '../components/NavProgress.astro';
 import Sidebar from '../components/Sidebar.astro';
 import Toc from '../components/Toc.astro';
+import Rail from '../components/Rail.astro';
 import type { Profile } from '../data/profile';
 import type { Locale } from '../i18n/ui';
 import { ClientRouter } from 'astro:transitions';
@@ -35,9 +36,23 @@ interface Props {
    * 指向最通用的那个页面，免得被当成几篇重复内容。传站内路径即可。
    */
   canonical?: string;
+  /**
+   * 左侧小挂件栏（迷你资料卡 / 写作足迹 / 本站速览 / 随便看看）。
+   * 只在文章页开：它在 1536px 以下整栏隐藏，纯属"外围锦上添花"。
+   */
+  rail?: boolean;
 }
 
-const { profile, locale, title, description, toc, showSidebar = false, canonical } = Astro.props;
+const {
+  profile,
+  locale,
+  title,
+  description,
+  toc,
+  showSidebar = false,
+  canonical,
+  rail = false,
+} = Astro.props;
 const base = import.meta.env.BASE_URL;
 const t = useTranslations(locale);
 
@@ -163,6 +178,9 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
           <Toc locale={locale} mode="headings" headings={toc} />
         ) : null
       }
+
+      {/* 左侧小挂件栏：与目录同一断点，只有文章页传了 rail 才出现 */}
+      {rail && <Rail locale={locale} profile={profile} />}
     </div>
 
     <footer class="footer">

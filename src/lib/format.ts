@@ -27,6 +27,11 @@ export function countWords(text: string): number {
   return (text.replace(CJK, ' ').match(/[A-Za-z0-9']+/g) ?? []).length;
 }
 
+/** 正文字数：中日文字符数 + 西文词数。侧栏「本站速览」用它统计全站体量 */
+export function countContentLength(text: string): number {
+  return (text.match(CJK) ?? []).length + countWords(text);
+}
+
 /**
  * 解析 frontmatter 里的 YYYY-MM-DD。
  * 必须按 UTC：内容集合用 z.coerce.date() 解析 '2026-09-01'，得到的就是 UTC 零点，

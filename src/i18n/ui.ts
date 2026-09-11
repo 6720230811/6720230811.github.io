@@ -165,6 +165,17 @@ const zh = {
   // 卡片与目录
   'widget.contents': '目录',
   'toc.aria': '页面目录导航',
+  'rail.aria': '站点小挂件',
+  'rail.aboutMe': '关于我',
+  'rail.footprint': '写作足迹',
+  'rail.footprintHint': '近 12 周，每格一天',
+  'rail.stats': '本站速览',
+  'rail.postsUnit': '篇文章',
+  'rail.charsUnit': '字',
+  'rail.tagsUnit': '个标签',
+  'rail.collectedUnit': '篇收藏',
+  'rail.sourcesUnit': '个来源站',
+  'rail.random': '随便看看',
 
   // 换页载入提示
   'nav.loading': '载入中…',
@@ -362,6 +373,17 @@ const en: Record<keyof typeof zh, string> = {
   // Cards and table of contents
   'widget.contents': 'Contents',
   'toc.aria': 'Table of contents',
+  'rail.aria': 'Site widgets',
+  'rail.aboutMe': 'About me',
+  'rail.footprint': 'Writing footprint',
+  'rail.footprintHint': 'Last 12 weeks, one cell per day',
+  'rail.stats': 'At a glance',
+  'rail.postsUnit': 'posts',
+  'rail.charsUnit': 'chars',
+  'rail.tagsUnit': 'tags',
+  'rail.collectedUnit': 'collected',
+  'rail.sourcesUnit': 'sources',
+  'rail.random': 'Surprise me',
 
   // 换页载入提示
   'nav.loading': 'Loading…',

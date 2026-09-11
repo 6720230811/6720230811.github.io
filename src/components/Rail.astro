@@ -1,0 +1,222 @@
+---
+import type { Locale } from '../i18n/ui';
+import { useTranslations } from '../i18n/ui';
+import type { Profile } from '../data/profile';
+import { postsOf, postHref } from '../lib/posts';
+import { resolveAvatar } from '../lib/avatar';
+import { countContentLength } from '../lib/format';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+/**
+ * 左侧小挂件栏（文章页外围的那片空白）。
+ *
+ * 只放"锦上添花"的东西——它在 1536px 以下整个隐藏（和右侧 TOC 同一断点），
+ * 窄屏读者看不到任何必要信息损失。
+ *
+ * 四个挂件全部是**构建时**算好的静态内容，没有运行时请求：
+ *   ① 迷你资料卡：复用首页那张卡的数据，缩一版
+ *   ② 写作足迹：近 12 周一天一格的热力图（数据就是文章日期）
+ *   ③ 本站速览：篇数 / 字数 / 标签 / 收藏篇数与来源站数
+ *   ④ 随便看看：点一下随机跳一篇（无 JS 时退化成构建时随机的那一篇）
+ */
+interface Props {
+  locale: Locale;
+  profile: Profile;
+}
+
+const { locale, profile } = Astro.props;
+const t = useTranslations(locale);
+const base = import.meta.env.BASE_URL;
+const home = getRelativeLocaleUrl(locale);
+
+const posts = await postsOf(locale);
+
+// ---------------------------------------------------------------- 写作足迹
+const DAY = 86_400_000;
+const WEEKS = 12;
+const WINDOW = WEEKS * 7;
+
+const now = new Date();
+// 全用 UTC 对齐：frontmatter 的日期是 UTC 零点（见 format.ts 的说明），
+// 用本地时区算会差一天
+const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+const mondayOffset = (new Date(todayUtc).getUTCDay() + 6) % 7; // 周一记 0
+const startUtc = todayUtc - (WINDOW - 1 - (6 - mondayOffset)) * DAY;
+
+const byDay = new Map<string, string[]>();
+for (const post of posts) {
+  const key = post.data.date.toISOString().slice(0, 10);
+  const list = byDay.get(key);
+  if (list) list.push(post.data.title);
+  else byDay.set(key, [post.data.title]);
+}
+
+const heatCells = Array.from({ length: WINDOW }, (_, i) => {
+  const utc = startUtc + i * DAY;
+  const key = new Date(utc).toISOString().slice(0, 10);
+  const titles = byDay.get(key) ?? [];
+  const count = titles.length;
+  return {
+    key,
+    count,
+    future: utc > todayUtc,
+    title: count ? `${key} · ${titles.join(' / ')}` : key,
+  };
+});
+const maxCount = Math.max(1, ...heatCells.map((c) => c.count));
+/** 0=没有，1..3 由少到多（只有一天多篇时才用得上 2、3） */
+const heatLevel = (n: number): number =>
+  n === 0 ? 0 : 1 + Math.round(((n - 1) / Math.max(1, maxCount - 1)) * 2);
+
+// ---------------------------------------------------------------- 本站速览
+const totalChars = posts.reduce((sum, p) => sum + countContentLength(p.body ?? ''), 0);
+const charsLabel =
+  locale === 'zh'
+    ? totalChars >= 10_000
+      ? `${(totalChars / 10_000).toFixed(1)} 万`
+      : String(totalChars)
+    : totalChars >= 1_000
+      ? `${(totalChars / 1_000).toFixed(1)}k`
+      : String(totalChars);
+
+const tags = new Set<string>();
+for (const post of posts) for (const tag of post.data.tags) tags.add(tag);
+
+const collected = posts.filter((p) => p.data.source);
+const sourceHosts = new Set<string>();
+for (const post of collected) {
+  try {
+    sourceHosts.add(new URL(post.data.source ?? '').host);
+  } catch {
+    // source 写得不规范就忽略，别让侧栏整个挂掉
+  }
+}
+
+// ---------------------------------------------------------------- 随便看看
+const hrefs = posts.map((p) => postHref(locale, p.slug));
+// 构建时先随机挑一篇：没有 JS 也能点，点了才有"再换一篇"的玩法
+const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.length)] : home;
+---
+
+<aside class="rail" aria-label={t('rail.aria')}>
+  <div class="rail__inner">
+    {/* ① 迷你资料卡 */}
+    <div class="card rail__card mini-profile">
+      <a class="mini-profile__avatar" href={`${home}#about`} tabindex="-1" aria-hidden="true">
+        <img src={resolveAvatar(profile.avatar, base)} alt="" width="512" height="512" />
+      </a>
+      <div class="mini-profile__name">{profile.name}</div>
+      <div class="mini-profile__title">{profile.title}</div>
+      <div class="mini-profile__links">
+        {
+          (
+            [
+              ['GitHub', profile.links.github],
+              ['Scholar', profile.links.scholar],
+              ['LinkedIn', profile.links.linkedin],
+              ['Blog', profile.links.blog],
+            ] as const
+          ).map(
+            ([label, href]) =>
+              href && (
+                <a href={href} target="_blank" rel="noopener noreferrer">
+                  {label}
+                </a>
+              )
+          )
+        }
+      </div>
+      <a class="mini-profile__more" href={`${home}#about`}>
+        {t('rail.aboutMe')} →
+      </a>
+    </div>
+
+    {/* ② 写作足迹 */}
+    {
+      heatCells.some((c) => c.count) && (
+        <div class="card rail__card">
+          <div class="rail__title">{t('rail.footprint')}</div>
+          <div class="heat" role="img" aria-label={t('rail.footprintHint')}>
+            {heatCells.map((cell) => (
+              <span
+                class:list={['heat__cell', `heat__cell--l${heatLevel(cell.count)}`, { 'is-future': cell.future }]}
+                title={cell.title}
+              />
+            ))}
+          </div>
+          <div class="rail__hint">{t('rail.footprintHint')}</div>
+        </div>
+      )
+    }
+
+    {/* ③ 本站速览 */}
+    <div class="card rail__card">
+      <div class="rail__title">{t('rail.stats')}</div>
+      <ul class="rail__stats">
+        <li>
+          <b>{posts.length}</b> {t('rail.postsUnit')}
+        </li>
+        <li>
+          <b>{charsLabel}</b> {t('rail.charsUnit')}
+        </li>
+        <li>
+          <b>{tags.size}</b> {t('rail.tagsUnit')}
+        </li>
+        {
+          collected.length > 0 && (
+            <li>
+              <b>{collected.length}</b> {t('rail.collectedUnit')}
+            </li>
+          )
+        }
+        {
+          sourceHosts.size > 0 && (
+            <li>
+              <b>{sourceHosts.size}</b> {t('rail.sourcesUnit')}
+            </li>
+          )
+        }
+      </ul>
+    </div>
+
+    {/* ④ 随便看看 */}
+    {
+      hrefs.length > 1 && (
+        <a class="rail__random" id="rail-random" href={fallbackHref} data-hrefs={JSON.stringify(hrefs)}>
+          <span aria-hidden="true">🎲</span> {t('rail.random')}
+        </a>
+      )
+    }
+  </div>
+</aside>
+
+<script>
+  /**
+   * 「随便看看」：把候选链接放在 data-hrefs 里，点击时随机挑一个。
+   *
+   * 用 <a> 而不是 <button>：没有 JS 时它就是一个正常的链接（指向构建时随机挑的那篇）。
+   * 绑定打标记，避免 astro:page-load 首屏触发两次导致同一个元素绑两遍。
+   */
+  const initRandom = () => {
+    const link = document.getElementById('rail-random');
+    if (!link || link.dataset.bound === '1') return;
+    link.dataset.bound = '1';
+    link.addEventListener('click', (event) => {
+      let hrefs: string[] = [];
+      try {
+        hrefs = JSON.parse(link.dataset.hrefs ?? '[]') as string[];
+      } catch {
+        return; // 解析不出来就让它走 href 里的兜底地址
+      }
+      if (hrefs.length < 2) return;
+      // 尽量别跳到当前这篇
+      const pool = hrefs.filter((h) => !location.pathname.startsWith(h));
+      const list = pool.length ? pool : hrefs;
+      event.preventDefault();
+      location.href = list[Math.floor(Math.random() * list.length)];
+    });
+  };
+
+  initRandom();
+  document.addEventListener('astro:page-load', initRandom);
+</script>
