@@ -12,8 +12,6 @@ source: "https://www.cnblogs.com/caihongmin/p/18939767"
 
 ## 原文
 
-随笔 - 242  文章 - 0  评论 - 19  阅读 -  58万
-
 #  [ Docker常用命令大全 ](https://www.cnblogs.com/caihongmin/p/18939767 "发布于 2025-06-21 11:06")
 
 ## 1、帮助类启动命令
