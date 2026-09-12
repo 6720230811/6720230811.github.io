@@ -1,0 +1,379 @@
+---
+import '../styles/pet.css';
+import { characters, pet } from '../data/pet';
+import { href, postHref, postsOf } from '../lib/posts';
+import { useTranslations, type Locale } from '../i18n/ui';
+import type { SiteDoc } from '../lib/pet/chat';
+
+/**
+ * 页面宠物「布兰」—— 全站右下角浮动、可拖拽、可对话。
+ *
+ * 界面只有三块，互不抢戏：
+ *   1. 宠物周围一圈**气泡**：戳一下 / 喂零食 / 好感度 / 齿轮，常驻可关
+ *   2. **对话框**：点宠物才出现，只有一行输入 + 发送，不给别的
+ *   3. **设置**：齿轮点开，配 Key、切 Live2D、以及「隐藏气泡 / 隐藏宠物」
+ *
+ * 外观有两层，同一时刻只显示一层（见下面的 .pet__stage）：
+ *   - **Live2D 画布**：public/live2d 下的 Cubism 2 模型，约 3.4 MB，懒加载
+ *   - **内置 SVG 精灵**：首屏立即可见，也是加载失败 / 减少动效 / 弱网时的最终形态
+ *   两层都是完整形态、不是占位图，所以任何一种降级都不会露馅。
+ *
+ * 其余职责都在 src/lib/pet/ 下：
+ *   - 在**构建期**把站内目录（文章 + 固定页）烤成一段 JSON 塞进页面，
+ *     运行时由 mount.ts 拿走做本地检索 —— 宠物因此「知道」站里有什么，
+ *     而且不依赖任何服务端检索接口
+ *   - 挂载 transition:persist，让它跨页不闪断（关键，见下）
+ *
+ * persist 为什么必须：站内跳转走 View Transitions，正文 DOM 会被整份换掉。
+ * 宠物在右下角常驻，换页时跟着重建会闪一下、对话框也会被关掉。
+ * persist 之后它连同事件监听一起被搬到新文档，mount.ts 靠 dataset.petReady
+ * 保证不会重复绑定。
+ */
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+
+/** UI 文案只在这里取一次：服务端渲染进 HTML，同时塞进 JSON 给 persist 后的刷新用 */
+const s = {
+  poke: t('pet.poke'),
+  feed: t('pet.feed'),
+  send: t('pet.send'),
+  placeholder: t('pet.placeholder'),
+  affection: t('pet.affection'),
+  mood: t('pet.mood'),
+  source: t('pet.source'),
+  settings: t('pet.settings'),
+  hide: t('pet.hide'),
+  panel: t('pet.panel'),
+  close: t('pet.close'),
+  groupLook: t('pet.groupLook'),
+  labelBubbles: t('pet.labelBubbles'),
+  labelLive2D: t('pet.labelLive2D'),
+  groupModel: t('pet.groupModel'),
+  needsKey: t('pet.needsKey'),
+  reloadHint: t('pet.reloadHint'),
+  hintShort: t('pet.hintShort'),
+  tips: t('pet.tips'),
+  dismiss: t('pet.dismiss'),
+  show: t('pet.show'),
+  save: t('pet.save'),
+  clear: t('pet.clear'),
+  test: t('pet.test'),
+  testing: t('pet.testing'),
+  testSuggest: t('pet.testSuggest'),
+  key: t('pet.key'),
+  endpoint: t('pet.endpoint'),
+  model: t('pet.model'),
+  keyHint: t('pet.keyHint'),
+  sprite: t('pet.sprite'),
+  saved: t('pet.saved'),
+  cleared: t('pet.cleared'),
+  cast: t('pet.cast'),
+};
+
+// 站内目录：文章取最近的若干条，再补上固定页面。
+// 上限是刻意的 —— 全量塞进 prompt 是浪费，检索本来也不需要那么多候选。
+const posts = await postsOf(locale);
+const docs: SiteDoc[] = [
+  ...posts.slice(0, 40).map((post) => ({
+    title: post.data.title,
+    url: postHref(locale, post.slug),
+    tags: post.data.tags,
+  })),
+  { title: t('nav.home'), url: href(locale, '/'), tags: ['首页', 'home'] },
+  { title: t('nav.blog'), url: href(locale, 'blog'), tags: ['博客', 'blog', '文章'] },
+  { title: t('archive.title'), url: href(locale, 'archive'), tags: ['归档', 'archive'] },
+  { title: t('categories.title'), url: href(locale, 'categories'), tags: ['分类', 'categories'] },
+  { title: t('tags.title'), url: href(locale, 'tags'), tags: ['标签', 'tags'] },
+  { title: t('nav.gallery'), url: href(locale, 'gallery'), tags: ['画廊', 'gallery', '照片', '展厅'] },
+  { title: t('nav.friends'), url: href(locale, 'friends'), tags: ['友链', 'friends', '链接', '朋友'] },
+];
+
+/**
+ * 角色按钮的显示名。
+ *
+ * 专有名词不进 i18n 表（中英文在 data/pet.ts 里已经成对写着），但**必须一起塞进
+ * 下面那段 JSON**：宠物带 transition:persist，切语言时服务端渲染的这段 HTML
+ * 不会被重新渲染，只有这里会被重新读一遍（和 strings 同一个道理）。
+ */
+const cast = characters.map((c) => ({ id: c.id, name: locale === 'zh' ? c.name : c.nameEn }));
+
+// 转义 < ：目录里有文章标题，万一标题写成 </script> 会提前掐断这段 JSON
+const indexJson = JSON.stringify({ locale, docs, strings: s, cast }).replace(/</g, '\\u003c');
+---
+
+<div class="pet" id="pet-root" data-locale={locale} transition:persist>
+  <!-- 泊位：自上而下依次是 回复气泡 → 对话框 → 互动气泡，最后贴着宠物头顶。
+       整列不吃点击，只有里面每一块自己吃，免得挡住它覆盖的正文 -->
+  <div class="pet__dock">
+    <!-- ① 回复气泡：模型或台词库说的话，点 × 就能关掉。
+         内容装在内层 body 里、由它自己滚 —— 关闭按钮留在外层，
+         否则长答案一滚，× 就跟着滚出可视区了。
+         aria-live 也放在 body 上：不然按钮文案的刷新会被读屏念出来 -->
+    <div class="pet__bubble" data-pet-bubble hidden>
+      <div class="pet__bubble-body" data-pet-bubble-body role="status" aria-live="polite"></div>
+      <button
+        class="pet__bubble-close"
+        type="button"
+        data-pet-dismiss
+        aria-label={s.dismiss}
+        title={s.dismiss}>×</button>
+    </div>
+
+    <!-- ② 对话框：点宠物才出现，只有输入与发送 -->
+    <form class="pet__ask" data-pet-form hidden>
+      <input
+        type="text"
+        data-pet-input
+        aria-label={s.placeholder}
+        placeholder={s.placeholder}
+        autocomplete="off"
+      />
+      <button class="btn" type="submit" data-pet-label="send">{s.send}</button>
+    </form>
+
+    <!-- ③ 宠物周围的气泡：戳 / 喂 / 好感度 / 设置。整组可以用「隐藏气泡」关掉 -->
+    <div class="pet__chips" data-pet-chips>
+      <button class="pet__chip" type="button" data-pet-poke data-pet-label="poke">{s.poke}</button>
+      <button class="pet__chip" type="button" data-pet-feed data-pet-label="feed">{s.feed}</button>
+      <span class="pet__chip pet__chip--stat" data-pet-stat title={`${s.affection} 30`}>
+        <span class="pet__heart" aria-hidden="true">❤</span><b data-pet-affection>30</b>
+      </span>
+      <button class="pet__chip pet__chip--icon" type="button" data-pet-gear aria-label={s.settings} title={s.settings}>
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">
+          <path
+            fill="currentColor"
+            d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 设置：齿轮触发，平时不占地方。
+       三块分区：角色（身份，零配置可用）→ 外观（两个开关）→ 对话模型（需自备 Key，
+       默认收起，不配置的人不必看见）。底部单独一行是弱化的边缘动作，与主操作拉开距离。 -->
+  <div class="pet__panel" data-pet-panel hidden>
+    <div class="pet__panel-head">
+      <span class="pet__panel-title" data-pet-label="panel">{s.panel}</span>
+      <button class="pet__panel-close" type="button" data-pet-close>×</button>
+    </div>
+
+    <!-- 角色：不用配置就能用，所以放最前。
+         点一下整页刷新 —— 换形象必须重建 WebGL 上下文，理由见 mount.ts 的注释。 -->
+    <div class="pet__group">
+      <div class="pet__group-title" id="pet-cast-title" data-pet-label="cast">{s.cast}</div>
+      <div class="pet__cast-list" role="group" aria-labelledby="pet-cast-title">
+        {
+          characters.map((c) => (
+            <button class="pet__cast-btn" type="button" data-pet-cast-btn={c.id} aria-pressed="false">
+              {locale === 'zh' ? c.name : c.nameEn}
+            </button>
+          ))
+        }
+      </div>
+      <p class="pet__hint pet__hint--quiet" data-pet-label="reloadHint">{s.reloadHint}</p>
+    </div>
+
+    <!-- 外观：布尔状态用开关表达，比「两个等宽按钮」一眼可读 -->
+    <div class="pet__group">
+      <div class="pet__group-title" data-pet-label="groupLook">{s.groupLook}</div>
+      <div class="pet__switch-row">
+        <span data-pet-label="labelBubbles">{s.labelBubbles}</span>
+        <button class="pet__switch" type="button" role="switch" aria-checked="true" data-pet-chips-toggle></button>
+      </div>
+      <div class="pet__switch-row">
+        <span data-pet-label="labelLive2D">{s.labelLive2D}</span>
+        <button class="pet__switch" type="button" role="switch" aria-checked="true" data-pet-live2d-toggle></button>
+      </div>
+    </div>
+
+    <!-- 对话模型：默认收起。折叠头右侧那句「需自备 Key」让不配置的人一眼知道
+         这里不必展开，而不是先展开再后悔。 -->
+    <div class="pet__group pet__group--model">
+      <button
+        class="pet__fold"
+        type="button"
+        data-pet-fold
+        aria-expanded="false"
+        aria-controls="pet-model-body">
+        <span class="pet__fold-arrow" aria-hidden="true">
+          <svg viewBox="0 0 8 8" width="8" height="8" focusable="false">
+            <path d="M2 1l4 3-4 3z" fill="currentColor"></path>
+          </svg>
+        </span>
+        <span class="pet__fold-name" data-pet-label="groupModel">{s.groupModel}</span>
+        <span class="pet__fold-meta" data-pet-label="needsKey">{s.needsKey}</span>
+      </button>
+
+      <div class="pet__fold-body" id="pet-model-body" data-pet-fold-body hidden>
+        <label>
+          <span data-pet-label="key">{s.key}</span>
+          <input type="password" data-pet-key autocomplete="off" placeholder="sk-…" />
+        </label>
+        <label>
+          <span data-pet-label="endpoint">{s.endpoint}</span>
+          <input type="text" data-pet-endpoint placeholder={pet.endpoint} />
+        </label>
+        <label>
+          <span data-pet-label="model">{s.model}</span>
+          <input type="text" data-pet-model placeholder={pet.model} />
+        </label>
+        <p class="pet__hint" data-pet-label="hintShort">{s.hintShort}</p>
+        <details class="pet__tips">
+          <summary data-pet-label="tips">{s.tips}</summary>
+          <p class="pet__tips-body" data-pet-label="keyHint">{s.keyHint}</p>
+        </details>
+        <div class="pet__actions">
+          <button class="btn" type="button" data-pet-test data-pet-label="test" title={s.test}>{s.test}</button>
+          <button class="btn btn--primary" type="button" data-pet-save data-pet-label="save">{s.save}</button>
+        </div>
+        <p class="pet__status" data-pet-note data-state="idle" role="status" aria-live="polite" hidden></p>
+      </div>
+    </div>
+
+    <!-- 边缘动作：挪到底部单独一行并弱化成文字按钮，与上面的主操作拉开距离 -->
+    <div class="pet__foot">
+      <button class="pet__linkbtn" type="button" data-pet-clear data-pet-label="clear">{s.clear}</button>
+      <span class="pet__foot-sep" aria-hidden="true">·</span>
+      <button class="pet__linkbtn" type="button" data-pet-hide data-pet-label="hide">{s.hide}</button>
+    </div>
+  </div>
+
+  <!-- 外观层：两层叠在同一个锚点盒里，同一时刻只显示一层。
+       canvas 默认 display:none，加载成功后 mount.ts 给根节点加 .pet--l2d 把它换上来。
+       下面那枚按钮是常驻的那层：它自带内置 SVG 精灵，同时承载全部交互。
+       Live2D 上来之后它**不消失**，只是把 svg 藏起来、自己铺满盒子压在画布上接事件 ——
+       这样键盘可达性、拖拽、pointer 那套逻辑都不用为 Live2D 再写一遍。 -->
+  <div class="pet__stage" data-pet-stage>
+    <canvas
+      class="pet__canvas"
+      id="pet-canvas"
+      data-pet-canvas
+      width="384"
+      height="576"
+      aria-hidden="true"></canvas>
+
+    <button class="pet__sprite" type="button" data-pet-sprite aria-label={s.sprite} title={s.sprite}>
+      <svg viewBox="0 0 120 142" aria-hidden="true">
+        <!-- 影子 -->
+        <ellipse cx="60" cy="136" rx="26" ry="4.5" fill="rgba(0,0,0,0.16)"></ellipse>
+
+        <!-- 腿与鞋 -->
+        <rect x="48" y="102" width="9" height="24" rx="4" fill="#fbe3cd" stroke="#2b3145" stroke-width="1.5"></rect>
+        <rect x="63" y="102" width="9" height="24" rx="4" fill="#fbe3cd" stroke="#2b3145" stroke-width="1.5"></rect>
+        <rect x="43" y="121" width="18" height="10" rx="5" fill="var(--pet-shoe)" stroke="#2b3145" stroke-width="1.5"></rect>
+        <rect x="59" y="121" width="18" height="10" rx="5" fill="var(--pet-shoe)" stroke="#2b3145" stroke-width="1.5"></rect>
+
+        <!-- 白裙（A 字） -->
+        <path
+          d="M46,84 h28 l13,29 a3,3 0 0 1 -2.8,4.2 h-48.4 a3,3 0 0 1 -2.8,-4.2 z"
+          fill="var(--pet-outfit)"
+          stroke="#2b3145"
+          stroke-width="1.6"
+          stroke-linejoin="round"></path>
+
+        <!-- 上身 -->
+        <rect x="44" y="62" width="32" height="24" rx="5" fill="var(--pet-outfit)" stroke="#2b3145" stroke-width="1.6"></rect>
+
+        <!-- 袖与手 -->
+        <rect x="30" y="64" width="12" height="26" rx="6" fill="var(--pet-outfit)" stroke="#2b3145" stroke-width="1.6"></rect>
+        <rect x="78" y="64" width="12" height="26" rx="6" fill="var(--pet-outfit)" stroke="#2b3145" stroke-width="1.6"></rect>
+        <circle cx="36" cy="92" r="5.2" fill="#fbe3cd" stroke="#2b3145" stroke-width="1.4"></circle>
+        <circle cx="84" cy="92" r="5.2" fill="#fbe3cd" stroke="#2b3145" stroke-width="1.4"></circle>
+
+        <!-- 领结 -->
+        <path d="M52,63 l8,4 -8,4 z" fill="var(--pet-accent)" stroke="#2b3145" stroke-width="1.2" stroke-linejoin="round"></path>
+        <path d="M68,63 l-8,4 8,4 z" fill="var(--pet-accent)" stroke="#2b3145" stroke-width="1.2" stroke-linejoin="round"></path>
+        <circle cx="60" cy="67" r="2.6" fill="var(--pet-accent-soft)" stroke="#2b3145" stroke-width="1.2"></circle>
+
+        <!-- 头发轮廓层 -->
+        <path
+          d="M60,16 C80,16 92,30 92,48 C92,66 80,78 60,78 C40,78 28,66 28,48 C28,30 40,16 60,16 Z"
+          fill="var(--pet-hair)"
+          stroke="#2b3145"
+          stroke-width="1.6"></path>
+
+        <!-- 脸 -->
+        <path
+          d="M60,24 C74,24 83,35 83,49 C83,63 73,72 60,72 C47,72 37,63 37,49 C37,35 46,24 60,24 Z"
+          fill="#fbe3cd"
+          stroke="#2b3145"
+          stroke-width="1.5"></path>
+
+        <!-- 刘海 -->
+        <path
+          d="M32,47 C32,27 44,19 60,19 C76,19 88,27 88,47 C83,38 75,32 60,32 C45,32 37,38 32,47 Z"
+          fill="var(--pet-hair)"
+          stroke="#2b3145"
+          stroke-width="1.5"
+          stroke-linejoin="round"></path>
+
+        <!-- 侧发 -->
+        <path d="M30,45 C27,56 28,66 32,74" fill="none" stroke="var(--pet-hair)" stroke-width="6.5" stroke-linecap="round"></path>
+        <path d="M90,45 C93,56 92,66 88,74" fill="none" stroke="var(--pet-hair)" stroke-width="6.5" stroke-linecap="round"></path>
+
+        <!-- 贝雷帽 -->
+        <path
+          d="M27,25 C29,7 45,-1 61,2 C77,5 91,13 93,25 Z"
+          fill="var(--pet-hat)"
+          stroke="#2b3145"
+          stroke-width="1.6"
+          stroke-linejoin="round"></path>
+        <ellipse cx="60" cy="25.5" rx="34" ry="8.5" fill="var(--pet-hat)" stroke="#2b3145" stroke-width="1.6"></ellipse>
+        <circle cx="60" cy="6" r="4.6" fill="var(--pet-accent)" stroke="#2b3145" stroke-width="1.4"></circle>
+
+        <!-- 眼睛 -->
+        <ellipse cx="48" cy="52" rx="4.6" ry="5.8" fill="#ffffff" stroke="#2b3145" stroke-width="1.3"></ellipse>
+        <ellipse cx="72" cy="52" rx="4.6" ry="5.8" fill="#ffffff" stroke="#2b3145" stroke-width="1.3"></ellipse>
+        <ellipse cx="48" cy="53" rx="3" ry="4" fill="var(--pet-eye)"></ellipse>
+        <ellipse cx="72" cy="53" rx="3" ry="4" fill="var(--pet-eye)"></ellipse>
+        <circle cx="49.2" cy="51" r="1.1" fill="#ffffff"></circle>
+        <circle cx="73.2" cy="51" r="1.1" fill="#ffffff"></circle>
+
+        <!-- 腮红与嘴 -->
+        <ellipse cx="42" cy="61" rx="4" ry="2.2" fill="#f0a79c" opacity="0.5"></ellipse>
+        <ellipse cx="78" cy="61" rx="4" ry="2.2" fill="#f0a79c" opacity="0.5"></ellipse>
+        <path d="M57,64.5 C59.4,67 60.6,67 63,64.5" fill="none" stroke="#2b3145" stroke-width="1.6" stroke-linecap="round"></path>
+      </svg>
+    </button>
+  </div>
+
+  <!-- 藏起来之后只剩这一个召回入口：截一张头部的简笔，等比放进圆按钮 -->
+  <button class="pet__tab" type="button" data-pet-tab aria-label={s.show} title={s.show} hidden>
+    <svg viewBox="24 -3 72 85" aria-hidden="true">
+      <path
+        d="M60,16 C80,16 92,30 92,48 C92,66 80,78 60,78 C40,78 28,66 28,48 C28,30 40,16 60,16 Z"
+        fill="var(--pet-hair)"
+        stroke="#2b3145"
+        stroke-width="4"></path>
+      <path
+        d="M60,24 C74,24 83,35 83,49 C83,63 73,72 60,72 C47,72 37,63 37,49 C37,35 46,24 60,24 Z"
+        fill="#fbe3cd"
+        stroke="#2b3145"
+        stroke-width="3.4"></path>
+      <path
+        d="M27,25 C29,7 45,-1 61,2 C77,5 91,13 93,25 Z"
+        fill="var(--pet-hat)"
+        stroke="#2b3145"
+        stroke-width="4"
+        stroke-linejoin="round"></path>
+      <ellipse cx="60" cy="25.5" rx="34" ry="8.5" fill="var(--pet-hat)" stroke="#2b3145" stroke-width="4"></ellipse>
+      <ellipse cx="48" cy="53" rx="3.4" ry="4.6" fill="var(--pet-eye)"></ellipse>
+      <ellipse cx="72" cy="53" rx="3.4" ry="4.6" fill="var(--pet-eye)"></ellipse>
+    </svg>
+  </button>
+</div>
+
+<script is:inline type="application/json" id="pet-index" set:html={indexJson}></script>
+
+<script>
+  import { initPet } from '../lib/pet/mount';
+
+  // 每次换页都调：宠物被 persist 保住时它只会刷新文案与站内目录，
+  // 没被保住（首次进入 / 硬刷新）时才真正绑定事件。幂等由 mount.ts 保证。
+  document.addEventListener('astro:page-load', () => initPet());
+  initPet();
+</script>

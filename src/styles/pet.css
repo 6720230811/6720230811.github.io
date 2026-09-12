@@ -1,0 +1,978 @@
+/* ============================================================
+   页面宠物（四只女神，src/components/Pet.astro + src/lib/pet/*）
+
+   设计约束：
+   - 颜色一律走全局 --c-* 变量，明暗主题自动跟随，切换主题不用碰这个文件
+     （唯一的例外是角色配色 --pet-*，见文件顶部那四套）
+   - 容器是**固定尺寸**的锚点盒：气泡与对话框绝对定位挂在它上方，
+     拖拽换算才有一个与开合无关的稳定基准（见 mount.ts 的 measureAnchor）
+   - z-index 20：压在正文 .page(10) 之上、顶栏(30) 与进度条(40) 之下
+
+   DOM 顺序即视觉顺序（从上往下）：回复气泡 → 对话框 → 互动气泡 → 宠物。
+   外观是两层，同一时刻只显示一层（见 .pet__stage）：
+     SVG 精灵 —— 内联矢量，无图片请求，首屏即可见，也是所有降级路径的终点
+     Live2D  —— 12×18rem 的 WebGL 画布，加载成功后才由 .pet--l2d 换上来
+
+   ⚠️ 两层尺寸不同：.pet--l2d 会把锚点盒从 5.5×6.5rem 撑到 12×18rem。
+   mount.ts 切层之后必须重新 measureAnchor()，否则拖拽换算会沿用旧基准，
+   表现是「宠物一被拖就跳走」。
+   ============================================================ */
+
+/* ---------------------------------------------------------------
+   角色配色：一个 SVG 结构 + 四套变量
+
+   内置精灵（Pet.astro 里的内联 SVG）把发色、瞳色、配饰、衣服、帽子
+   全写成了 var(--pet-*)，所以「换角色」在这里就等于换一组变量。
+
+   为什么不画四份 SVG：Live2D 才是主形象，精灵只在拿不到 WebGL / 弱网 /
+   访客主动关掉模型时才露面。为它画四套发型不划算，而发色 + 配饰 + 衣服
+   的色相差异，在 5.5×6.5rem 这个小尺寸下已经足够认人。
+
+   为什么挂在 :root 而不是 .pet 上：那个属性是 <head> 里的脚本在**样式
+   生效前**写到 <html> 上的（见 BaseLayout.astro），这样首屏就是对的人，
+   不会先画成布兰再跳一下色。换成挂在 .pet 上就要求等 JS 跑完，白闪一次。
+   --------------------------------------------------------------- */
+
+/* 兜底：万一 data-pet-character 是个认不出的值（有人手改 localStorage），
+   下面四条属性选择器一条都不匹配，--pet-* 就会全部为空 ——
+   表现是一堆无色块。所以这里先铺一份布兰的配色，保证永远有东西可用。 */
+:root {
+  --pet-hair: #c98d5a;
+  --pet-accent: #7ba7d4;
+  --pet-accent-soft: #a9c8e8;
+  --pet-eye: #5b8fc9;
+  --pet-outfit: #f4f6fb;
+  --pet-hat: #ffffff;
+  --pet-shoe: #3b4256;
+}
+
+/* 布兰：棕发 + 蓝领结 + 白贝雷帽（原配色） */
+:root[data-pet-character='blanc'] {
+  --pet-hair: #c98d5a;
+  --pet-accent: #7ba7d4;
+  --pet-accent-soft: #a9c8e8;
+  --pet-eye: #5b8fc9;
+  --pet-outfit: #f4f6fb;
+  --pet-hat: #ffffff;
+  --pet-shoe: #3b4256;
+}
+
+/* 涅普顿：淡紫发 + 紫配饰 */
+:root[data-pet-character='neptune'] {
+  --pet-hair: #b79fe0;
+  --pet-accent: #8e6fd0;
+  --pet-accent-soft: #c3aeea;
+  --pet-eye: #7a5fc0;
+  --pet-outfit: #f6f3fc;
+  --pet-hat: #f1e8ff;
+  --pet-shoe: #4a4266;
+}
+
+/* 诺瓦露：黑发 + 红配饰 */
+:root[data-pet-character='noire'] {
+  --pet-hair: #4f4a66;
+  --pet-accent: #d4506e;
+  --pet-accent-soft: #e98da1;
+  --pet-eye: #c94b66;
+  --pet-outfit: #efedf5;
+  --pet-hat: #f8e9ee;
+  --pet-shoe: #2f2b42;
+}
+
+/* 贝露：金绿发 + 绿配饰 */
+:root[data-pet-character='vert'] {
+  --pet-hair: #bccb6e;
+  --pet-accent: #4f9d76;
+  --pet-accent-soft: #8cc4a6;
+  --pet-eye: #4f9d76;
+  --pet-outfit: #eef6ef;
+  --pet-hat: #e9f5ec;
+  --pet-shoe: #3b4a3f;
+}
+
+/* 状态行的语义色：全局 --c-* 里没有 success / danger，这里补一对（跟随主题） */
+:root {
+  --pet-ok: #1a7f4b;
+  --pet-err: #c0392b;
+}
+
+:root[data-theme='dark'] {
+  --pet-ok: #4ade80;
+  --pet-err: #f87171;
+}
+
+.pet {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  /* 内置精灵的尺寸；切到 Live2D 时由 .pet--l2d 覆盖 */
+  width: var(--pet-w, 5.5rem);
+  height: var(--pet-h, 6.5rem);
+  z-index: 20;
+  /* 拖拽时别触发浏览器的滚动/缩放手势，也别选中文字 */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 切到 Live2D：锚点盒换成 2:3 竖版 —— 与画布属性尺寸 384×576 同比，
+   否则那 4 张 1024 贴图会被拉变形 */
+.pet--l2d {
+  --pet-w: 12rem;
+  --pet-h: 18rem;
+}
+
+/* 外观层：唯一一个随模式变尺寸的盒子，画布与按钮都铺满它 */
+.pet__stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* 精灵本体：外圈按钮负责「弹一下」，里面 svg 负责持续呼吸，两层动画互不打架 */
+.pet__sprite {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  filter: drop-shadow(0 4px 8px var(--c-shadow-sm));
+}
+
+/* 键盘用户看不见焦点在哪就会彻底迷路 —— 这一层透明，必须自己给环 */
+.pet__sprite:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+/* ------------------------------------------------------------ Live2D 画布
+   默认整层不显示。加载成功后 mount.ts 给根节点加 .pet--l2d：
+   画布上来，精灵退到画布**之上**继续接事件 ——
+   它不消失，只是把 svg 藏起来，于是键盘可达性、拖拽、pointer 逻辑
+   一个都不用为 Live2D 重写。 */
+
+.pet__canvas {
+  display: none;
+  width: 100%;
+  height: 100%;
+  /* 画布不吃指针：事件统一交给上面那枚按钮，避免两套命中逻辑打架 */
+  pointer-events: none;
+}
+
+.pet--l2d .pet__canvas {
+  display: block;
+  filter: drop-shadow(0 6px 16px var(--c-shadow-md));
+  animation: pet-fade 0.5s ease both;
+}
+
+.pet--l2d .pet__sprite {
+  position: absolute;
+  inset: 0;
+  filter: none;
+}
+
+.pet--l2d .pet__sprite svg {
+  visibility: hidden;
+  animation: none;
+}
+
+.pet__sprite:active {
+  cursor: grabbing;
+}
+
+.pet__sprite svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  animation: pet-bob 3.6s ease-in-out infinite;
+}
+
+/* 弹一下挂在 stage 上而不是精灵上，这样 SVG 与 Live2D 两种外观都会一起弹 */
+.pet__stage.is-bump {
+  animation: pet-bump 0.42s ease-in-out 2;
+}
+
+/* ------------------------------------------------------------ 泊位
+   回复气泡 → 对话框 → 互动气泡，从上往下贴在宠物头顶。
+   整列不吃点击，只有里面每一块自己吃，否则会挡住它覆盖的那片正文。 */
+
+.pet__dock {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.4rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  /* 关键：绝对定位盒默认被 .pet 那 5.5rem 宽度的包含块夹住，
+     会把「戳一下 / 喂零食」挤成竖排。width:max-content 让它按内容撑开。 */
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  pointer-events: none;
+}
+
+/* display 由作者样式写死的元素（flex）会盖掉浏览器对 [hidden] 的默认隐藏，
+   所以这里显式补一条，否则 hidden 对它们失效 */
+.pet__ask[hidden],
+.pet__bubble[hidden],
+.pet__chips[hidden],
+.pet__panel[hidden],
+.pet__tab[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------ 互动气泡
+   常驻在宠物头顶，是「戳一下 / 喂零食 / 好感度 / 设置」的唯一入口。
+   外观里的开关只收前三颗（.pet--nochips）；齿轮是控件不是气泡，永远留着。 */
+
+.pet__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  max-width: 15rem;
+  animation: pet-pop 0.22s ease;
+  /* 只让气泡本身吃点击，气泡之间的空隙放行正文 */
+  pointer-events: none;
+}
+
+.pet__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  background: var(--c-float-panel);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px var(--c-shadow-sm);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+button.pet__chip {
+  cursor: pointer;
+}
+
+button.pet__chip:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+button.pet__chip:active {
+  transform: translateY(1px);
+}
+
+.pet__chip--stat {
+  color: var(--c-text-muted);
+}
+
+.pet__chip--stat b {
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.pet__heart {
+  color: #e0524a;
+  font-size: 0.68rem;
+}
+
+.pet__chip--icon {
+  padding: 0.22rem 0.4rem;
+  color: var(--c-text-muted);
+}
+
+/* ------------------------------------------------------------ 回复气泡 */
+
+.pet__bubble {
+  position: relative;
+  max-width: 15rem;
+  padding: 0.5rem 1.45rem 0.5rem 0.7rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  background: var(--c-float-panel);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 14px var(--c-shadow-md);
+  color: var(--c-text);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  animation: pet-pop 0.22s ease;
+  pointer-events: auto;
+}
+
+/* 内容层：**长答案在这里滚，气泡本身不滚**。
+   这样关闭按钮（绝对定位在气泡上）始终停在原地，
+   而内容超出时给出滚动条而不是被截掉 —— 截断会让答案看起来是「没说完」。
+   max-height 用 min() 保住两头：桌面最多 22rem，小屏不超过视口六成。 */
+.pet__bubble-body {
+  max-height: min(22rem, 60vh);
+  overflow-y: auto;
+  /* 滚到头之后别把滚动接力给页面：悬停在气泡上却滚动正文会很怪 */
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/* Chrome / Edge 默认滚动条太粗，在 15rem 宽的气泡里很抢眼 */
+.pet__bubble-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pet__bubble-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pet__bubble-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--c-border);
+}
+
+.pet__bubble-close {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.25rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--c-text-faint);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pet__bubble-close:hover {
+  background: var(--c-bg-soft);
+  color: var(--c-text);
+}
+
+.pet__link {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  /* 文章标题可能很长（「给博客加一台不会熄火的服务器 · 用 Tailscale 组网」），
+     允许在任意位置断开，别把气泡顶宽 */
+  overflow-wrap: anywhere;
+}
+
+.pet__detail {
+  display: block;
+  margin-top: 0.4rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--c-border);
+  color: var(--c-text-muted);
+  font-size: 0.72rem;
+}
+
+/* ------------------------------------------------------------ 对话框
+   点宠物才出现，只有输入 + 发送；其余功能都在气泡和设置里。 */
+
+.pet__ask {
+  display: flex;
+  gap: 0.35rem;
+  width: 15rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.35rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  background: var(--c-float-panel);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px var(--c-shadow-md);
+  animation: pet-pop 0.22s ease;
+  pointer-events: auto;
+}
+
+.pet__ask input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg-soft);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+}
+
+.pet__ask input:focus {
+  outline: none;
+  border-color: var(--c-accent);
+}
+
+.pet__ask .btn {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ 设置面板
+   与互动气泡共用一个泊位，开的时候把气泡让出来，免得叠在一起。
+   面板内分三块分区（角色 / 外观 / 对话模型），靠小标题与细线分隔：
+   组内紧、组间松，这十来个块才不会再排成一条看不出边界的队列。 */
+
+/* 分区：分隔线画在「后一块」的顶部，所以只在相邻时生效 */
+.pet__group + .pet__group {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--c-border);
+}
+
+.pet__group-title {
+  margin-bottom: 0.45rem;
+  color: var(--c-text-muted);
+  font-size: 0.72rem;
+}
+
+/* 说明文字：常驻的只留一行短的，长说明收进 .pet__tips 按需展开 ——
+   原来那四行灰字就摊在这里，想看的人嫌小，不想看的人被打断 */
+.pet__hint {
+  margin: 0.4rem 0 0;
+  color: var(--c-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  /* 端点地址很长，让它能在任意位置断开，别把面板撑宽 */
+  overflow-wrap: anywhere;
+}
+
+.pet__hint--quiet {
+  opacity: 0.72;
+}
+
+/* 开关行：布尔状态用开关表达。写成两个等宽按钮等于让人每次点之前
+   先读一遍当前是哪一面，这才是原面板最含糊的地方 */
+.pet__switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.28rem 0;
+  color: var(--c-text);
+  font-size: 0.78rem;
+}
+
+.pet__switch {
+  position: relative;
+  flex: none;
+  width: 1.9rem;
+  height: 1.05rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--c-border);
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+/* 滑块：左右各留 0.145rem，滑块 0.76rem，行程正好 0.85rem */
+.pet__switch::after {
+  content: '';
+  position: absolute;
+  top: 0.145rem;
+  left: 0.145rem;
+  width: 0.76rem;
+  height: 0.76rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.18s ease;
+}
+
+.pet__switch[aria-checked='true'] {
+  background: var(--c-accent);
+}
+
+.pet__switch[aria-checked='true']::after {
+  transform: translateX(0.85rem);
+}
+
+.pet__switch:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+/* 折叠头：默认收起的「对话模型」 */
+.pet__fold {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--c-bg-soft);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.pet__fold:hover {
+  border-color: var(--c-border);
+}
+
+.pet__fold:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+.pet__fold-name {
+  font-weight: 500;
+}
+
+/* 右侧那句「需自备 Key」：让不配置的人一眼知道这里不必展开，
+   而不是先展开再后悔 */
+.pet__fold-meta {
+  margin-left: auto;
+  color: var(--c-text-muted);
+  font-size: 0.7rem;
+}
+
+.pet__fold-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--c-text-muted);
+  transition: transform 0.18s ease;
+}
+
+.pet__fold[aria-expanded='true'] .pet__fold-arrow {
+  transform: rotate(90deg);
+}
+
+.pet__fold-body {
+  margin-top: 0.55rem;
+}
+
+/* 长的填写说明收在这里，常驻只留一行短的 */
+.pet__tips {
+  margin-top: 0.45rem;
+  color: var(--c-text-muted);
+  font-size: 0.72rem;
+}
+
+.pet__tips summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.pet__tips summary::before {
+  content: '▸ ';
+}
+
+.pet__tips[open] summary::before {
+  content: '▾ ';
+}
+
+/* Chrome / Safari 自己画的那个三角要关掉，否则和我们补的符号重影 */
+.pet__tips summary::-webkit-details-marker {
+  display: none;
+}
+
+.pet__tips-body {
+  margin: 0.35rem 0 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.pet__cast-list {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.pet__cast-btn {
+  flex: 1;
+  padding: 0.32rem 0.15rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg-soft);
+  color: var(--c-text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pet__cast-btn:hover {
+  border-color: var(--c-accent);
+  color: var(--c-text);
+}
+
+/* 当前那只：实心主色，扫一眼就知道选的是谁（和站内 .btn--primary 同一套观感） */
+.pet__cast-btn.is-on {
+  border-color: var(--c-accent);
+  background: var(--c-accent);
+  color: #fff;
+  cursor: default;
+}
+
+.pet__cast-btn:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+/* 17rem 是给「接口地址」让的位：15rem 时那个 http 地址会被截断成 .../chat/cc，
+   填的人看不到自己该填什么样的值 */
+.pet__panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.45rem);
+  width: 17rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.7rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  background: var(--c-float-panel);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px var(--c-shadow-md);
+  animation: pet-pop 0.22s ease;
+}
+
+/* 标题栏：以前既没标题也没关闭键，「这是什么、从哪关」全靠猜 */
+.pet__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+
+.pet__panel-title {
+  color: var(--c-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.pet__panel-close {
+  display: grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--c-text-muted);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pet__panel-close:hover {
+  background: var(--c-bg-soft);
+  color: var(--c-text);
+}
+
+.pet__panel label {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: 0.4rem;
+  color: var(--c-text-muted);
+  font-size: 0.72rem;
+}
+
+.pet__panel input {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg-soft);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+}
+
+.pet__panel input:focus {
+  outline: none;
+  border-color: var(--c-accent);
+}
+
+/* 复用站内 .btn 的外观，只在宠物面板里收小一号 */
+.pet__panel .btn {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* 操作行：次操作（测试连接）+ 主操作（保存）。保存是面板里唯一的实心按钮，
+   一眼就知道哪一个是「提交」—— 原来八个按钮同一个分量，扫不出主次 */
+.pet__actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.pet__actions .btn {
+  flex: 1;
+}
+
+/* 测试进行中：按钮禁用态已经由 .btn 处理，这里只压一下光标 */
+.pet__actions .btn[disabled] {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+/* 状态行：取代原来塞在面板最底部的 note 段落，紧跟触发它的那个按钮。
+   圆点颜色跟着 data-state 走，所以文本内容仍然可以整段替换 */
+.pet__status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0;
+  color: var(--c-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  /* 测试结果是多行的（结论 / 建议模型 / 实际地址），要保留换行 */
+  white-space: pre-line;
+  /* 端点地址很长，让它能在任意位置断开，别把面板撑宽 */
+  overflow-wrap: anywhere;
+}
+
+/* 作者样式里的 display:flex 会盖掉 UA 的 [hidden]{display:none}，必须补一条，
+   否则 mount.ts 设的 note.hidden = true 不生效 */
+.pet__status[hidden] {
+  display: none;
+}
+
+.pet__status::before {
+  content: '';
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-top: 0.45em;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+.pet__status[data-state='ok'] {
+  color: var(--pet-ok);
+}
+
+.pet__status[data-state='err'] {
+  color: var(--pet-err);
+}
+
+/* 底部：边缘动作挪出主操作区，去掉边框只留文字 —— 位置 + 样式双重弱化，
+   和上面的「保存」拉开距离，误触成本就下来了 */
+.pet__foot {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--c-border);
+}
+
+.pet__foot-sep {
+  color: var(--c-border);
+}
+
+.pet__linkbtn {
+  padding: 0.1rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.pet__linkbtn:hover {
+  color: var(--c-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* 「清除配置」的代价是明确的（要重新填 Key），hover 用警示色和「隐藏宠物」区分开 */
+.pet__linkbtn[data-pet-clear]:hover {
+  color: var(--pet-err);
+}
+
+/* ------------------------------------------------------------ 收起入口 */
+
+.pet__tab {
+  position: absolute;
+  right: 0.1rem;
+  bottom: 0.1rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0.35rem;
+  border: 1px solid var(--c-border);
+  border-radius: 50%;
+  background: var(--c-float-panel);
+  box-shadow: 0 3px 10px var(--c-shadow-md);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pet__tab svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pet__tab:hover {
+  border-color: var(--c-accent);
+}
+
+/* ------------------------------------------------------------ 状态 */
+
+/* 整只藏起来：外观层、气泡、对话框、设置一起收 */
+.pet--hidden .pet__stage,
+.pet--hidden .pet__chips,
+.pet--hidden .pet__bubble,
+.pet--hidden .pet__ask,
+.pet--hidden .pet__panel {
+  display: none;
+}
+
+/* 只关互动气泡（戳 / 喂 / 好感度），宠物本体还在、还能点出对话框。
+   **齿轮必须留下**：它是设置面板唯一的入口，跟着气泡一起藏就成了单向门 ——
+   关掉气泡就再也找不到开关把它打开（踩过这个坑，别把 :not 去掉）。 */
+.pet--nochips .pet__chip:not(.pet__chip--icon) {
+  display: none;
+}
+
+/* 设置开着时把气泡让出来 */
+.pet--settings .pet__chips {
+  display: none;
+}
+
+/* 睡着：浮动放慢，头顶冒 z，气泡压暗一点 */
+.pet--sleep .pet__sprite svg {
+  animation-duration: 7s;
+  opacity: 0.9;
+}
+
+.pet--sleep .pet__sprite::after {
+  content: 'z z';
+  position: absolute;
+  top: -0.1rem;
+  right: 0.5rem;
+  color: var(--c-text-faint);
+  font-size: 0.7rem;
+  animation: pet-doze 3s ease-in-out infinite;
+}
+
+.pet--sleep .pet__chips {
+  opacity: 0.45;
+}
+
+@keyframes pet-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pet-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes pet-bump {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-6px) scale(1.04);
+  }
+  70% {
+    transform: translateY(1px) scale(0.99);
+  }
+}
+
+@keyframes pet-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pet-doze {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (max-width: 640px) {
+  .pet {
+    right: 0.75rem;
+    bottom: 0.75rem;
+    --pet-w: 4.5rem;
+    --pet-h: 5.5rem;
+  }
+
+  /* Live2D 在窄屏也得让出空间，但要比桌面小一号 */
+  .pet--l2d {
+    --pet-w: 9rem;
+    --pet-h: 13.5rem;
+  }
+
+  .pet__bubble,
+  .pet__chips {
+    max-width: 12rem;
+  }
+
+  .pet__ask {
+    width: 13rem;
+  }
+
+  /* 面板不跟着缩到 13rem：接口地址会被截断到看不出该填什么。
+     16rem 在 375px 的窄屏上仍然留得下边距 */
+  .pet__panel {
+    width: 16rem;
+  }
+}
+
+/* 关掉动画偏好时只保留必要反馈 */
+@media (prefers-reduced-motion: reduce) {
+  .pet__sprite svg,
+  .pet--l2d .pet__canvas,
+  .pet__stage.is-bump,
+  .pet__bubble,
+  .pet__chips,
+  .pet__ask,
+  .pet__panel,
+  .pet--sleep .pet__sprite::after {
+    animation: none;
+  }
+}
+
+@media print {
+  .pet {
+    display: none;
+  }
+}

@@ -16,3 +16,6 @@ core.*
 *.log
 .env
 .env.*
+
+# AI 协作工作目录（项目记忆与日志，不进仓库）
+.workbuddy/

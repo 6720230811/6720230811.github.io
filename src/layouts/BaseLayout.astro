@@ -7,6 +7,8 @@ import NavProgress from '../components/NavProgress.astro';
 import Sidebar from '../components/Sidebar.astro';
 import Toc from '../components/Toc.astro';
 import Rail from '../components/Rail.astro';
+import Pet from '../components/Pet.astro';
+import { DEFAULT_CHARACTER } from '../data/pet';
 import type { Profile } from '../data/profile';
 import type { Locale } from '../i18n/ui';
 import { ClientRouter } from 'astro:transitions';
@@ -66,7 +68,7 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
 ---
 
 <!doctype html>
-<html lang={locale}>
+<html lang={locale} data-pet-character={DEFAULT_CHARACTER}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -94,6 +96,28 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
         document.documentElement.dataset.theme = saved;
       } catch (e) {
         document.documentElement.dataset.theme = 'light';
+      }
+    </script>
+
+    {/* 同一个道理：宠物选的是哪只，也得在样式生效前贴到 <html> 上。
+        角色存在 localStorage，而页面是**构建期渲染**的，HTML 里只可能是默认角色 ——
+        不在这里补一次，选了涅普顿的人会先看到布兰、再跳一下色。
+
+        默认值来自 <html> 上那个构建期写好的 data-pet-character，所以这里
+        **只在 localStorage 有值时覆盖**，读不到（没选过 / 无痕模式）就什么都不做。
+
+        键名 'pet_v1' 与 src/lib/pet/state.ts 的 PET_KEY 相同 —— 改一处要改两处，
+        那边有互指的注释。真要让脚本去 import 常量的话，它就不再是最小的内联脚本了，
+        而这段必须阻塞渲染、越早跑越好。 */}
+    <script is:inline data-astro-rerun>
+      try {
+        var petRaw = localStorage.getItem('pet_v1');
+        var petId = petRaw ? JSON.parse(petRaw).character : '';
+        if (typeof petId === 'string' && petId) {
+          document.documentElement.dataset.petCharacter = petId;
+        }
+      } catch (e) {
+        // 读不出来就保持构建期那个默认角色，别覆盖
       }
     </script>
 
@@ -188,5 +212,8 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
         © {new Date().getFullYear()} {profile.name}
       </div>
     </footer>
+
+    {/* 页面宠物：全站右下角浮动（含构建期生成的站内目录，供它本地检索） */}
+    <Pet locale={locale} />
   </body>
 </html>
