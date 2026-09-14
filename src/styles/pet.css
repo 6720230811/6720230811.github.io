@@ -4,14 +4,28 @@
    设计约束：
    - 颜色一律走全局 --c-* 变量，明暗主题自动跟随，切换主题不用碰这个文件
      （唯一的例外是角色配色 --pet-*，见文件顶部那四套）
-   - 容器是**固定尺寸**的锚点盒：气泡与对话框绝对定位挂在它上方，
+   - 舞台是**固定尺寸**的锚点盒：气泡与对话框绝对定位挂在它上方，
      拖拽换算才有一个与开合无关的稳定基准（见 mount.ts 的 measureAnchor）
-   - z-index 20：压在正文 .page(10) 之上、顶栏(30) 与进度条(40) 之下
+   - .pet-layer 是 z-index 20：压在正文 .page(10) 之上、顶栏(30) 与进度条(40) 之下
+
+   ## 两层节点的分工（改之前先看这段）
+
+     .pet-layer  铺满视口、不吃点击、被 transition:persist 保住。
+                 承接**整组**的语义：整组隐藏 / 关掉气泡圈 / 面板开着，
+                 以及那个召回按钮（它必须留在层上，不然整组藏起来后连它也一起没了）
+     .pet        舞台，一只一份。承接**每只**的语义：
+                 这一只是不是 Live2D（.pet--l2d）、是不是睡着了（.pet--sleep）、
+                 被拖到哪儿（内联 transform）、以及它自己的默认泊位
+
+   为什么必须分开：把「整组」的类挂在每只身上，一只退回 SVG 时另一只也会跟着变；
+   把「每只」的类挂在层上，就根本没法表达两只状态不同。同伴那份是主角那份的
+   **克隆**，所以两边的结构必须保持一致。
 
    DOM 顺序即视觉顺序（从上往下）：回复气泡 → 对话框 → 互动气泡 → 宠物。
    外观是两层，同一时刻只显示一层（见 .pet__stage）：
      SVG 精灵 —— 内联矢量，无图片请求，首屏即可见，也是所有降级路径的终点
-     Live2D  —— 12×18rem 的 WebGL 画布，加载成功后才由 .pet--l2d 换上来
+     Live2D  —— 12×18rem 的 WebGL 画布（主角）或同尺寸 iframe（同伴），
+                加载成功后才由 .pet--l2d 换上来
 
    ⚠️ 两层尺寸不同：.pet--l2d 会把锚点盒从 5.5×6.5rem 撑到 12×18rem。
    mount.ts 切层之后必须重新 measureAnchor()，否则拖拽换算会沿用旧基准，
@@ -101,25 +115,60 @@
   --pet-err: #f87171;
 }
 
-.pet {
+/* 层：铺满视口、不吃点击，只负责给舞台提供包含块与 z-index。
+   **它才是那个被 transition:persist 保住的节点**（id="pet-root"）。 */
+.pet-layer {
   position: fixed;
+  inset: 0;
+  z-index: 20;
+  /* 空层放行：只有每一只自己吃点击，否则整片视口都会挡住正文 */
+  pointer-events: none;
+
+  /* 内置精灵那一档的尺寸 */
+  --pet-w-svg: 5.5rem;
+  --pet-h-svg: 6.5rem;
+  /* Live2D 那一档。画布属性尺寸是 384×576（2:3），所以**高度由宽度算出来** ——
+     给两个数就一定会有一处被改漏，表现是贴图被拉变形 */
+  --pet-w-l2d: 12rem;
+  /* 同伴的默认泊位按哪一档宽度算，见下面 .pet[data-pet-role='companion']。
+     由 mount.ts 在切换外观层时挂上 has-l2d（两只里只要有一只上了 Live2D） */
+  --pet-ref-w: var(--pet-w-svg);
+}
+
+.pet-layer.has-l2d {
+  --pet-ref-w: var(--pet-w-l2d);
+}
+
+.pet {
+  position: absolute;
   right: 1rem;
   bottom: 1rem;
-  /* 内置精灵的尺寸；切到 Live2D 时由 .pet--l2d 覆盖 */
-  width: var(--pet-w, 5.5rem);
-  height: var(--pet-h, 6.5rem);
-  z-index: 20;
+  /* 这一只是哪一档尺寸。--pet-w 由 --pet--l2d 覆盖成 Live2D 那一档 */
+  --pet-w: var(--pet-w-svg);
+  --pet-h: var(--pet-h-svg);
+  width: var(--pet-w);
+  height: var(--pet-h);
   /* 拖拽时别触发浏览器的滚动/缩放手势，也别选中文字 */
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  /* 层不吃点击，每一只自己吃 */
+  pointer-events: auto;
 }
 
-/* 切到 Live2D：锚点盒换成 2:3 竖版 —— 与画布属性尺寸 384×576 同比，
-   否则那 4 张 1024 贴图会被拉变形 */
-.pet--l2d {
-  --pet-w: 12rem;
-  --pet-h: 18rem;
+/* 同伴的默认泊位：主角**左侧**，水平间距 = 参考宽度 × 1.05（错开约半只身位）。
+   间距用 --pet-ref-w 而不是自己的 --pet-w：万一一只上了 Live2D、另一只还停在
+   内置精灵上（那是被允许的稳定状态），按自己那档算就会叠在一起。 */
+.pet[data-pet-role='companion'] {
+  right: calc(1rem + var(--pet-ref-w) * 1.05);
+}
+
+/* 切到 Live2D：锚点盒换成 2:3 竖版 —— 与画布属性尺寸 384×576 同比。
+   选择器写成 .pet.pet--l2d 是刻意的：它要盖掉上面 .pet 里那条 --pet-w，
+   两边同为 0,1,0，靠源码顺序决定胜负太脆了。 */
+.pet.pet--l2d {
+  --pet-w: var(--pet-w-l2d);
+  --pet-h: calc(var(--pet-w-l2d) * 1.5);
 }
 
 /* 外观层：唯一一个随模式变尺寸的盒子，画布与按钮都铺满它 */
@@ -149,21 +198,35 @@
   border-radius: var(--radius-sm);
 }
 
-/* ------------------------------------------------------------ Live2D 画布
-   默认整层不显示。加载成功后 mount.ts 给根节点加 .pet--l2d：
-   画布上来，精灵退到画布**之上**继续接事件 ——
+/* ------------------------------------------------------------ Live2D 外观层
+   默认整层不显示。加载成功后 mount.ts 给舞台根加 .pet--l2d：
+   画布（或同伴那个 iframe）上来，精灵退到它**之上**继续接事件 ——
    它不消失，只是把 svg 藏起来，于是键盘可达性、拖拽、pointer 逻辑
-   一个都不用为 Live2D 重写。 */
+   一个都不用为 Live2D 重写。
 
-.pet__canvas {
+   ⚠️ 两只的渲染载体不同，但**必须长得一模一样**：
+     主角是同页 <canvas>（运行时是模块级单例，只有它能用）
+     同伴是 <iframe>（独立浏览上下文，见 stage-iframe.ts）
+   所以下面两条规则的属性是成对写的，改一条就顺手看另一条。 */
+
+.pet__canvas,
+.pet__frame {
   display: none;
   width: 100%;
   height: 100%;
-  /* 画布不吃指针：事件统一交给上面那枚按钮，避免两套命中逻辑打架 */
+  /* 画布 / iframe 都不吃指针：事件统一交给上面那枚按钮，避免两套命中逻辑打架 */
   pointer-events: none;
 }
 
-.pet--l2d .pet__canvas {
+.pet__frame {
+  border: 0;
+  /* iframe 默认是白的，会把整块方框糊在正文上 */
+  background: transparent;
+  color-scheme: normal;
+}
+
+.pet--l2d .pet__canvas,
+.pet--l2d .pet__frame {
   display: block;
   filter: drop-shadow(0 6px 16px var(--c-shadow-md));
   animation: pet-fade 0.5s ease both;
@@ -585,9 +648,31 @@ button.pet__chip:active {
   overflow-wrap: anywhere;
 }
 
+/* 成员分区：一行一个角色位。左边那个「主角 / 同伴」标签是**这一行是什么的答案** ——
+   少了它，两排长得一模一样的按钮没人知道区别在哪 */
+.pet__member + .pet__member {
+  margin-top: 0.45rem;
+}
+
+.pet__member-role {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--c-text-muted);
+  font-size: 0.7rem;
+}
+
 .pet__cast-list {
   display: flex;
   gap: 0.3rem;
+}
+
+/* 同伴那一行有五项（独自 + 四只），一行放不下，让它折行并用最小宽度兜住可读性 */
+.pet__cast-list--many {
+  flex-wrap: wrap;
+}
+
+.pet__cast-list--many .pet__cast-btn {
+  flex: 1 0 3rem;
 }
 
 .pet__cast-btn {
@@ -804,6 +889,9 @@ button.pet__chip:active {
 
 /* ------------------------------------------------------------ 收起入口 */
 
+/* ⚠️ 它挂在 .pet-layer 上，**不在 .pet 里** —— 整组藏起来时 .pet 的内容
+   全部 visibility:hidden，放在里面的话连召回按钮也一起没了。
+   位置就落在原本那只宠物的角落上。 */
 .pet__tab {
   position: absolute;
   right: 0.1rem;
@@ -817,6 +905,8 @@ button.pet__chip:active {
   box-shadow: 0 3px 10px var(--c-shadow-md);
   line-height: 1;
   cursor: pointer;
+  /* 层整体不吃点击，这一枚自己吃 */
+  pointer-events: auto;
 }
 
 .pet__tab svg {
@@ -831,24 +921,24 @@ button.pet__chip:active {
 
 /* ------------------------------------------------------------ 状态 */
 
-/* 整只藏起来：外观层、气泡、对话框、设置一起收 */
-.pet--hidden .pet__stage,
-.pet--hidden .pet__chips,
-.pet--hidden .pet__bubble,
-.pet--hidden .pet__ask,
-.pet--hidden .pet__panel {
-  display: none;
+/* 整组藏起来：外观层、气泡、对话框、设置一起收，只留右下角那枚召回按钮。
+   ⚠️ 用 visibility 而不是 display:none —— **舞台的盒子必须留着**：
+   mount.ts 的 measureAnchor() 量的是未位移时的盒子，盒子塌成 0 之后
+   clampOffset 会把落盘的位移夹到一个离谱的位置，表现是「叫回来的宠物
+   跑到别处去了」。这一条踩过一次，别改成 display。 */
+.pet-layer.pet--hidden .pet > * {
+  visibility: hidden;
 }
 
 /* 只关互动气泡（戳 / 喂 / 好感度），宠物本体还在、还能点出对话框。
    **齿轮必须留下**：它是设置面板唯一的入口，跟着气泡一起藏就成了单向门 ——
    关掉气泡就再也找不到开关把它打开（踩过这个坑，别把 :not 去掉）。 */
-.pet--nochips .pet__chip:not(.pet__chip--icon) {
+.pet-layer.pet--nochips .pet__chip:not(.pet__chip--icon) {
   display: none;
 }
 
 /* 设置开着时把气泡让出来 */
-.pet--settings .pet__chips {
+.pet-layer.pet--settings .pet__chips {
   display: none;
 }
 
@@ -928,18 +1018,24 @@ button.pet__chip:active {
 }
 
 @media (max-width: 640px) {
+  /* 尺寸变量挂**层**上而不是 .pet 上：--pet-ref-w（同伴的默认泊位）是在层上
+     用 --pet-w-svg / --pet-w-l2d 算出来的，改在 .pet 上它读不到 */
+  .pet-layer {
+    --pet-w-svg: 4.5rem;
+    --pet-h-svg: 5.5rem;
+    /* 两只一起按比例缩小（规格 §6.3）：
+         可用宽度减去边距与间距，再除以两只并排所需的 2.05 个身位
+         下限 7.2rem = 12 × 0.6 —— 再小就看不清了，宁可允许部分重叠
+       640px 时它会正好钳到 12rem，与桌面档连续，不会跳一下 */
+    --pet-w-l2d: clamp(7.2rem, calc((100vw - 2.5rem) / 2.05), 12rem);
+  }
+
   .pet {
     right: 0.75rem;
     bottom: 0.75rem;
-    --pet-w: 4.5rem;
-    --pet-h: 5.5rem;
   }
 
-  /* Live2D 在窄屏也得让出空间，但要比桌面小一号 */
-  .pet--l2d {
-    --pet-w: 9rem;
-    --pet-h: 13.5rem;
-  }
+  /* 同伴的泊位跟着层的参考宽度走，所以这里不用再写一条 —— 见 .pet[data-pet-role] */
 
   .pet__bubble,
   .pet__chips {
@@ -960,7 +1056,8 @@ button.pet__chip:active {
 /* 关掉动画偏好时只保留必要反馈 */
 @media (prefers-reduced-motion: reduce) {
   .pet__sprite svg,
-  .pet--l2d .pet__canvas,
+  .pet__canvas,
+  .pet__frame,
   .pet__stage.is-bump,
   .pet__bubble,
   .pet__chips,
@@ -972,7 +1069,7 @@ button.pet__chip:active {
 }
 
 @media print {
-  .pet {
+  .pet-layer {
     display: none;
   }
 }

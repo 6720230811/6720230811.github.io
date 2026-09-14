@@ -106,13 +106,17 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
         默认值来自 <html> 上那个构建期写好的 data-pet-character，所以这里
         **只在 localStorage 有值时覆盖**，读不到（没选过 / 无痕模式）就什么都不做。
 
+        `lead` 是新版字段，`character` 是单只时代的 —— 两个都认，
+        否则老访客会先看到布兰再跳一下色（state.ts 里有对应的迁移）。
+
         键名 'pet_v1' 与 src/lib/pet/state.ts 的 PET_KEY 相同 —— 改一处要改两处，
         那边有互指的注释。真要让脚本去 import 常量的话，它就不再是最小的内联脚本了，
         而这段必须阻塞渲染、越早跑越好。 */}
     <script is:inline data-astro-rerun>
       try {
         var petRaw = localStorage.getItem('pet_v1');
-        var petId = petRaw ? JSON.parse(petRaw).character : '';
+        var pet = petRaw ? JSON.parse(petRaw) : null;
+        var petId = pet ? pet.lead || pet.character : '';
         if (typeof petId === 'string' && petId) {
           document.documentElement.dataset.petCharacter = petId;
         }

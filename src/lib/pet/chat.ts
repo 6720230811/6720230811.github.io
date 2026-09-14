@@ -60,6 +60,14 @@ export interface AskOptions {
    * 之所以做成可选：自检（probe）那条路根本不生成 system prompt。
    */
   character?: string;
+  /**
+   * 「你正在回应另一只宠物」时的上下文，由 orchestrator.ts 传入。
+   *
+   * 这是两只**互相接话**的全部机制：把上一句说的是谁、说了什么带进
+   * system prompt，模型就会接着那个话头说，而不是自说自话。
+   * 访客插话那条路径不传它（那时是在回答人，不是在回答同伴）。
+   */
+  context?: AskContext;
   docs: readonly SiteDoc[];
   history: readonly Turn[];
   signal?: AbortSignal;
@@ -68,6 +76,14 @@ export interface AskOptions {
    * 界面据此把气泡逐字填上，首字从「整段生成完」提前到 0.4～1.5 秒。
    */
   onDelta?: (partial: string) => void;
+}
+
+/** 同伴刚说过的内容。用于让模型「接着对方的话说」而不是重复对方 */
+export interface AskContext {
+  /** 说话那位的显示名（已按语言取好） */
+  speaker: string;
+  /** 它说的原话 */
+  line: string;
 }
 
 /** 只存本机的凭据，键名沿用 admin 那套习惯（localStorage，不上传） */
@@ -307,6 +323,16 @@ function systemPrompt(options: AskOptions): string {
     .map((doc) => `- ${doc.title} → ${doc.url}`)
     .join('\n');
 
+  // 同伴刚说过话时，把话头显式交过来。不写这一段的话，模型只会各说各的 ——
+  // 两只都在「回答访客」，读起来像两个人分别自言自语，而不是在对话。
+  const banter = options.context
+    ? isZh
+      ? `你正在跟旁边的「${options.context.speaker}」说话。它刚说：「${options.context.line}」。` +
+        `接着它的话头回应，可以调侃或反驳，但别重复它已经说过的内容。`
+      : `You are talking with "${options.context.speaker}" next to you. It just said: "${options.context.line}". ` +
+        `Pick up from there — tease or disagree if you like, but do not repeat what it already said.`
+    : '';
+
   return [
     persona,
     '',
@@ -325,6 +351,7 @@ function systemPrompt(options: AskOptions): string {
         `if it is not in the list, say you do not know.`,
     '',
     isZh ? `自己的名字是「${name}」。` : `Your name is "${name}".`,
+    ...(banter ? ['', banter] : []),
   ].join('\n');
 }
 

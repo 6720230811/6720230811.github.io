@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live2D renderer</title>
+    <style>
+      /* 这张页面只负责画，背景必须全透明 —— 它要贴在主页面的宠物位置上。
+         不要给它加任何边框、内边距或背景色，否则会在宠物周围露出一个方块。 */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+      }
+      #stage {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <!--
+      Live2D 渲染器 · 给主页面当「第二只宠物」用。
+
+      为什么需要它：public/live2d/js/live2d.js（Cubism 2 web 运行时）是
+      **模块级单例** —— 画布存在单变量里、渲染循环用一次性标志启动、WebGL
+      上下文与输入监听全挂在 window 上。同一个 window 里 loadlive2d 调两次，
+      要么第二个不渲染，要么第一个被顶掉。想同时跑两只，唯一干净的路是
+      **给每只一个独立的浏览上下文**，也就是这个页面。
+
+      职责边界（很重要）：
+        本页只画。不谈台词、不管气泡、不存状态、不认识「布兰」是谁。
+        它收到的只有一个 modelUrl 和一些坐标。所有逻辑留在主页面 ——
+        那边已经有一整套踩过坑的排版契约，不该为了多一只重写一遍。
+
+      协议（只认同源）：
+        主 → 本页  {from:'pet-host', t:'load',    modelUrl}
+        主 → 本页  {from:'pet-host', t:'pointer', x, y}   x/y 是**本页坐标系**内的值
+        本页 → 主  {from:'pet-render', t:'hello'}          握手，父级收到后发 load
+        本页 → 主  {from:'pet-render', t:'ready'}          模型已就绪，父级可淡入
+        本页 → 主  {from:'pet-render', t:'fail', reason}   失败，父级退回 SVG 精灵
+    -->
+    <script src="./js/live2d.js"></script>
+    <script>
+      (function () {
+        'use strict';
+
+        var HOST = 'pet-host';
+        var SELF = 'pet-render';
+        // 同源站点下 location.origin 就是父页的源；用它当 targetOrigin，
+        // 等于「只把消息交给同源的父页」，别的宿主嵌不进来。
+        var ORIGIN = location.origin;
+
+        var canvas = document.getElementById('stage');
+        var loading = false;
+        var loadedModel = null;
+
+        function post(msg) {
+          try {
+            msg.from = SELF;
+            parent.postMessage(msg, ORIGIN);
+          } catch (e) {
+            /* 父页没了/跨源，静默 —— 这里没有可恢复的动作 */
+          }
+        }
+
+        function fail(reason) {
+          post({ t: 'fail', reason: reason });
+        }
+
+        /**
+         * 探测 WebGL **必须另开一张画布**。
+         * 一张 canvas 只能有一种上下文：对 #stage 取过 'webgl' 之后再取别的类型
+         * 会返回 null，而先取 2d 就再也拿不到 webgl。拿目标画布去探测等于把它
+         * 自己废掉。这条规则和 src/lib/pet/live2d.ts 里那条是同一个原因。
+         */
+        function hasWebGL() {
+          try {
+            var probe = document.createElement('canvas');
+            return !!(probe.getContext('webgl') || probe.getContext('experimental-webgl'));
+          } catch (e) {
+            return false;
+          }
+        }
+
+        /**
+         * 把 index.json 引用的资源先读进 HTTP 缓存。
+         *
+         * 不做这一步的后果很具体：loadlive2d 是**发射后不管**的，没有任何加载
+         * 完成回调。贴图没到之前它画出来是空白，而调用方无从知道 —— 于是淡入的
+         * 那一下会看到一只透明的宠物。
+         *
+         * 父页与本页同源，共享同一份 HTTP 缓存，所以父页若已预热过，这里几乎
+         * 零成本；两边都预热也不会重复下载（第二次命中缓存）。
+         */
+        function warm(modelUrl) {
+          return fetch(modelUrl, { cache: 'force-cache' })
+            .then(function (res) {
+              return res.ok ? res.json() : null;
+            })
+            .then(function (json) {
+              // 描述文件缺字段的话后面必然失败，早退
+              if (!json || typeof json.model !== 'string' || !json.textures || !json.textures.length) {
+                return false;
+              }
+              var base = new URL(modelUrl, location.href);
+              var refs = [json.model].concat(json.textures);
+              if (json.pose) refs.push(json.pose);
+              if (json.physics) refs.push(json.physics);
+              Object.keys(json.motions || {}).forEach(function (kind) {
+                (json.motions[kind] || []).forEach(function (m) {
+                  if (m && m.file) refs.push(m.file);
+                });
+              });
+              return Promise.all(
+                refs.map(function (ref) {
+                  // 必须把 body 读掉才算真的缓存上，所以是 arrayBuffer 而不是 HEAD
+                  return fetch(new URL(ref, base).href, { cache: 'force-cache' })
+                    .then(function (r) {
+                      return r.arrayBuffer();
+                    })
+                    .catch(function () {
+                      /* 单条失败无所谓，运行时自己还会再取一次 */
+                    });
+                })
+              ).then(function () {
+                return true;
+              });
+            })
+            .catch(function () {
+              return false;
+            });
+        }
+
+        function onLoad(modelUrl) {
+          if (!modelUrl) {
+            fail('no-url');
+            return;
+          }
+          // 运行时不支持多实例、也没有卸载接口：load 第二次会顶掉第一只。
+          // 同一只重复 load 直接回 ready（幂等），换模型则明确拒绝 ——
+          // 换角色在父页是**整页刷新**，不需要热切换。
+          if (loadedModel) {
+            if (loadedModel === modelUrl) post({ t: 'ready', again: true });
+            else fail('already-loaded');
+            return;
+          }
+          if (loading) return;
+          loading = true;
+
+          if (!hasWebGL()) {
+            loading = false;
+            fail('no-webgl');
+            return;
+          }
+          if (typeof window.loadlive2d !== 'function') {
+            loading = false;
+            fail('no-runtime');
+            return;
+          }
+
+          warm(modelUrl).then(function (ok) {
+            if (!ok) {
+              loading = false;
+              fail('bad-model');
+              return;
+            }
+            try {
+              window.loadlive2d('stage', modelUrl);
+            } catch (e) {
+              // WebGL 上下文拿不到、moc 解析失败之类的同步异常
+              loading = false;
+              fail('load-threw');
+              return;
+            }
+            loadedModel = modelUrl;
+            loading = false;
+            // 资源已预热，第一帧基本就绪；留一点余量盖住运行时解析 moc 的时间。
+            // 450ms 与主页面 src/lib/pet/mount.ts 的 REVEAL_DELAY_MS 取同一个值。
+            setTimeout(function () {
+              post({ t: 'ready' });
+            }, 450);
+          });
+        }
+
+        /**
+         * 眼神跟随：运行时在自己的 window 上监听 mousemove，处理函数只读
+         * clientX/clientY 再减去画布的 getBoundingClientRect()，**不检查
+         * isTrusted** —— 所以合成事件能直接喂进去。
+         *
+         * 坐标是**本页坐标系**内的 CSS 像素：父页负责把它自己的指针位置换算过来
+         * （注意 iframe 被 CSS scale 时，内部坐标不等于屏幕坐标，要除掉缩放比）。
+         */
+        function onPointer(x, y) {
+          try {
+            window.dispatchEvent(
+              new MouseEvent('mousemove', {
+                clientX: x,
+                clientY: y,
+                bubbles: true,
+                cancelable: true,
+              })
+            );
+          } catch (e) {
+            /* 老环境没有 MouseEvent 构造器：跟随失效，但不值得报错 */
+          }
+        }
+
+        window.addEventListener('message', function (e) {
+          if (e.origin !== ORIGIN) return;
+          var d = e.data;
+          if (!d || typeof d !== 'object' || d.from !== HOST) return;
+          if (d.t === 'load') onLoad(d.modelUrl);
+          else if (d.t === 'pointer') onPointer(d.x, d.y);
+        });
+
+        // 握手：父页建好 iframe 就会发 load，但那一刻本页的监听可能还没注册上。
+        // 主动报到一次，父页收到 hello 后重发 load（onLoad 是幂等的）。
+        post({ t: 'hello' });
+      })();
+    </script>
+  </body>
+</html>

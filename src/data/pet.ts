@@ -21,6 +21,15 @@ export interface Live2DConfig {
    * 放在 public/live2d 下，构建期原样拷进产物，**不进打包图**，运行时按需注入。
    */
   runtimeUrl: string;
+  /**
+   * 渲染器页面地址（iframe 用）。
+   *
+   * 为什么同伴必须走 iframe：运行时是**模块级单例**（画布存在单变量里、渲染循环
+   * 用一次性标志启动、WebGL 上下文与输入监听全挂在 window 上），同一个 window 里
+   * `loadlive2d` 调两次只会互相顶掉。所以第二只必须有自己的浏览上下文。
+   * 详见 docs/superpowers/specs/2026-09-12-multi-pet-design.md 第 2 节。
+   */
+  renderUrl: string;
 }
 
 // ------------------------------------------------------------------ 角色
@@ -271,5 +280,6 @@ export const pet: PetConfig = {
   live2d: {
     enabled: true,
     runtimeUrl: '/live2d/js/live2d.js',
+    renderUrl: '/live2d/render.html',
   },
 };

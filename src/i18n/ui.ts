@@ -213,7 +213,7 @@ const zh = {
   'label.more': '查看更多',
 
   // 页面宠物（右下角常驻的土豆仔，见 src/components/Pet.astro）
-  'pet.sprite': '页面宠物布兰：点我说话，按住可以拖动',
+  'pet.sprite': '页面宠物：点我说话，按住可以拖动',
   'pet.poke': '戳一下',
   'pet.feed': '喂零食',
   'pet.placeholder': '问它一句…',
@@ -246,7 +246,11 @@ const zh = {
   'pet.testSuggest': '更合适的模型：',
   'pet.saved': '已保存到本浏览器',
   'pet.cleared': '配置已清除，退回台词库',
-  'pet.cast': '角色',
+  'pet.members': '成员',
+  'pet.roleLead': '主角',
+  'pet.roleCompanion': '同伴',
+  'pet.solo': '独自',
+  'pet.companionHint': '首次召唤会下载约 3.4 MB 模型',
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
@@ -458,7 +462,7 @@ const en: Record<keyof typeof zh, string> = {
   'label.more': 'More',
 
   // Page pet (the potato living in the bottom-right corner, see src/components/Pet.astro)
-  'pet.sprite': 'Page pet Blanc — click to chat, drag to move',
+  'pet.sprite': 'Page pet — click to chat, drag to move',
   'pet.poke': 'Poke it',
   'pet.feed': 'Give a snack',
   'pet.placeholder': 'Ask it something…',
@@ -491,7 +495,11 @@ const en: Record<keyof typeof zh, string> = {
   'pet.testSuggest': 'Better options: ',
   'pet.saved': 'Saved to this browser',
   'pet.cleared': 'Config cleared — back to local lines',
-  'pet.cast': 'Character',
+  'pet.members': 'Members',
+  'pet.roleLead': 'Lead',
+  'pet.roleCompanion': 'Companion',
+  'pet.solo': 'Alone',
+  'pet.companionHint': 'First summon downloads about 3.4 MB',
 };
 
 export const ui = { zh, en } as const;

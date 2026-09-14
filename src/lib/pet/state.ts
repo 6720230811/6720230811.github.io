@@ -1,7 +1,7 @@
 import { DEFAULT_CHARACTER } from '../../data/pet';
 
 /**
- * 宠物的记忆：选了谁、各自的好感度、藏起来没、气泡关没关、被拖到哪儿了、用不用 Live2D。
+ * 宠物的记忆：谁是主角、召唤了谁、各自的好感度、各自被拖到哪儿、藏起来没、气泡关没关、用不用 Live2D。
  *
  * 为什么不放 DOM 上：站内跳转走 View Transitions，正文 DOM 会被整份换掉。
  * 状态存 localStorage，换页之后还是「刚才被喂过零食」的那一只。
@@ -9,8 +9,9 @@ import { DEFAULT_CHARACTER } from '../../data/pet';
  *
  * 读取一律包 try：Safari 无痕模式下 localStorage 会直接抛。
  *
- * **换角色不清空任何东西**：四只各自记好感度，来回切谁也不影响谁 ——
- * 中途换回来，那只还记得你之前喂过它。这也是「换角色 = 换一段关系」的落点。
+ * **换角色不清空任何东西**：四只各自记好感度、各自记位置，来回切谁也不影响谁 ——
+ * 中途换回来，那只还记得你之前喂过它、也还记得自己被拖到哪儿。
+ * 这也是「换角色 = 换一段关系」的落点。
  */
 /**
  * localStorage 键名。
@@ -23,21 +24,35 @@ const KEY = 'pet_v1';
 const INITIAL_AFFECTION = 30;
 
 export interface PetOffset {
-  /** 相对默认位置（右下角）的位移，px；负值向左/向上 */
+  /** 相对默认位置的位移，px；负值向左/向上 */
   x: number;
   y: number;
 }
 
 export interface PetState {
-  /** 当前角色 id，对应 data/pet.ts 的 characters[].id */
-  character: string;
+  /**
+   * 主角 id，对应 data/pet.ts 的 characters[].id。
+   * 它同时也是**服务端渲染的那一只** —— 换主角 = 整页刷新（见 mount.ts）。
+   */
+  lead: string;
+  /**
+   * 同伴 id，`null` 表示独自。
+   * 同伴是**访客手动召唤**的：不召唤就不会有任何额外加载（那只模型约 3.4 MB）。
+   * 它与 lead 不会相同 —— 面板里只列「其余三只」，读的时候也再兜一道。
+   */
+  companion: string | null;
   /**
    * 好感度，**按角色分开记**。0-100，戳一下 +1、喂零食 +6、提问 +2，
    * 只增不减（不做惩罚，宠物不该记仇）。
    * 缺键表示这只还没被喂过，读的时候回落到 INITIAL_AFFECTION。
    */
   affectionById: Record<string, number>;
-  /** 访客主动收起后整只消失，右下角只留一个小小的召回按钮 */
+  /**
+   * 位置，**按角色分开记**。缺键回落 `{x:0,y:0}`（即默认泊位）。
+   * 两只各自独立拖动，互相不带动 —— 这也是「每只一个舞台实例」的落点。
+   */
+  positions: Record<string, PetOffset>;
+  /** 访客主动收起后整组消失，右下角只留一个小小的召回按钮 */
   hidden: boolean;
   /** 只把「戳一下 / 喂零食 / 好感度」那圈气泡关掉，宠物本体还在 */
   chipsHidden: boolean;
@@ -47,29 +62,49 @@ export interface PetState {
    * 这个开关只记「访客主动要或不要」，用来跳过那 3.4 MB。
    */
   live2d: boolean;
-  offset: PetOffset;
 }
 
-/** 只有 affection 一个数字的**上一版**结构，迁移时要用 */
+/**
+ * 历史版本的结构，迁移时要用：
+ *   - `character`：单只时代的当前角色
+ *   - `offset`：单只时代的位移
+ *   - `affection`：更早的单只时代的好感度
+ */
 interface LegacyState extends Partial<PetState> {
+  character?: string;
+  offset?: PetOffset;
   affection?: number;
 }
 
 function fresh(): PetState {
   return {
-    character: DEFAULT_CHARACTER,
+    lead: DEFAULT_CHARACTER,
+    companion: null,
     affectionById: { [DEFAULT_CHARACTER]: INITIAL_AFFECTION },
+    positions: {},
     hidden: false,
     chipsHidden: false,
     live2d: true,
-    offset: { x: 0, y: 0 },
+  };
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
+/** 位移脏值（手改 localStorage、NaN）一律收敛成有限数 */
+function toOffset(value: unknown): PetOffset {
+  const raw = (value ?? {}) as Partial<PetOffset>;
+  return {
+    x: Number(raw.x ?? 0) || 0,
+    y: Number(raw.y ?? 0) || 0,
   };
 }
 
 /**
  * 好感度的迁移，分三种情况：
  *   1. 已经是 affectionById → 逐个夹到 0-100（防手改 localStorage 塞进脏值）
- *   2. 只有老版的 affection  → 那是喂给布兰的，搬给默认角色
+ *   2. 只有老版的 affection  → 那是喂给默认角色的，搬给它
  *   3. 什么都没有            → 空表，读的时候回落到 INITIAL_AFFECTION
  */
 function migrateAffection(parsed: LegacyState): Record<string, number> {
@@ -84,24 +119,59 @@ function migrateAffection(parsed: LegacyState): Record<string, number> {
   return { [DEFAULT_CHARACTER]: clamp(Number(parsed.affection ?? INITIAL_AFFECTION), 0, 100) };
 }
 
+/**
+ * 主角 / 同伴的迁移。
+ *
+ * **向后兼容是硬要求**：访客的 localStorage 里可能躺着任意历史版本，
+ * 读不出来会让宠物整只白屏。所以三种形态都要认：
+ *   1. 已有 `lead`（当前版本）→ 直接用，顺手把脏的 companion 洗掉
+ *   2. 只有 `character`（单只时代）→ lead = character，独自
+ *   3. 都没有 → 默认角色
+ */
+function migrateRoster(parsed: LegacyState): { lead: string; companion: string | null } {
+  const lead =
+    typeof parsed.lead === 'string' && parsed.lead
+      ? parsed.lead
+      : typeof parsed.character === 'string' && parsed.character
+        ? parsed.character
+        : DEFAULT_CHARACTER;
+  const companion =
+    typeof parsed.companion === 'string' && parsed.companion && parsed.companion !== lead
+      ? parsed.companion
+      : null;
+  return { lead, companion };
+}
+
+/**
+ * 位置的迁移：新版是 `positions`（按角色分开），单只时代是 `offset`。
+ * 后者搬给主角，同伴用默认泊位 —— 这样老访客的两只不会叠在同一处。
+ */
+function migratePositions(parsed: LegacyState, lead: string): Record<string, PetOffset> {
+  const saved = parsed.positions;
+  if (saved && typeof saved === 'object') {
+    const out: Record<string, PetOffset> = {};
+    for (const [id, value] of Object.entries(saved)) out[id] = toOffset(value);
+    return out;
+  }
+  if (parsed.offset) return { [lead]: toOffset(parsed.offset) };
+  return {};
+}
+
 function load(): PetState {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return fresh();
     const parsed = JSON.parse(raw) as LegacyState;
+    const roster = migrateRoster(parsed);
     return {
-      // 认不出的 id 不改也不报错，交给 findCharacter 去回落 ——
-      // 这里保留原值，万一只是暂时读不到角色表，还能恢复
-      character: typeof parsed.character === 'string' ? parsed.character : DEFAULT_CHARACTER,
+      lead: roster.lead,
+      companion: roster.companion,
       affectionById: migrateAffection(parsed),
+      positions: migratePositions(parsed, roster.lead),
       hidden: parsed.hidden === true,
       chipsHidden: parsed.chipsHidden === true,
       // 只有显式存过 false 才算关掉；没存过（老版本数据）按默认开着走
       live2d: parsed.live2d !== false,
-      offset: {
-        x: Number(parsed.offset?.x ?? 0) || 0,
-        y: Number(parsed.offset?.y ?? 0) || 0,
-      },
     };
   } catch {
     return fresh();
@@ -109,10 +179,6 @@ function load(): PetState {
 }
 
 let state: PetState = load();
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, n));
-}
 
 function save(): void {
   try {
@@ -126,33 +192,65 @@ export function getState(): Readonly<PetState> {
   return state;
 }
 
-/** 当前角色 id（原始值）。要拿完整角色对象用 data/pet.ts 的 findCharacter() */
-export function character(): string {
-  return state.character;
+/** 主角 id（原始值）。要拿完整角色对象用 data/pet.ts 的 findCharacter() */
+export function lead(): string {
+  return state.lead;
+}
+
+/** 同伴 id；`null` = 独自 */
+export function companion(): string | null {
+  return state.companion;
 }
 
 /**
- * 记下选了谁。**只写状态，不负责刷新页面** ——
+ * 当前在场的角色 id：[主角, 同伴?]。顺序即默认的左右排布顺序。
+ * 渲染层照它来建舞台实例，不关心「谁是主角」这层语义。
+ */
+export function roster(): string[] {
+  return state.companion ? [state.lead, state.companion] : [state.lead];
+}
+
+/**
+ * 记下选了谁当主角。**只写状态，不负责刷新页面** ——
  * 换形象必须重建 WebGL 上下文（运行时没有卸载接口），所以调用方
  * 紧接着要做的是 location.reload()，见 mount.ts。
+ *
+ * 顺带把同伴洗掉：同伴不能与主角相同（面板也已排除，这里是第二道）。
  */
-export function setCharacter(id: string): void {
-  state = { ...state, character: id };
+export function setLead(id: string): void {
+  const companion = state.companion === id ? null : state.companion;
+  state = { ...state, lead: id, companion };
   save();
 }
 
-/** 当前角色的好感度 */
-export function affection(): number {
-  return state.affectionById[state.character] ?? INITIAL_AFFECTION;
+/** 召唤 / 送走同伴。传 `null` 表示送走 */
+export function setCompanion(id: string | null): void {
+  // 与主角相同的一律当「送走」处理，避免出现两只一样的
+  state = { ...state, companion: id && id !== state.lead ? id : null };
+  save();
 }
 
-/** 加当前角色的好感度并落盘，返回加完之后的值 */
-export function addAffection(delta: number): number {
-  const id = state.character;
+/** 某个角色的好感度；不传则取主角 */
+export function affection(id: string = state.lead): number {
+  return state.affectionById[id] ?? INITIAL_AFFECTION;
+}
+
+/** 加某个角色的好感度并落盘，返回加完之后的值。不传 id 则加给主角 */
+export function addAffection(delta: number, id: string = state.lead): number {
   const next = clamp((state.affectionById[id] ?? INITIAL_AFFECTION) + delta, 0, 100);
   state = { ...state, affectionById: { ...state.affectionById, [id]: next } };
   save();
   return next;
+}
+
+/** 某个角色的位移；缺键回落默认泊位 */
+export function position(id: string): PetOffset {
+  return state.positions[id] ?? { x: 0, y: 0 };
+}
+
+export function setPosition(id: string, offset: PetOffset): void {
+  state = { ...state, positions: { ...state.positions, [id]: offset } };
+  save();
 }
 
 export function isHidden(): boolean {
@@ -179,11 +277,6 @@ export function isLive2DEnabled(): boolean {
 
 export function setLive2DEnabled(live2d: boolean): void {
   state = { ...state, live2d };
-  save();
-}
-
-export function setOffset(offset: PetOffset): void {
-  state = { ...state, offset };
   save();
 }
 

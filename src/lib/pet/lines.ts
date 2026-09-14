@@ -17,6 +17,7 @@ import type { Locale } from '../../i18n/ui';
  */
 export type LineKind =
   | 'greet' // 首次出现
+  | 'arrive' // 同伴被召唤到场时的第一句
   | 'poke' // 被戳
   | 'feed' // 被喂
   | 'idle' // 空闲自说自话
@@ -35,6 +36,10 @@ const blanc: Table = {
   greet: {
     zh: ['……你好。我住这个角落。', '我是布兰。别吵，我在看书。', '又是你啊。坐吧。'],
     en: ['…Hello. I live in this corner.', 'I am Blanc. Quiet, I am reading.', 'You again. Sit down.'],
+  },
+  arrive: {
+    zh: ['……我也在。别指望我陪它闹。', '嗯，我过来了。'],
+    en: ['…I am here too. Do not expect me to join its nonsense.', 'Mm. I came over.'],
   },
   poke: {
     zh: ['别戳。', '……你手很闲？', '再戳一下试试。', '我在看书。真的在看书。'],
@@ -80,6 +85,10 @@ const neptune: Table = {
     zh: ['哟！我是涅普顿，这片角落的女主角！', '你来啦～我就知道你会来！', '嗨嗨，我是住右下角的女主角哦！'],
     en: ['Yo! I am Neptune, the protagonist of this corner!', 'You came! I knew you would~', 'Hi hi, resident protagonist here!'],
   },
+  arrive: {
+    zh: ['登场～两位女主角同台啦！', '哟！我也来啦，这下热闹了！'],
+    en: ['Entering stage~ Two protagonists, one corner!', 'Yo! I am here too, now it is a party!'],
+  },
   poke: {
     zh: ['诶嘿～痒！', '戳我干嘛，想聊天就直说嘛！', '再戳我就给你起个绰号！'],
     en: ['Ehehe, that tickles!', 'Why poke me? Just say you want to talk!', 'Poke me again and I am giving you a nickname!'],
@@ -124,6 +133,10 @@ const noire: Table = {
     zh: ['哼，我可不是特意等你的。', '……你也在这儿啊。随便你。', '别误会，我只是刚好住这边。'],
     en: ['Hmph. It is not like I was waiting for you.', '…So you are here too. Whatever.', 'Do not get the wrong idea. I just happen to live here.'],
   },
+  arrive: {
+    zh: ['哼，我只是顺路过来看看。', '……别误会，我不是来陪它玩的。'],
+    en: ['Hmph. I just happened to pass by.', '…Do not get me wrong, I am not here to play with it.'],
+  },
   poke: {
     zh: ['喂，别碰！', '你、你干什么！', '……再戳我真生气了。', '哼，幼稚。'],
     en: ['Hey, do not touch!', 'Wh-what are you doing!', '…Poke me again and I will actually get mad.', 'Hmph. Childish.'],
@@ -167,6 +180,10 @@ const vert: Table = {
   greet: {
     zh: ['欢迎，我是贝露。慢慢看，不着急。', '哦呀，又见面了。', '这里是个安静的好地方，对吧？'],
     en: ['Welcome. I am Vert. Take your time, no rush.', 'Oh my, we meet again.', 'This is a nice quiet place, is it not?'],
+  },
+  arrive: {
+    zh: ['哦呀，那我也来凑个热闹。', '打扰了，我来陪你们一会儿。'],
+    en: ['Oh my, let me join in too.', 'Pardon me, I shall keep you company a while.'],
   },
   poke: {
     zh: ['哎呀，这么调皮。', '呵呵，想引起我注意？', '再戳的话，我可要回敬了哦。'],
@@ -218,8 +235,106 @@ export function pickLine(kind: LineKind, locale: Locale, character = DEFAULT_CHA
   // 认不出的 id 直接退回布兰，而不是抛错 —— 老数据里可能存着已删掉的角色
   const table = TABLES[character] ?? blanc;
   const pool = table[kind][locale] ?? table[kind].zh;
+  return pick(pool);
+}
+
+function pick(pool: readonly string[]): string {
   if (!pool.length) return '';
   return pool[Math.floor(Math.random() * pool.length)] ?? pool[0] ?? '';
+}
+
+// ------------------------------------------------------------------ 对撞表
+//
+// 两只同时在场时，**没有配 Key** 的那条路径全靠这张表：谁对谁说什么。
+// 零延迟、零成本、完全可预测 —— 也是「配了 Key 就真聊」的降级落点。
+//
+// 口径与各自的 persona 对齐：布兰短促、涅普顿自来熟、诺瓦露嘴硬、贝露爱逗。
+// 两个人之间的关系才是这张表的意义 —— 写成人人平等就白做了。
+
+/** BANTER[说话者][对方] = 说话者对**对方**说的一句 */
+const BANTER: Record<string, Record<string, Pool>> = {
+  blanc: {
+    neptune: {
+      zh: ['涅普顿。安静点。', '……你能不能坐一会儿。'],
+      en: ['Neptune. Quiet.', '…Can you sit still for one moment.'],
+    },
+    noire: {
+      zh: ['诺瓦露。你也一样。', '……你们两个真吵。'],
+      en: ['Noire. You too.', '…You two are noisy.'],
+    },
+    vert: {
+      zh: ['贝露，管管她。', '……怎么你也来了。'],
+      en: ['Vert. Rein her in.', '…Why are you here too.'],
+    },
+  },
+  neptune: {
+    blanc: {
+      zh: ['布兰布兰，书看完了没～', '布兰别老瞪我嘛！'],
+      en: ['Blanc Blanc, finished that book yet~', 'Blanc, stop glaring at me!'],
+    },
+    noire: {
+      zh: ['诺瓦露你又板着脸～', '诺瓦露，笑一个嘛！'],
+      en: ['Noire, frowning again~', 'Noire, give us a smile!'],
+    },
+    vert: {
+      zh: ['贝露姐～陪我玩会儿嘛！', '贝露姐你今天也超温柔！'],
+      en: ['Vert nee~ come play with me!', 'Vert nee, you are so gentle today!'],
+    },
+  },
+  noire: {
+    blanc: {
+      zh: ['布兰，你倒是说句话啊。', '……布兰，那本书好看吗？'],
+      en: ['Blanc, say something already.', '…Blanc, is that book any good?'],
+    },
+    neptune: {
+      zh: ['涅普顿，你吵死了。', '别在我耳边嚷嚷！'],
+      en: ['Neptune, you are deafening.', 'Stop yelling in my ear!'],
+    },
+    vert: {
+      zh: ['贝露姐，你别老惯着她。', '……贝露姐，你就是太纵容她了。'],
+      en: ['Vert nee, stop spoiling her.', '…You are far too lenient with her.'],
+    },
+  },
+  vert: {
+    blanc: {
+      zh: ['布兰，一起看书吗？', '布兰还是这么安静呢。'],
+      en: ['Blanc, shall we read together?', 'Blanc is as quiet as ever.'],
+    },
+    neptune: {
+      zh: ['涅普顿，别闹了哦。', '呵呵，涅普顿真有精神。'],
+      en: ['Neptune, do settle down.', 'Hehe, Neptune is full of energy.'],
+    },
+    noire: {
+      zh: ['诺瓦露，脸红了哦。', '别逞强了，诺瓦露。'],
+      en: ['Noire, you are blushing.', 'Stop putting on a brave face, Noire.'],
+    },
+  },
+};
+
+/**
+ * 对方不在 BANTER 里时的通用兜底。
+ * 表是「说话者 × 对方」的笛卡尔积，以后加了第五只角色必然会有缺格 ——
+ * 那时靠这里接住，而不是安静地返回空串（空串会让编排器以为「没什么可说」）。
+ */
+const BANTER_ANY: Record<string, Pool> = {
+  blanc: { zh: ['……嗯。', '你说吧。'], en: ['…Mm.', 'Go on.'] },
+  neptune: { zh: ['诶，说到这个～', '对吧对吧！'], en: ['Oh, speaking of which~', 'Right, right!'] },
+  noire: { zh: ['哼，随便你。', '……然后呢？'], en: ['Hmph, whatever.', '…And then?'] },
+  vert: { zh: ['呵呵，是呢。', '哦呀，有意思。'], en: ['Hehe, indeed.', 'Oh my, how interesting.'] },
+};
+
+/**
+ * 说话者 `speaker` 对 `target` 说的一句话。
+ * 查不到具体组合就退到通用句，认不出的 speaker 再退到默认角色 —— 三级回落，
+ * 保证**永远返回一句非空的话**（编排器靠它决定要不要开口）。
+ */
+export function banterLine(speaker: string, target: string, locale: Locale): string {
+  const pool =
+    BANTER[speaker]?.[target] ??
+    BANTER_ANY[speaker] ??
+    BANTER_ANY[DEFAULT_CHARACTER] ??
+    blanc.idle;
+  return pick(pool[locale] ?? pool.zh);
 }
 
 /** 心情标签：好感度落在哪个区间 */

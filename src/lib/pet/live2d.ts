@@ -46,7 +46,7 @@ export type Live2DResult =
   /** 环境或资源有问题，退回内置精灵 */
   | 'fail';
 
-function hasWebGL(): boolean {
+export function hasWebGL(): boolean {
   try {
     const probe = document.createElement('canvas');
     return Boolean(probe.getContext('webgl') ?? probe.getContext('experimental-webgl'));
@@ -58,8 +58,11 @@ function hasWebGL(): boolean {
 /**
  * 三条否决：访客要减少动效、访客开了省流量、网络是 2G/3G。
  * 前两条是明确的用户意愿，第三条是替用户省钱 —— 3.4 MB 不值得为一只宠物花。
+ *
+ * 导出给 stage-iframe.ts 用：同伴走的是另一条加载路径（iframe 而不是同页），
+ * 但「该不该为一个形象花 3.4 MB」的判断必须**是同一条**，不然两只口径会不一致。
  */
-function shouldSkip(): boolean {
+export function shouldSkip(): boolean {
   try {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return true;
   } catch {
