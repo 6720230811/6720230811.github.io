@@ -1,0 +1,23 @@
+---
+/**
+ * 丝滑惯性滚动的挂载点。控制器本体在 src/lib/smooth-scroll.ts。
+ *
+ * 本组件**每页都渲染**（含被排除的展映厅页）—— 关不关不看「组件在不在」，
+ * 只看 <html data-smooth-scroll>。原因见控制器里 enabled() 的注释：
+ * View Transitions 换页时模块级状态是活的，靠「这页没组件」关不掉旧实例。
+ *
+ * 这里**不引**官方的 `lenis/dist/lenis.css`：它把 overscroll-behavior: contain
+ * 挂在 `.lenis` 类下，而 <html> 的 class 活不过一次换页（见控制器文件头），
+ * 规则会在换页后静默失效。我们只需要那一条，改挂在 [data-lenis-prevent] 上，
+ * 写在 global.css 里；官方其余几条（html.lenis{height:auto}、iframe 指针事件）
+ * 本站都用不到。
+ */
+---
+
+<script>
+  import { syncSmoothScroll } from '../lib/smooth-scroll';
+
+  // astro:page-load 首次进入也会触发，所以这两行不会漏掉首屏
+  document.addEventListener('astro:page-load', () => syncSmoothScroll());
+  syncSmoothScroll();
+</script>

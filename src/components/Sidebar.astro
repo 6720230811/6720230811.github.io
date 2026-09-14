@@ -24,7 +24,7 @@ const cvUrl = `${base}cv/${profile.cvFile}`;
 const { links } = profile;
 ---
 
-<aside class="sidebar">
+<aside class="sidebar" data-lenis-prevent>
   {/* ---------- 资料卡 ---------- */}
   <div class="card card--hover card--profile">
     <img class="sidebar__avatar" src={avatarUrl} alt={profile.name} width="512" height="512" />

@@ -120,7 +120,7 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
 ---
 
 <aside class="rail" aria-label={t('rail.aria')}>
-  <div class="rail__inner">
+  <div class="rail__inner" data-lenis-prevent>
     {/* ① 迷你资料卡 */}
     <div class="card rail__card mini-profile">
       <a class="mini-profile__avatar" href={`${home}#about`} tabindex="-1" aria-hidden="true">
@@ -185,7 +185,7 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
                         {cell.count} {t('rail.postsUnit')}
                       </span>
                     </span>
-                    <ul class="heat__day-list">
+                    <ul class="heat__day-list" data-lenis-prevent>
                       {cell.posts.map((p) => (
                         /* 只放一行标题：栏宽只有 ~140px，带上分类/时长会折成两行，
                            展开时把日历往下顶太多。完整标题在 title 里 */

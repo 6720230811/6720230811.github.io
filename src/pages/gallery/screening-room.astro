@@ -13,7 +13,7 @@ const p = profile[locale];
 const backUrl = getRelativeLocaleUrl(locale, 'gallery');
 ---
 
-<BaseLayout profile={p} locale={locale} title={`${t('screening.title')} · ${t('gallery.title')}`} description={t('screening.desc')}>
+<BaseLayout profile={p} locale={locale} title={`${t('screening.title')} · ${t('gallery.title')}`} description={t('screening.desc')} smoothScroll={false}>
   <Section title={t('screening.title')} icon="▣">
     <p class="list-summary">{t('screening.desc')}</p>
     <ScreeningRoom locale={locale} backUrl={backUrl} />

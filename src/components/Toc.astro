@@ -35,7 +35,8 @@ const links: readonly TocLink[] =
 {
   links.length > 0 && (
     <aside class="toc" aria-label={t('toc.aria')}>
-      <nav class="toc__inner">
+      {/* data-lenis-prevent：目录在 1536px+ 自带滚动条，滚轮要归它自己 */}
+      <nav class="toc__inner" data-lenis-prevent>
         <div class="card__title">{t('widget.contents')}</div>
         <ul class="toc__list">
           {links.map((link) => (

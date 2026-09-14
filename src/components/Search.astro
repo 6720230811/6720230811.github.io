@@ -49,7 +49,9 @@ const t = useTranslations(locale);
   </div>
 
   <p class="search-panel__status" id="search-status">{t('search.hint')}</p>
-  <ul class="search-results" id="search-results"></ul>
+  {/* data-lenis-prevent：自带滚动的容器，滚轮归它自己。没这个标记，Lenis 会把
+      滚轮吃掉去滚正文 —— 而这里恰恰是「刚打完字就把鼠标放在结果上」的高频位置 */}
+  <ul class="search-results" id="search-results" data-lenis-prevent></ul>
 </div>
 
 {/*
@@ -61,14 +63,33 @@ const t = useTranslations(locale);
 */}
 <script is:inline>
   (() => {
+    /*
+      这段脚本会被反复执行，而 document 自始至终是同一个对象 —— 所以必须保证
+      「无论跑多少遍，同一时刻只有一套监听活着」。
+
+      为什么会反复执行：文档 parse 时跑一次，`astro:page-load` 每次触发再跑一次
+      （首屏就会触发，所以首屏 init 就跑两遍）；换页时这段内联脚本还可能被整体
+      重跑，那是另一份实例、另一套闭包 —— 「每份实例只管清理自己」挡不住跨实例叠加。
+
+      叠起来的后果不是「多一次无用调用」，而是**功能直接坏掉**：一次点击跑 N 遍
+      处理器，前一个刚 setOpen(true)、后一个看到「已经开着」立刻 setOpen(false)，
+      表现成搜索按钮完全点不开。Navbar 的汉堡按钮踩过同一个坑，见那里的注释。
+
+      做法：把「撤掉本实例」的句柄挂到 window 上，新实例进来先调旧的。
+    */
+    window.__searchCleanup?.();
+
     // 索引只加载一次，换页后仍然复用
     let loading;
-    // 上一次绑定的 document 级监听：换页前撤掉，否则会越叠越多
+    // 撤掉本实例当前这套监听。init 每跑一次就换一个新 controller，
+    // 所以它同时也负责把「上一次绑的那套」撤掉。
     let cleanup = () => {};
+    window.__searchCleanup = () => cleanup();
 
     const init = () => {
       cleanup();
       const ac = new AbortController();
+      cleanup = () => ac.abort();
 
       const btn = document.getElementById('search-switch');
       const panel = document.getElementById('search-panel');
@@ -103,12 +124,21 @@ const t = useTranslations(locale);
         else input.value = '';
       };
 
-      btn.addEventListener('click', () => {
-        const willOpen = panel.classList.contains('float-panel--closed');
-        setOpen(willOpen);
-        // 面板一打开就预热索引，输入时不必再等
-        if (willOpen) load().catch(() => {});
-      });
+      // 这个监听必须挂 signal。init() 在首屏会被跑两遍（脚本执行一次 +
+      // astro:page-load 一次），而 cleanup() 只 abort 得掉挂了 signal 的那些 ——
+      // 不挂就会留下两份处理器，一次点击跑两遍：前一个刚把面板打开，
+      // 后一个看到「已经开着」又把它关回去，表现成**完全打不开**。
+      // Navbar 的汉堡按钮踩过同一个坑（那里用 dataset.bound 防的）。
+      btn.addEventListener(
+        'click',
+        () => {
+          const willOpen = panel.classList.contains('float-panel--closed');
+          setOpen(willOpen);
+          // 面板一打开就预热索引，输入时不必再等
+          if (willOpen) load().catch(() => {});
+        },
+        { signal: ac.signal }
+      );
 
       // Esc 关闭；点击面板之外也关闭。
       // 这两个挂在 document 上，而 document 在换页后还是同一个，所以要用 signal 撤掉旧的
@@ -193,12 +223,14 @@ const t = useTranslations(locale);
         }
       };
 
-      input.addEventListener('input', () => search(input.value));
+      // 同 btn：不挂 signal 会绑两遍，每敲一个字都触发两次 search()
+      input.addEventListener('input', () => search(input.value), { signal: ac.signal });
 
-      cleanup = () => ac.abort();
+      // 重绑完再登记「下次换页继续重绑」。它挂在同一个 controller 上，
+      // 于是下一次 init 一 abort 就会把它连同其它监听一起换掉 —— 恒为恰好一套。
+      document.addEventListener('astro:page-load', init, { signal: ac.signal });
     };
 
     init();
-    document.addEventListener('astro:page-load', init);
   })();
 </script>

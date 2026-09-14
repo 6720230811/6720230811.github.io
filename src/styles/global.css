@@ -110,6 +110,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Lenis 接管滚动时，标了 data-lenis-prevent 的嵌套滚动容器自己吃滚轮，
+   并且滚到底后不把溢出传给页面（scroll chaining 到此为止）。
+
+   为什么不用官方的 lenis.css：那条规则挂在 `.lenis` 类下，而 <html> 的 class
+   会被 View Transitions 的文档交换整个换掉 —— 类一没，规则就静默失效。
+   挂在属性上就与换页无关了，代价是它不依赖 JS（无 JS 时也在，效果同样合理：
+   侧栏/目录滚到底不带着页面一起滚）。 */
+[data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
 a {
   color: var(--c-accent);
   text-decoration: none;

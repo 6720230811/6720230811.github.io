@@ -134,7 +134,8 @@ const indexJson = JSON.stringify({ locale, docs, strings: s, cast }).replace(/</
            否则长答案一滚，× 就跟着滚出可视区了。
            aria-live 也放在 body 上：不然按钮文案的刷新会被读屏念出来 -->
       <div class="pet__bubble" data-pet-bubble hidden>
-        <div class="pet__bubble-body" data-pet-bubble-body role="status" aria-live="polite"></div>
+        {/* data-lenis-prevent：长答案要在这个盒子里滚，滚轮不能被 Lenis 拿去滚正文 */}
+        <div class="pet__bubble-body" data-pet-bubble-body role="status" aria-live="polite" data-lenis-prevent></div>
         <button
           class="pet__bubble-close"
           type="button"
