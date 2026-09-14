@@ -91,7 +91,12 @@ export function createRenderer(host: HTMLElement): RendererHandle | null {
 
   function post(message: Record<string, unknown>): void {
     try {
-      frame.contentWindow?.postMessage({ from: 'pet-host', ...message }, location.origin);
+      // 画布尺寸随 load 一起发过去，让渲染器**没有自己的默认值可写** ——
+      // 取景由画布后端缓冲的尺寸决定（投影按画布宽度归一化），两个宿主不一致
+      // 就会一大一小。这里踩过一次，详见 render.html 里 onLoad 的注释。
+      const payload: Record<string, unknown> =
+        message.t === 'load' ? { ...message, w: cfg.canvasW, h: cfg.canvasH } : message;
+      frame.contentWindow?.postMessage({ from: 'pet-host', ...payload }, location.origin);
     } catch {
       // contentWindow 还没建好，或父页正在卸载 —— 这一条丢了就丢了
     }

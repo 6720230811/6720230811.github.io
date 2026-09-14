@@ -30,6 +30,21 @@ export interface Live2DConfig {
    * 详见 docs/superpowers/specs/2026-09-12-multi-pet-design.md 第 2 节。
    */
   renderUrl: string;
+  /**
+   * 画布**后端缓冲**的尺寸（不是显示尺寸）。两个宿主必须完全相同。
+   *
+   * 为什么必须共享同一份 —— 可见范围就是这么定出来的（`live2d.js` 的 `n()`）：
+   *     var r = C.height / C.width;
+   *     viewMatrix.setScreenRect(VIEW_LOGICAL_LEFT, VIEW_LOGICAL_RIGHT, -r, r);
+   * 即 **可见横向固定为 ±1，可见纵向是 ±(canvasH / canvasW)**。画布越扁，
+   * 看到的纵向切片越窄、角色被放得越大。实测踩过一次：同伴的 iframe 只写了
+   * CSS `width/height:100%` 而**没设这两个属性**，画布吃了 HTML 规范默认的
+   * 300×150（2:1 扁的），可见纵向只剩 ±0.5 —— 中段三分之一，现象就是
+   * 「同伴比主角大 3 倍、头顶和小腿同时被切掉」，而当时所有断言都是绿的。
+   * 所以它只能有一份出处，由 stage-iframe.ts 随 load 一起发给渲染器。
+   */
+  canvasW: number;
+  canvasH: number;
 }
 
 // ------------------------------------------------------------------ 角色
@@ -281,5 +296,9 @@ export const pet: PetConfig = {
     enabled: true,
     runtimeUrl: '/live2d/js/live2d.js',
     renderUrl: '/live2d/render.html',
+    // 2:3 —— 主页面画布一直用的就是这个比例（可见纵向 ±1.5）。主角画布与同伴
+    // iframe 里的画布共用这一对值，改就一起改（见上面的注释）。
+    canvasW: 384,
+    canvasH: 576,
   },
 };

@@ -39,7 +39,7 @@
         那边已经有一整套踩过坑的排版契约，不该为了多一只重写一遍。
 
       协议（只认同源）：
-        主 → 本页  {from:'pet-host', t:'load',    modelUrl}
+        主 → 本页  {from:'pet-host', t:'load',    modelUrl, w, h}   w/h 是画布**后端缓冲**尺寸
         主 → 本页  {from:'pet-host', t:'pointer', x, y}   x/y 是**本页坐标系**内的值
         本页 → 主  {from:'pet-render', t:'hello'}          握手，父级收到后发 load
         本页 → 主  {from:'pet-render', t:'ready'}          模型已就绪，父级可淡入
@@ -137,11 +137,26 @@
             });
         }
 
-        function onLoad(modelUrl) {
+        function onLoad(modelUrl, w, h) {
           if (!modelUrl) {
             fail('no-url');
             return;
           }
+          /*
+            画布**后端缓冲**的尺寸决定取景，必须在 loadlive2d 之前设好。
+
+            机制：运行时把模型铺满逻辑坐标后，投影按**画布宽度**归一化 ——
+            可见的纵向范围 = ±(canvasH / canvasW)。所以画布越扁，看到的纵向切片
+            越窄、角色被放得越大。而 canvas 没有 width/height 属性时会吃 HTML
+            规范默认的 300×150（2:1 扁的）：可见纵向只剩 ±0.5，恰好是模型高度的
+            中段三分之一 —— 现象就是「同伴比主角大 3 倍，头顶和小腿都被切掉」。
+            主页面画布用的是 384×576（2:3 → 可见纵向 ±1.5），两只共用同一个值。
+
+            尺寸由父页随 load 一起给（见 stage-iframe.ts），这里**故意不留自己
+            的默认值**：两边各写一份就迟早会分叉。数字只是拿不到时的兜底。
+          */
+          canvas.width = w > 0 ? w : 384;
+          canvas.height = h > 0 ? h : 576;
           // 运行时不支持多实例、也没有卸载接口：load 第二次会顶掉第一只。
           // 同一只重复 load 直接回 ready（幂等），换模型则明确拒绝 ——
           // 换角色在父页是**整页刷新**，不需要热切换。
@@ -215,7 +230,7 @@
           if (e.origin !== ORIGIN) return;
           var d = e.data;
           if (!d || typeof d !== 'object' || d.from !== HOST) return;
-          if (d.t === 'load') onLoad(d.modelUrl);
+          if (d.t === 'load') onLoad(d.modelUrl, d.w, d.h);
           else if (d.t === 'pointer') onPointer(d.x, d.y);
         });
 

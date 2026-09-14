@@ -895,8 +895,11 @@ function createStage(host: HTMLElement, id: string, options: StageOptions): Stag
       canvas.className = 'pet__canvas';
       // 运行时是按 id 找元素的，而**同一份运行时只服务主角**，所以这里的 id 唯一
       canvas.id = `pet-canvas-${id}`;
-      canvas.width = 384;
-      canvas.height = 576;
+      // 取景由这对尺寸决定（投影按画布宽度归一化），同伴 iframe 里的画布用的是
+      // **同一对值**（pet.live2d.canvasW/H，由 stage-iframe.ts 随 load 发过去）。
+      // 改这里必须同时想到那边，否则两只的取景会不一致。
+      canvas.width = pet.live2d.canvasW;
+      canvas.height = pet.live2d.canvasH;
       canvas.setAttribute('aria-hidden', 'true');
       stage!.insertBefore(canvas, stage!.firstChild);
       ok = (await initLive2D(canvas, live2dModelUrl(findCharacter(id)))) === 'ok';
