@@ -1,0 +1,81 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import GalleryShell from '../../components/gallery/GalleryShell.astro';
+import CollectionIndex from '../../components/gallery/CollectionIndex.astro';
+import '../../styles/gallery.css';
+import '../../styles/gallery-spread.css';
+import '../../styles/gallery-collections.css';
+import { profile } from '../../data/profile';
+import { threeDCollections } from '../../data/gallery';
+import { galleryNav, no2 } from '../../lib/gallery/shell';
+import { toLocale, useTranslations } from '../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+/**
+ * 3D 艺术展厅（门排）。
+ *
+ * 2026-09-15 之前这个位置挂着 Section 卡片，和画廊首页（合集封面页）
+ * 是两副面孔；现在两页共用 GalleryShell + CollectionIndex，
+ * 只是这里传进去的是 threeDCollections —— 点封面进去就是那间可以走动的展厅。
+ */
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+const base = getRelativeLocaleUrl(locale, 'gallery');
+
+const list = threeDCollections;
+const photos = list.reduce((sum, item) => sum + item.photos.length, 0);
+const years = list.flatMap((item) => item.photos.map((photo) => photo.year));
+const yearSpan = years.length
+  ? Math.min(...years) === Math.max(...years)
+    ? String(Math.min(...years))
+    : `${Math.min(...years)}–${Math.max(...years)}`
+  : '—';
+
+const dirItems = list.map((collection, index) => ({
+  id: collection.id,
+  no: no2(index),
+  name: collection.title[locale],
+  sub: t(`gallery.style.${collection.style}`),
+  href: `${base}${collection.id}/`,
+}));
+
+const facts = [
+  { k: t('gallery.meta.collections'), v: `${list.length} ${t('gallery.roomCount')}` },
+  { k: t('gallery.meta.photos'), v: `${photos} ${t('gallery.itemCount')}` },
+  { k: t('gallery.meta.years'), v: yearSpan },
+];
+
+const hero = list[0]?.cover.src ?? `${import.meta.env.BASE_URL}banner.jpg`;
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${t('gallery.entry.rooms')} · ${t('gallery.title')}`}
+  description={t('gallery.rooms.intro')}
+  hero="backdrop"
+  heroImage={hero}
+  heroHeight="13rem"
+>
+  <GalleryShell
+    locale={locale}
+    no="02"
+    name={t('gallery.entry.rooms')}
+    intro={t('gallery.rooms.intro')}
+    entries={galleryNav(locale, base, 'rooms')}
+    dirTitle={t('gallery.dir.title')}
+    dirItems={dirItems}
+    noteTitle={t('gallery.note.title')}
+    noteBody={t('gallery.rooms.note')}
+    noteFacts={facts}
+    noteTags={[...new Set(list.flatMap((item) => item.tags))].slice(0, 8)}
+  >
+    <CollectionIndex locale={locale} base={base} list={list} />
+  </GalleryShell>
+</BaseLayout>
+
+<script>
+  import { initGalleryStudio } from '../../lib/gallery/studio';
+  initGalleryStudio();
+</script>

@@ -31,6 +31,10 @@ const base = import.meta.env.BASE_URL;
       <span>素材</span>
       <span class="sidebar__count" id="asset-count" hidden>0</span>
     </button>
+    <button class="sidebar__tab" type="button" role="tab" id="tab-gallery" data-tab="gallery" aria-selected="false" aria-controls="panel-gallery">
+      <Icon name="frame" />
+      <span>画廊</span>
+    </button>
   </nav>
 
   <div class="sidebar__block" data-only="post">
@@ -129,6 +133,36 @@ const base = import.meta.env.BASE_URL;
     <p id="trash-empty" class="trash__empty" hidden>还没有删除记录。</p>
     <p class="trash__hint">删掉的文章会在这台浏览器里留一份副本，可一键还原；换设备或清了站点数据就没有了。</p>
   </details>
+
+  {/* 画廊分区：合集列表。一个合集 = public/gallery 下的一个目录（图 + meta.json） */}
+  <div class="sidebar__block" data-only="gallery">
+    <div class="galp-new">
+      <button id="gal-new" class="btn btn--soft btn--block" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        新建合集
+      </button>
+      <button id="gal-reload" class="btn btn--ghost btn--block" type="button">
+        <Icon name="refresh" />
+        重新载入
+      </button>
+    </div>
+
+    <label class="search">
+      <Icon name="search" />
+      <input
+        id="gal-filter"
+        class="search__input"
+        type="search"
+        placeholder="过滤合集 id / 标题"
+        spellcheck="false"
+      />
+    </label>
+  </div>
+
+  <ul id="gal-items" class="sidebar__list" data-only="gallery" aria-label="合集列表"></ul>
+  <p id="gal-list-meta" class="sidebar__meta" data-only="gallery"></p>
 
   <footer class="sidebar__foot">
     <button id="token-pill" class="pill" type="button" data-state="missing">

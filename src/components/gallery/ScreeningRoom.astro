@@ -1,5 +1,5 @@
 ---
-import { gallery, mediaUrl } from '../../data/gallery';
+import { allPhotos, mediaUrl } from '../../data/gallery';
 import { useTranslations, type Locale } from '../../i18n/ui';
 
 interface Props {
@@ -9,13 +9,12 @@ interface Props {
 
 const { locale, backUrl } = Astro.props;
 const t = useTranslations(locale);
-const items = gallery.items
-  .filter((item) => item.type === 'image')
-  .map((item) => ({
-    id: item.id,
-    src: mediaUrl(item.src),
-    title: item.title[locale],
-  }));
+// allPhotos 全是图片（视频是访客自己从本地选的，不在仓库里）
+const items = allPhotos.map((photo) => ({
+  id: photo.id,
+  src: mediaUrl(photo.src),
+  title: photo.title[locale],
+}));
 ---
 
 <div

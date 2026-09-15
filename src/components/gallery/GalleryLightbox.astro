@@ -3,9 +3,15 @@ import { useTranslations, type Locale } from '../../i18n/ui';
 
 interface Props {
   locale: Locale;
+  /**
+   * 哪一批按钮算「一册」。默认是网格的 '.gal-tile'；
+   * 合集详情页的照片流传 '.gal-plate__tile'。
+   * 交给 lightbox.ts 时走 dialog 的 data-tiles —— <script> 拿不到组件 props。
+   */
+  selector?: string;
 }
 
-const { locale } = Astro.props;
+const { locale, selector = '.gal-tile' } = Astro.props;
 const t = useTranslations(locale);
 ---
 
@@ -17,6 +23,7 @@ const t = useTranslations(locale);
   class="gal-lb"
   id="gal-lightbox"
   aria-label={t('gallery.title')}
+  data-tiles={selector}
   data-label-camera={t('gallery.meta.camera')}
 >
   <div class="gal-lb__inner">

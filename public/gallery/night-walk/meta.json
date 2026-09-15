@@ -1,0 +1,81 @@
+{
+  "title": {
+    "zh": "夜行长廊",
+    "en": "Night Walk"
+  },
+  "subtitle": {
+    "zh": "城市 · 三条街",
+    "en": "The city · three streets"
+  },
+  "note": {
+    "zh": "三条街，一个晚上。天桥上的车流、雨停之后的便利店、天黑前最后十分钟的天台——城市在夜里把音量调低，反而听得更清楚。",
+    "en": "Three streets, one night: traffic off the footbridge, a convenience store after the rain, the last ten minutes of light on a rooftop. The city turns its volume down at night, and you hear more."
+  },
+  "mode": "3d",
+  "style": "louvre",
+  "theme": "city",
+  "year": 2024,
+  "cover": "01-last-bus.jpg",
+  "order": [
+    "01-last-bus.jpg",
+    "02-convenience.jpg",
+    "03-rooftop.jpg"
+  ],
+  "tags": [
+    "夜景",
+    "街拍"
+  ],
+  "gear": [
+    "Sony A7C · 35mm f/1.8",
+    "Fujifilm X100V"
+  ],
+  "photos": {
+    "01-last-bus.jpg": {
+      "title": {
+        "zh": "末班公交",
+        "en": "Last Bus"
+      },
+      "desc": {
+        "zh": "天桥上等了四十分钟，车流在下面拖成一条条光线。",
+        "en": "Forty minutes on the footbridge, traffic smearing into light below."
+      },
+      "year": 2024,
+      "camera": "Sony A7C · 35mm f/1.8",
+      "tags": [
+        "夜景",
+        "长曝光"
+      ]
+    },
+    "02-convenience.jpg": {
+      "title": {
+        "zh": "便利店",
+        "en": "Convenience Store"
+      },
+      "desc": {
+        "zh": "雨刚停，整条街只剩这一块亮着。",
+        "en": "The rain had just stopped; this was the only lit thing on the street."
+      },
+      "year": 2024,
+      "camera": "Sony A7C · 35mm f/1.8",
+      "tags": [
+        "夜景",
+        "街拍"
+      ]
+    },
+    "03-rooftop.jpg": {
+      "title": {
+        "zh": "天台",
+        "en": "Rooftop"
+      },
+      "desc": {
+        "zh": "天黑之前最后十分钟，楼顶风很大。",
+        "en": "The last ten minutes before dark, and it was windy up there."
+      },
+      "year": 2025,
+      "camera": "Fujifilm X100V",
+      "tags": [
+        "黄昏"
+      ]
+    }
+  }
+}

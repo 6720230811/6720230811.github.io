@@ -1,0 +1,501 @@
+/* ============================================================
+   合集的两页：封面索引（/gallery/）与合集详情（/gallery/<合集>/）
+
+   外壳（页头 + 两侧栏 + 借宽）在 gallery-spread.css，这里只管中间那栏的两样东西：
+
+     封面索引 —— 每个合集一块「封面 + 右侧信息」。封面比例用图片自己的，
+       所以竖构图那本自然就比横构图那本高，整页不用刻意错落就有节奏。
+       第一本做开篇：封面通栏、信息条压到下面分两栏。
+
+     照片流 —— 宽度档位在 12 栏里轮换（通栏 / 左半 / 偏右 / 近通栏 …），
+       配巨大的编号与发丝线。这是「一页看完一个合集」的版面，
+       加照片只需往目录里丢文件，档位自动轮换。
+   ============================================================ */
+
+/* ═══════════════════ 一、封面索引 ═══════════════════ */
+
+.gal-covers {
+  display: grid;
+  gap: 4rem;
+}
+
+.gal-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 1.25rem 1.75rem;
+  align-items: start;
+  min-width: 0;
+}
+
+/* 开篇那本：封面通栏，信息条压到封面下面、自己分两栏
+   （左边是标题与前言，右边是合计与去处）*/
+.gal-cover--feature {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.gal-cover--feature .gal-cover__frame {
+  max-height: 33rem;
+}
+
+.gal-cover--feature .gal-cover__panel {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1.5rem 2.25rem;
+  align-items: start;
+  padding-top: 0.25rem;
+}
+
+/* 交错的下沉量：三块一循环。开篇不参与（它是通栏的，错开反而散了）。 */
+.gal-covers > .gal-cover:nth-child(3n + 2) {
+  margin-top: 2.75rem;
+}
+
+.gal-covers > .gal-cover:nth-child(3n + 3) {
+  margin-top: 1rem;
+}
+
+/* ---------- 封面 ---------- */
+
+.gal-cover__frame {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  /* 比例跟着封面图自己走；上限挡住「竖构图撑成一整屏」那种情况。
+     超出部分由 object-fit 裁掉 —— 封面本来就可以裁。 */
+  aspect-ratio: var(--ar, 3 / 2);
+  max-height: 26rem;
+  box-shadow: 0 1px 2px -1px var(--c-shadow-md);
+  transition: box-shadow 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gal-cover__frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gal-cover__frame:hover,
+.gal-cover__frame:focus-visible {
+  box-shadow: 0 14px 34px -14px var(--c-shadow-md);
+  transform: translateY(-3px);
+}
+
+.gal-cover__frame:hover img,
+.gal-cover__frame:focus-visible img {
+  transform: scale(1.04);
+}
+
+/* 底部压暗：编号与「进入」按钮压在上面时，浅色照片上也能读 */
+.gal-cover__frame::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 46%;
+  background: linear-gradient(to top, rgba(6, 10, 18, 0.62), rgba(6, 10, 18, 0));
+  pointer-events: none;
+}
+
+.gal-cover__no {
+  position: absolute;
+  left: 1rem;
+  bottom: 0.7rem;
+  z-index: 1;
+  font-size: clamp(2.75rem, 5.5vw, 4.75rem);
+  font-weight: 800;
+  line-height: 0.78;
+  letter-spacing: -0.05em;
+  color: #fff;
+  opacity: 0.94;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.gal-cover__cta {
+  position: absolute;
+  right: 0.9rem;
+  bottom: 0.95rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #151a22;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  pointer-events: none;
+}
+
+.gal-cover__frame:hover .gal-cover__cta,
+.gal-cover__frame:focus-visible .gal-cover__cta,
+.gal-cover.is-lit .gal-cover__cta {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- 封面右边的信息 ---------- */
+
+.gal-cover__panel {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.gal-cover__lead {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.gal-cover__kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--c-text-faint);
+}
+
+.gal-cover__name {
+  margin: 0;
+  font-size: clamp(1.3rem, 2vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.gal-cover__note {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.78;
+  color: var(--c-text-muted);
+}
+
+.gal-cover__meta {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+  min-width: 0;
+}
+
+/* 展示方式的标记：3D 展厅 / 平面 */
+.gal-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--c-text-muted);
+}
+
+.gal-mode::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--c-text-faint);
+}
+
+.gal-mode--3d::before {
+  background: var(--c-accent);
+}
+
+/* 点亮某一块时，别的退后半步 —— 和目录栏联动（见 lib/gallery/studio.ts） */
+.gal-covers.is-dimming .gal-cover:not(.is-lit) .gal-cover__frame img,
+.gal-covers.is-dimming .gal-cover:not(.is-lit) .gal-cover__panel {
+  opacity: 0.45;
+}
+
+.gal-covers .gal-cover__frame img,
+.gal-covers .gal-cover__panel {
+  transition: opacity 0.22s ease, transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ═══════════════════ 二、合集详情 ═══════════════════ */
+
+.gal-detail {
+  display: grid;
+  gap: 2.75rem;
+}
+
+/* 开篇：封面通栏 + 标题压在图上 */
+.gal-detail__hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  aspect-ratio: var(--ar, 3 / 2);
+  max-height: 32rem;
+}
+
+.gal-detail__hero img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gal-detail__hero-body {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 4rem 1.6rem 1.35rem;
+  background: linear-gradient(to top, rgba(6, 10, 18, 0.74), rgba(6, 10, 18, 0));
+  color: #fff;
+}
+
+.gal-detail__kicker {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  opacity: 0.82;
+}
+
+.gal-detail__name {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.5rem, 2.8vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.gal-detail__sub {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  opacity: 0.86;
+}
+
+/* ---------- 照片流 ---------- */
+
+.gal-stream {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  /* 行间距给大：每张照片配一行说明，且相邻两张的档位不同，
+     间距小了会看成「一列柱子」。 */
+  gap: 4.75rem 1.5rem;
+  align-items: start;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gal-plate {
+  grid-column: var(--col, 1 / -1);
+  margin-top: var(--dy, 0rem);
+  min-width: 0;
+}
+
+.gal-plate__tile {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: zoom-in;
+}
+
+.gal-plate__img {
+  display: block;
+  width: 100%;
+  /* HTML 的 width/height 属性会落成 presentational hint（height: 832px），
+     把 aspect-ratio 顶掉 —— 必须显式 height:auto，比例才接管。 */
+  height: auto;
+  aspect-ratio: var(--ar, 3 / 2);
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: var(--c-bg-soft);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease,
+    opacity 0.25s ease;
+}
+
+.gal-plate__tile:hover .gal-plate__img,
+.gal-plate__tile:focus-visible .gal-plate__img {
+  transform: translateY(-5px);
+  box-shadow: 0 18px 40px -18px var(--c-shadow-md);
+}
+
+.gal-stream.is-dimming .gal-plate:not(.is-lit) .gal-plate__img,
+.gal-stream.is-dimming .gal-plate:not(.is-lit) .gal-plate__cap {
+  opacity: 0.42;
+}
+
+/* 说明行：大编号 + 发丝线 + 标题/描述。
+   编号**不压在照片上** —— 压上去就得靠白字加阴影，遇到亮照片会读不出来
+   （本仓已有一次「白线压在底色上等于没画」的教训）；
+   放在图外的说明行里，任何照片都稳。 */
+.gal-plate__cap {
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 1rem;
+  margin-top: 0.95rem;
+  transition: opacity 0.25s ease;
+}
+
+.gal-plate__no {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.gal-plate__text {
+  display: grid;
+  gap: 0.3rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--c-border);
+  min-width: 0;
+}
+
+.gal-plate__name {
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.gal-plate__desc {
+  font-size: 0.84rem;
+  line-height: 1.72;
+  color: var(--c-text-muted);
+  max-width: 54ch;
+}
+
+.gal-plate__meta {
+  font-size: 0.74rem;
+  color: var(--c-text-faint);
+}
+
+/* 窄档位（占不到半幅）时说明行收成上下：编号在左、正文在右，
+   3.6rem 那一列在窄盒子里会把说明挤成两三个字一行。 */
+@media (max-width: 1240px) {
+  .gal-plate__cap {
+    grid-template-columns: 2.6rem minmax(0, 1fr);
+    column-gap: 0.75rem;
+  }
+
+  .gal-plate__no {
+    font-size: 1.4rem;
+  }
+}
+
+/* ---------- 滚动揭示 ----------
+   只在支持的浏览器 + 没要求减动效时开。`view()` 时间线让照片随滚动浮起来，
+   一页照片多时这一步是「冲击力」的主要来源。
+
+   ⚠ 全页截图（captureBeyondViewport）会把视口外的元素停在动画起点 ——
+   所以 e2e 与定妆照脚本都模拟了 prefers-reduced-motion: reduce，
+   等于把这一层关掉再拍。加新截图脚本时别忘了这一条。 */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .gal-plate {
+      animation: gal-plate-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 26%;
+    }
+  }
+}
+
+@keyframes gal-plate-rise {
+  from {
+    opacity: 0;
+    transform: translateY(2.75rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ═══════════════════ 三、窄屏 ═══════════════════ */
+
+/* 封面索引在上下一栏时：封面在上、信息在下（「右侧」没有位置了） */
+@media (max-width: 1080px) {
+  .gal-covers {
+    gap: 3.25rem;
+  }
+
+  .gal-cover,
+  .gal-cover--feature {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gal-cover--feature .gal-cover__panel {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .gal-cover__frame,
+  .gal-cover--feature .gal-cover__frame {
+    max-height: none;
+  }
+
+  .gal-covers > .gal-cover:nth-child(3n + 2),
+  .gal-covers > .gal-cover:nth-child(3n + 3) {
+    margin-top: 0;
+  }
+}
+
+/* 照片流收成单列：档位与错落一并取消 —— 单列里错落只剩参差，没有版面的意思 */
+@media (max-width: 780px) {
+  .gal-stream {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.75rem;
+  }
+
+  .gal-plate {
+    grid-column: 1 / -1;
+    margin-top: 0;
+  }
+
+  .gal-plate__cap {
+    grid-template-columns: 2.4rem minmax(0, 1fr);
+  }
+}
+
+/* 减动效：位移、放大、聚光全部退成静态，只留边框/颜色这类不动的反馈 */
+@media (prefers-reduced-motion: reduce) {
+  .gal-cover__frame,
+  .gal-cover__frame img,
+  .gal-cover__cta,
+  .gal-plate__img,
+  .gal-plate__cap,
+  .gal-covers .gal-cover__panel {
+    transition: none;
+  }
+
+  .gal-cover__frame:hover,
+  .gal-cover__frame:focus-visible,
+  .gal-cover__frame:hover img,
+  .gal-cover__frame:focus-visible img,
+  .gal-plate__tile:hover .gal-plate__img,
+  .gal-plate__tile:focus-visible .gal-plate__img {
+    transform: none;
+  }
+
+  /* 按钮该看得见 —— 它只是不做位移 */
+  .gal-cover__cta {
+    opacity: 1;
+    transform: none;
+  }
+}

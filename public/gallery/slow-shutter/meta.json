@@ -1,0 +1,47 @@
+{
+  "title": {
+    "zh": "慢门",
+    "en": "Slow Shutter"
+  },
+  "subtitle": {
+    "zh": "海 · 一次曝光",
+    "en": "The sea · one exposure"
+  },
+  "note": {
+    "zh": "慢门把水变成了雾，石头还在原地。一次曝光，一个盒子。",
+    "en": "A slow shutter turned the water into mist; the rocks stayed. One exposure, one box."
+  },
+  "mode": "3d",
+  "style": "neue",
+  "theme": "sea",
+  "year": 2024,
+  "cover": "01-waves.jpg",
+  "order": [
+    "01-waves.jpg"
+  ],
+  "tags": [
+    "海",
+    "长曝光"
+  ],
+  "gear": [
+    "Sony A7C · 24mm"
+  ],
+  "photos": {
+    "01-waves.jpg": {
+      "title": {
+        "zh": "浪",
+        "en": "Waves"
+      },
+      "desc": {
+        "zh": "慢门把水变成了雾，石头还在原地。",
+        "en": "A slow shutter turned the water into mist; the rocks stayed."
+      },
+      "year": 2024,
+      "camera": "Sony A7C · 24mm",
+      "tags": [
+        "海",
+        "长曝光"
+      ]
+    }
+  }
+}

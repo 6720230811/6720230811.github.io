@@ -1,0 +1,61 @@
+{
+  "title": {
+    "zh": "潮汐之间",
+    "en": "Between Tides"
+  },
+  "subtitle": {
+    "zh": "海 · 两个时刻",
+    "en": "The sea · two moments"
+  },
+  "note": {
+    "zh": "五点半的渔港，雾还没散，船都在原地；退潮以后，湿沙把天空又还给了一遍。同一片海，隔几个钟头就换一副面孔。",
+    "en": "At half past five the mist had not lifted and the boats had not moved. After the tide went out, the wet sand gave the sky back. The same sea, a few hours apart, wearing a different face."
+  },
+  "mode": "flat",
+  "theme": "sea",
+  "year": 2025,
+  "cover": "01-dawn-port.jpg",
+  "order": [
+    "01-dawn-port.jpg",
+    "02-low-tide.jpg"
+  ],
+  "tags": [
+    "海"
+  ],
+  "gear": [
+    "Sony A7C · 55mm"
+  ],
+  "photos": {
+    "01-dawn-port.jpg": {
+      "title": {
+        "zh": "渔港清晨",
+        "en": "Fishing Port, Dawn"
+      },
+      "desc": {
+        "zh": "五点半，雾还没散，船都在原地。",
+        "en": "Half past five, the mist had not lifted, and the boats had not moved."
+      },
+      "year": 2025,
+      "camera": "Sony A7C · 55mm",
+      "tags": [
+        "海",
+        "清晨"
+      ]
+    },
+    "02-low-tide.jpg": {
+      "title": {
+        "zh": "退潮",
+        "en": "Low Tide"
+      },
+      "desc": {
+        "zh": "湿沙把天空又还给了一遍。",
+        "en": "The wet sand gave the sky back once more."
+      },
+      "year": 2025,
+      "camera": "Sony A7C · 55mm",
+      "tags": [
+        "海"
+      ]
+    }
+  }
+}

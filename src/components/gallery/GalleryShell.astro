@@ -1,0 +1,175 @@
+---
+import { useTranslations, type Locale } from '../../i18n/ui';
+import type { DirItem, Fact, NavEntry } from '../../lib/gallery/shell';
+
+/**
+ * 画廊的跨页外壳：左栏目录 ｜ 中栏内容 ｜ 右栏说明。
+ *
+ * /gallery/ 下四个页面（合集封面页、合集详情页、3D 展厅门排、私人放映室）
+ * 都用它，中间那栏的内容各不相同、但页头和两侧栏是同一套 ——
+ * 所以从一页切到另一页不会换一副面孔（这一条是 2026-09-15 那轮明确要求）。
+ *
+ * 结构上有一条不能动：**页头必须留在中栏里**，不能跨整幅。
+ * 横跨会把两侧栏挤到第二行、起跑线低于标题，右栏给宠物让位的余量就不够了
+ * （详见 gallery-spread.css 的 .gal-spread__main）。
+ */
+interface Props {
+  locale: Locale;
+  /** 页头：编号 + 名称 + 一句导语 */
+  no: string;
+  name: string;
+  intro: string;
+  entries: NavEntry[];
+  /** 左栏 */
+  dirTitle: string;
+  dirItems: DirItem[];
+  /** 右栏 */
+  noteTitle: string;
+  noteBody: string;
+  noteFacts?: Fact[];
+  noteGear?: string[];
+  noteTags?: string[];
+}
+
+const {
+  locale,
+  no,
+  name,
+  intro,
+  entries,
+  dirTitle,
+  dirItems,
+  noteTitle,
+  noteBody,
+  noteFacts = [],
+  noteGear = [],
+  noteTags = [],
+} = Astro.props;
+
+const t = useTranslations(locale);
+const inline = entries.filter((entry) => !entry.accent);
+const aside = entries.filter((entry) => entry.accent);
+---
+
+<div class="gal-spread" data-gal-spread>
+  <aside class="gal-rail gal-rail--dir" data-gal-dir data-lenis-prevent>
+    <h3 class="gal-rail__title">{dirTitle}</h3>
+    <ul class="gal-dir">
+      {
+        dirItems.map((item) =>
+          item.plain ? (
+            <li>
+              {/* 纯清单（放映室的片单）：没有可去的地方，就不做成链接 */}
+              <span class="gal-dir__row gal-dir__row--plain">
+                {item.no && <span class="gal-dir__no">{item.no}</span>}
+                <span class="gal-dir__name">{item.name}</span>
+                {item.sub && <span class="gal-dir__sub">{item.sub}</span>}
+              </span>
+            </li>
+          ) : (
+            <li>
+              <a
+                class="gal-dir__row"
+                href={item.href ?? `#${item.id}`}
+                data-gal-jump={item.id}
+              >
+                {item.no && <span class="gal-dir__no">{item.no}</span>}
+                <span class="gal-dir__name">{item.name}</span>
+                {item.sub && <span class="gal-dir__sub">{item.sub}</span>}
+              </a>
+            </li>
+          )
+        )
+      }
+    </ul>
+  </aside>
+
+  <div class="gal-spread__main">
+    <header class="gal-spread__head">
+      <h2 class="gal-spread__label">
+        <span class="gal-spread__no">{no}</span>
+        <span class="gal-spread__name">{name}</span>
+        <span class="gal-spread__rule" aria-hidden="true"></span>
+      </h2>
+      <p class="gal-spread__intro">{intro}</p>
+
+      <nav class="gal-head__tools" aria-label={t('gallery.title')}>
+        <div class="gal-views">
+          {
+            inline.map((entry) => (
+              <a
+                class="gal-view"
+                href={entry.href}
+                aria-current={entry.current ? 'page' : undefined}
+              >
+                {entry.icon} {entry.label}
+              </a>
+            ))
+          }
+        </div>
+        {/* 本页自己的工具（目前只有 3D 合集的「房间 / 网格」切换）——
+            投在这里，与跨页导航同处一排。自己另起一行就会出现两排一样的胶囊 */}
+        <slot name="tools" />
+        {
+          aside.map((entry) => (
+            <a
+              class="gal-view gal-view--accent"
+              href={entry.href}
+              aria-current={entry.current ? 'page' : undefined}
+            >
+              {entry.icon} {entry.label}
+            </a>
+          ))
+        }
+      </nav>
+    </header>
+
+    <div class="gal-spread__body">
+      <slot />
+    </div>
+  </div>
+
+  <aside class="gal-rail gal-rail--note" data-lenis-prevent>
+    <h3 class="gal-rail__title">{noteTitle}</h3>
+    <p class="gal-rail__body">{noteBody}</p>
+
+    {
+      noteFacts.length > 0 && (
+        <dl class="gal-facts">
+          {noteFacts.map((fact) => (
+            <div class="gal-facts__row">
+              <dt>{fact.k}</dt>
+              <dd>{fact.v}</dd>
+            </div>
+          ))}
+        </dl>
+      )
+    }
+
+    {
+      noteGear.length > 0 && (
+        <>
+          <h3 class="gal-rail__title">{t('gallery.meta.gear')}</h3>
+          <ul class="gal-tags">
+            {noteGear.map((value) => (
+              <li>{value}</li>
+            ))}
+          </ul>
+        </>
+      )
+    }
+
+    {
+      noteTags.length > 0 && (
+        <>
+          <h3 class="gal-rail__title">{t('gallery.meta.tags')}</h3>
+          <ul class="gal-tags">
+            {noteTags.map((value) => (
+              <li>{value}</li>
+            ))}
+          </ul>
+        </>
+      )
+    }
+  </aside>
+</div>

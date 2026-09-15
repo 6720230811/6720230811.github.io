@@ -758,6 +758,36 @@ h4 {
   background-size: cover;
   background-position: center;
 }
+/* 门面带（hero="backdrop"）：只当**背景**用，不占文档流。
+
+   与 .hero（横幅）的区别就在这儿。横幅会把下面的内容往下推
+   --banner-h − --banner-overlap（900px 视口下 315−56 = 259px），
+   而画廊跨页的两侧栏是 sticky 的、让位量按「栏顶 = 顶栏下方」算 ——
+   一推就顶到右下角的宠物身上（实测右栏下缘 723 vs 宠物 564，
+   调 max-height 救不回来，因为前提就错了）。
+
+   所以画廊要的是「有背景、不占位」：绝对定位铺在文档顶部，顶栏浮在它上面，
+   跨页从顶栏下面正常起跑。底部渐隐到页面底色，免得图与内容交界处留一条硬边。
+
+   body / html 都没有定位，所以这个绝对定位盒子挂在初始包含块上 = 铺满视口宽。 */
+.hero--backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--hero-backdrop-h, 30rem);
+  margin-bottom: 0;
+  opacity: 0.55;
+  /* 顶栏那一段要实，跨页页头那一段要基本退干净 ——
+     实测铺满又慢渐隐时，右栏的小灰字正好落在照片最亮的地方，读不出来 */
+  /* 顶上那一段要实（顶栏 + 顶栏与跨页之间的间距都在这里），
+     往下要尽快退干净 —— 一路铺到页头下面时，右栏的小灰字正好落在
+     照片最亮的地方，实测读不出来。高度见各页的 heroHeight（13rem）。 */
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 34%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 34%, transparent 100%);
+  pointer-events: none;
+}
+
 
 /* 底部渐隐到页面底色，避免与内容区出现硬边 */
 .hero::after {

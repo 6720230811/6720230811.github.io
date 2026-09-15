@@ -34,9 +34,16 @@ interface Props {
    * 顶部视觉，三选一：
    * - 'banner'（默认）：静态横幅（现状），全站沿用
    * - 'immersive'：首页的沉浸式视差首屏（见 HomeHero.astro）
+   * - 'backdrop'：只当背景、不占文档流。画廊跨页要的是「有背景、不占位」——
+   *   横幅那 259px 一推，跨页两侧栏的 sticky 起跑线就低于让位锚点，
+   *   右栏下缘会压到右下角的宠物身上（见 global.css 的 .hero--backdrop）
    * - 'none'：不渲染任何顶部视觉
    */
-  hero?: 'banner' | 'immersive' | 'none';
+  hero?: 'banner' | 'immersive' | 'backdrop' | 'none';
+  /** hero='backdrop' 时的背景图（站内路径）；省略用全站的 banner.jpg */
+  heroImage?: string;
+  /** hero='backdrop' 时的高度；省略由 CSS 给 30rem */
+  heroHeight?: string;
   /**
    * 左侧个人信息卡（头像 / 姓名 / 简介 / 联系）只在关于页出现 ——
    * 首页改版成沉浸式门面后，它跟着简历式内容一起搬去了 /about。
@@ -72,6 +79,8 @@ const {
   description,
   toc,
   hero = 'banner',
+  heroImage,
+  heroHeight,
   showSidebar = false,
   canonical,
   rail = false,
@@ -209,17 +218,24 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
       });
     </script>
 
-    {/* 顶部视觉（三选一）：
+    {/* 顶部视觉（四选一）：
         · 'immersive' → 首页的沉浸式视差首屏，见 HomeHero.astro
         · 'banner'    → 静态横幅（现状），全站沿用；下方 .page 会盖住它的底部 --banner-overlap
+        · 'backdrop'  → 只当背景、不占文档流（画廊跨页用；见 global.css 的 .hero--backdrop）
         · 'none'      → 不渲染
-        三者渲染在同一个位置（.page **之外**），所以沉浸首屏天然全出血，
+        四者渲染在同一个位置（.page **之外**），所以沉浸首屏天然全出血，
         不受 --page-max 与 .page 内边距的限制。 */}
     {
       hero === 'immersive' ? (
         <HomeHero locale={locale} profile={profile} />
       ) : hero === 'none' ? null : (
-        <div class="hero" aria-hidden="true" style={`--banner-img: url('${base}banner.jpg')`} />
+        <div
+          class:list={['hero', { 'hero--backdrop': hero === 'backdrop' }]}
+          aria-hidden="true"
+          style={`--banner-img: url('${heroImage ?? `${base}banner.jpg`}')${
+            heroHeight ? `; --hero-backdrop-h: ${heroHeight}` : ''
+          }`}
+        />
       )
     }
 

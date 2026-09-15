@@ -4,7 +4,7 @@ import type { Locale } from '../i18n/ui';
 import { useTranslations } from '../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import { postsOf } from '../lib/posts';
-import { gallery, mediaUrl } from '../data/gallery';
+import { allPhotos, mediaUrl } from '../data/gallery';
 import PostCard from './PostCard.astro';
 
 /**
@@ -39,7 +39,7 @@ const posts = await postsOf(locale);
 const latest = posts.slice(0, 3);
 
 const galleryBase = getRelativeLocaleUrl(locale, 'gallery');
-const shots = gallery.items.slice(0, 3);
+const shots = allPhotos.slice(0, 3);
 
 /** 四个入口：顺序与顶栏导航一致（首页之外的主要目的地） */
 const entries = [
@@ -59,7 +59,8 @@ const entries = [
     href: galleryBase,
     title: t('nav.gallery'),
     desc: t('home.card.gallery'),
-    meta: gallery.items.length > 0 ? `${gallery.items.length} ${t('gallery.itemCount')}` : '',
+    meta:
+      allPhotos.length > 0 ? `${allPhotos.length} ${t('gallery.itemCount')}` : '',
   },
   {
     href: getRelativeLocaleUrl(locale, 'friends'),
@@ -164,15 +165,15 @@ const entries = [
         <ul class="shots" data-rv data-rv-state="out" data-lens-group>
           {shots.map((item) => (
             <li>
-              {/* 点进去落在它所属主题的房间（/gallery/theme-city/ 这类）。
+              {/* 点进去落在这张照片所属的**合集**页（/gallery/night-walk/ 这类）。
                   transition:name 与 GalleryGrid 里同一件展品同名 ——
-                  点下去时这张缩略图会「飞」到房间页网格里它的位置上。
+                  点下去时这张缩略图会「飞」到合集页网格里它的位置上。
                   名字用 id 而不是下标：下标会在改 JSON 顺序时错位，
                   而重名的后果不是这一对失效，是整次导航的 View Transition 全被跳过。
 
                   名字挂在 <img> 上而不是外层 <a> 上：对面 GalleryGrid 里也是个裸 <img>，
                   图对图才是同一对；挂在外层会把底下的标题蒙版一起卷进快照。 */}
-              <a class="shot" href={`${galleryBase}theme-${item.theme}/`} data-lens>
+              <a class="shot" href={`${galleryBase}${item.collectionId}/`} data-lens>
                 <img
                   class="shot__img"
                   src={mediaUrl(item.thumb)}

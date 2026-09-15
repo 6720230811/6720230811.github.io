@@ -28,7 +28,8 @@ const { groups, locale } = Astro.props;
 {
   groups.map((group) => (
     <section class="gal-group">
-      <h3 class="gal-group__name">{group.label}</h3>
+      {/* 平铺页只有一组、且不给标签 —— 那时不渲染空标题，免得留一道空行 */}
+      {group.label && <h3 class="gal-group__name">{group.label}</h3>}
       <ul class="gal-grid">
         {group.items.map((item) => (
           <li>

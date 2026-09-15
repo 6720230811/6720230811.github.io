@@ -7,8 +7,18 @@
  */
 export function initGridLightbox(): void {
   const dialogEl = document.getElementById('gal-lightbox') as HTMLDialogElement | null;
-  const tiles = Array.from(document.querySelectorAll<HTMLButtonElement>('.gal-tile'));
-  if (!dialogEl || tiles.length === 0) return;
+  if (!dialogEl) return;
+
+  /*
+    哪一批按钮算「一册」由灯箱自己说了算（data-tiles）：
+    网格是 .gal-tile，合集详情页的照片流是 .gal-plate__tile。
+    写死在选择器里的话，详情页要么点不开灯箱、要么把 3D 网格的按钮一起算进来。
+    为什么走 data 属性而不是组件 prop：Astro 的 <script> 是提升出去的，
+    读不到组件 props，只能借 DOM 传一次。
+  */
+  const selector = dialogEl.dataset.tiles || '.gal-tile';
+  const tiles = Array.from(document.querySelectorAll<HTMLButtonElement>(selector));
+  if (tiles.length === 0) return;
   // 闭包里要用，先收成非空常量：TS 的 narrowing 进不了闭包
   const dialog: HTMLDialogElement = dialogEl;
 

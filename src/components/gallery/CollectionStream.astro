@@ -1,0 +1,94 @@
+---
+import { photoAR, type Photo } from '../../data/gallery';
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+/**
+ * 合集详情页的正文（mode: 'flat'）：一条**杂志式照片流**。
+ *
+ * 冲击力从三处来，都不靠花哨的效果：
+ *   ① 宽度档位在 12 栏里轮换（通栏 → 左半 → 偏右 → 近通栏内缩 → …），
+ *      相邻两张必定错开，绝不会排成一列等宽的柱子；
+ *   ② 每张配一行说明：大编号 + 发丝线 + 标题/描述/参数 —— 说明在**图外**，
+ *      所以任何照片上都读得清（压在图上的白字遇到亮照片会消失）；
+ *   ③ 行距给到 4.75rem，一屏只放得下一两张 —— 照片多的时候才不显拥挤。
+ *
+ * 加照片不用改这里：档位按序号取模，往目录里丢文件就自动往下排。
+ */
+interface Props {
+  photos: readonly Photo[];
+  locale: Locale;
+}
+
+const { photos, locale } = Astro.props;
+const t = useTranslations(locale);
+
+/**
+ * 宽度档位与下沉量。12 栏，`--col` 直接喂给 grid-column。
+ *
+ * 相邻两档**必须列位重叠**：重叠才会各占一行，否则两张会并到同一行、
+ * 版式当场变成规整的两列。
+ */
+const SLOTS = [
+  { col: '1 / -1', dy: '0rem' },
+  { col: '1 / span 7', dy: '2.5rem' },
+  { col: '6 / span 7', dy: '0rem' },
+  { col: '2 / span 9', dy: '3.5rem' },
+  { col: '7 / span 6', dy: '1rem' },
+  { col: '3 / span 8', dy: '0rem' },
+];
+const slotFor = (index: number) => SLOTS[index % SLOTS.length];
+
+const no = (index: number) => String(index + 1).padStart(2, '0');
+
+/** 一行参数：器材 · 年份（最多一个间隔点，别堆成数据条） */
+const metaOf = (photo: Photo) =>
+  [photo.camera, String(photo.year)].filter((value): value is string => Boolean(value)).join(' · ');
+---
+
+<ul class="gal-stream" data-gal-dim>
+  {
+    photos.map((photo, index) => {
+      const slot = slotFor(index);
+      return (
+        <li
+          class="gal-plate"
+          id={photo.id}
+          data-gal-block={photo.id}
+          style={`--col: ${slot.col}; --dy: ${slot.dy}`}
+        >
+          <button
+            class="gal-plate__tile"
+            type="button"
+            data-gal-open
+            data-id={photo.id}
+            data-src={photo.src}
+            data-title={photo.title[locale]}
+            data-desc={photo.desc?.[locale] ?? ''}
+            data-camera={photo.camera ?? ''}
+            aria-label={photo.title[locale]}
+          >
+            <img
+              class="gal-plate__img"
+              src={photo.thumb}
+              alt={photo.title[locale]}
+              width={photo.w ?? 1200}
+              height={photo.h ?? 800}
+              loading={index < 2 ? 'eager' : 'lazy'}
+              style={`--ar: ${photoAR(photo)}`}
+              transition:name={`p-${photo.id}`}
+            />
+          </button>
+
+          <div class="gal-plate__cap">
+            <span class="gal-plate__no">{no(index)}</span>
+            <div class="gal-plate__text">
+              <span class="gal-plate__name">{photo.title[locale]}</span>
+              {photo.desc && <span class="gal-plate__desc">{photo.desc[locale]}</span>}
+              {metaOf(photo) && <span class="gal-plate__meta">{metaOf(photo)}</span>}
+            </div>
+          </div>
+        </li>
+      );
+    })
+  }
+</ul>

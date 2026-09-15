@@ -1,0 +1,55 @@
+---
+import GalleryFloor from './GalleryFloor.astro';
+import GalleryGrid from './GalleryGrid.astro';
+import GalleryLightbox from './GalleryLightbox.astro';
+import { collectionItems, type Collection } from '../../data/gallery';
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+/**
+ * 合集详情页的正文（mode: '3d'）：复刻展厅。
+ *
+ * 展厅里摆的是**所有 3D 合集**（走过拱门换一间 —— 这是 3D 展厅本来的意思），
+ * 出生点是当前这个合集；而下面的网格只列当前合集的照片 ——
+ * 网格是「这本合集的作品」，展厅是「可走的空间」，两者分工不同。
+ *
+ * 默认 data-mode='grid'：无 WebGL / 无 JS / 弱设备都停在网格上（服务端渲染的
+ * 那份），脚本确认跑得动才切到 3d。降级不是「出错」，是常态路径。
+ */
+interface Props {
+  /** 当前合集 */
+  collection: Collection;
+  /** 同一批 3D 合集（含自己），摆进同一个连通的展厅 */
+  siblings: readonly Collection[];
+  locale: Locale;
+  /** 「离开展厅」去哪：画廊首页 */
+  exitUrl: string;
+}
+
+const { collection, siblings, locale, exitUrl } = Astro.props;
+const t = useTranslations(locale);
+
+const floorRooms = siblings.map((item) => ({
+  id: item.id,
+  label: item.title[locale],
+  intro: `${item.photos.length} ${t('gallery.itemCount')}`,
+  style: item.style,
+  items: collectionItems(item),
+}));
+
+const currentItems = collectionItems(collection);
+---
+
+<div class="gal-page" id="gal-page" data-mode="grid">
+  <p class="gal-fallback" id="gal-fallback" hidden>{t('gallery.fallback.notice')}</p>
+
+  <GalleryFloor
+    rooms={floorRooms}
+    startRoomId={collection.id}
+    locale={locale}
+    exitUrl={exitUrl}
+  />
+
+  <GalleryGrid groups={[{ id: collection.id, label: '', items: currentItems }]} locale={locale} />
+
+  <GalleryLightbox locale={locale} />
+</div>

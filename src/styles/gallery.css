@@ -116,6 +116,17 @@ button.gal-view[aria-pressed='true'] {
   background: var(--c-card);
 }
 
+/* 视图切换（房间 / 网格）投进跨页工具条之后的排布。
+   它与左边那枚胶囊同处一排，但说的是「怎么看」不是「去哪」——
+   所以不套第二层胶囊底色，当两枚松散的开关；选中的那枚靠
+   `button.gal-view[aria-pressed='true']` 的卡片底 + 阴影自己立起来。 */
+.gal-views--local {
+  padding: 0;
+  gap: 0.15rem;
+  background: none;
+  border: none;
+}
+
 /* ---------- 房间（3D 画布） ---------- */
 .gal {
   position: relative;
@@ -608,6 +619,10 @@ button.gal-view[aria-pressed='true'] {
 
 .gal-tile img {
   width: 100%;
+  /* HTML 的 width/height 属性（给 CLS 留位那对）会落成 height:832px 的
+     presentational hint，把 aspect-ratio 顶掉 —— 图片被压成 212x832 的竖条。
+     必须显式 height:auto，aspect-ratio 才接管；比例本身照样预留空间，CLS 不丢。 */
+  height: auto;
   aspect-ratio: 3 / 2;
   object-fit: cover;
   border-radius: var(--radius);
@@ -890,163 +905,6 @@ body.is-immersive .gal__focus img {
   .gal-tile img,
   .gal-tile:hover img {
     transform: none;
-    transition: none;
-  }
-}
-
-/* ============================================================
-  /gallery/kimbell/ 采光验证：单摆线拱那一间
-  画布铺满内容区宽度，HUD 压在左下角（与画廊 3D 那套 HUD 同款观感）
-  ============================================================ */
-
-.light-spec {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 1.4rem;
-  margin: 0 0 1rem;
-}
-
-.light-spec__row {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-}
-
-.light-spec dt {
-  font-size: 0.78rem;
-  color: var(--c-text-faint);
-}
-
-.light-spec dd {
-  margin: 0;
-  font-size: 0.86rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.light {
-  position: relative;
-  border: 1px solid var(--c-border-soft);
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: #0d0f12;
-}
-
-.light__canvas {
-  display: block;
-  width: 100%;
-  height: min(72vh, 34rem);
-  touch-action: none; /* 拖视角时别让页面跟着滚 */
-}
-
-/* 场景没挂起来时，画布留着但压暗，降级说明浮在中间 */
-.light[data-ready='false'] .light__canvas {
-  filter: grayscale(1) brightness(0.5);
-}
-
-/* 视角预设：俯视 / 横剖面 / 纵剖面 / 人视 */
-.light__views {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0.3rem;
-  border-radius: 999px;
-  background: rgba(16, 18, 22, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(8px);
-}
-
-.light__views .gal-view {
-  color: rgba(232, 232, 230, 0.72);
-  font-size: 0.78rem;
-  padding: 0.24rem 0.7rem;
-}
-
-.light__views .gal-view:hover {
-  color: #fff;
-}
-
-.light__views .gal-view[aria-pressed='true'] {
-  color: #16181c;
-  background: #d8b26a;
-}
-
-.light__hud {
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-  width: min(320px, calc(100% - 28px));
-  padding: 12px 14px 14px;
-  border-radius: 10px;
-  background: rgba(16, 18, 22, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(8px);
-  color: #e8e8e6;
-  user-select: none;
-}
-
-.light__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.light__clock {
-  font-size: 1.6rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.light__state {
-  font-size: 0.74rem;
-  opacity: 0.7;
-}
-
-.light__hud input[type='range'] {
-  width: 100%;
-  margin: 8px 0 10px;
-  accent-color: #d8b26a;
-}
-
-.light__stats {
-  margin: 0;
-  font: 11.5px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
-  opacity: 0.72;
-  white-space: pre;
-}
-
-.light__hint {
-  margin: 8px 0 0;
-  font-size: 11.5px;
-  opacity: 0.5;
-}
-
-.light__fallback {
-  position: absolute;
-  inset: auto 0 50% 0;
-  margin: 0;
-  padding: 0 1.5rem;
-  text-align: center;
-  color: var(--c-text-muted);
-  font-size: 0.88rem;
-}
-
-.light__back {
-  margin: 1rem 0 0;
-}
-
-@media print {
-  .light {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .light__canvas {
     transition: none;
   }
 }

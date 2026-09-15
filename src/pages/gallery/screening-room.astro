@@ -1,22 +1,70 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import Section from '../../components/Section.astro';
+import GalleryShell from '../../components/gallery/GalleryShell.astro';
 import ScreeningRoom from '../../components/gallery/ScreeningRoom.astro';
+import '../../styles/gallery.css';
+import '../../styles/gallery-spread.css';
 import '../../styles/screening-room.css';
 import { profile } from '../../data/profile';
+import { allPhotos } from '../../data/gallery';
+import { galleryNav, no2 } from '../../lib/gallery/shell';
 import { toLocale, useTranslations } from '../../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
+/**
+ * 私人放映室。
+ *
+ * 2026-09-15 之前它套的是 Section 卡片，和画廊其它页是两副面孔；
+ * 现在同样的 GalleryShell：页头 + 左栏片单 + 右栏说明，中间是放映机本体。
+ *
+ * 两条必须保留的东西：
+ * ① `smoothScroll={false}` —— 放映室的画布是**滚轮驱动**的（凑近/拉远），
+ *    Lenis 会把 wheel 抢走，两者正面打架（见 BaseLayout 的注释）。
+ * ② 左栏是**纯片单**（plain）：它列的是「放映机能放什么」，
+ *    点了不该跳走 —— 所以渲染成 <span>，不是假链接。
+ */
 const locale = toLocale('zh');
 const t = useTranslations(locale);
 const p = profile[locale];
-const backUrl = getRelativeLocaleUrl(locale, 'gallery');
+const base = getRelativeLocaleUrl(locale, 'gallery');
+
+const dirItems = allPhotos.map((photo, index) => ({
+  id: photo.id,
+  no: no2(index),
+  name: photo.title[locale],
+  sub: photo.camera ?? String(photo.year),
+  plain: true,
+}));
+
+const facts = [
+  { k: t('gallery.meta.photos'), v: `${allPhotos.length} ${t('gallery.itemCount')}` },
+];
+
+const hero = allPhotos[0]?.src ?? `${import.meta.env.BASE_URL}banner.jpg`;
 ---
 
-<BaseLayout profile={p} locale={locale} title={`${t('screening.title')} · ${t('gallery.title')}`} description={t('screening.desc')} smoothScroll={false}>
-  <Section title={t('screening.title')} icon="▣">
-    <p class="list-summary">{t('screening.desc')}</p>
-    <ScreeningRoom locale={locale} backUrl={backUrl} />
-  </Section>
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${t('screening.title')} · ${t('gallery.title')}`}
+  description={t('screening.desc')}
+  hero="backdrop"
+  heroImage={hero}
+  heroHeight="13rem"
+  smoothScroll={false}
+>
+  <GalleryShell
+    locale={locale}
+    no="03"
+    name={t('screening.title')}
+    intro={t('screening.desc')}
+    entries={galleryNav(locale, base, 'screening')}
+    dirTitle={t('screening.playlist')}
+    dirItems={dirItems}
+    noteTitle={t('gallery.note.title')}
+    noteBody={t('gallery.screening.note')}
+    noteFacts={facts}
+  >
+    <ScreeningRoom locale={locale} backUrl={base} />
+  </GalleryShell>
 </BaseLayout>
-

@@ -1,23 +1,92 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import Section from '../../components/Section.astro';
-import RoomIndex from '../../components/gallery/RoomIndex.astro';
+import GalleryShell from '../../components/gallery/GalleryShell.astro';
+import CollectionIndex from '../../components/gallery/CollectionIndex.astro';
 import '../../styles/gallery.css';
+import '../../styles/gallery-spread.css';
+import '../../styles/gallery-collections.css';
 import { profile } from '../../data/profile';
+import { collections, galleryTotals } from '../../data/gallery';
+import { galleryNav, no2 } from '../../lib/gallery/shell';
 import { toLocale, useTranslations } from '../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
 
+/**
+ * 画廊首页 = 合集封面展示页（2026-09-15 起）。
+ *
+ * 三个「不给就不对」的决定：
+ *
+ * ① 它**不套 Section 卡片** —— 这一页是画册跨页，要自己向两侧的留白借宽
+ *    （见 gallery-spread.css 里 .gal-spread 的 --bleed）。
+ *
+ * ② `hero="backdrop"`。默认横幅会在文档流里占掉
+ *    `--banner-h − --banner-overlap`（900px 视口下 315−56 = 259px），
+ *    加上顶栏正好把跨页推到 y≈331 —— 于是两栏的 sticky 起跑线低于右栏给宠物
+ *    让位的锚点，右栏下缘（331+392=723）压住宠物（564）。
+ *    门面带只当背景、不占位，跨页从顶栏下面正常起跑，右栏下缘落回 488；
+ *    同时顶栏不再浮在空底色上（这是「顶栏和内容之间既没有背景、又贴太紧」那条）。
+ *    背景图直接用**第一个合集的封面** —— 这一页的背景就是它最拿得出手的一张。
+ *
+ * ③ 正文交给 CollectionIndex，而 3D 展厅门排（/gallery/rooms/）用的是同一个
+ *    组件 —— 「统一样式」靠传参，不靠抄一遍。
+ */
 const locale = toLocale('zh');
 const t = useTranslations(locale);
 const p = profile[locale];
+const base = getRelativeLocaleUrl(locale, 'gallery');
+
+/** 左栏目录：点一下直接进合集（真链接），悬停时点亮对应封面 */
+const dirItems = collections.map((collection, index) => ({
+  id: collection.id,
+  no: no2(index),
+  name: collection.title[locale],
+  sub:
+    collection.subtitle?.[locale] ??
+    `${collection.photos.length} ${t('gallery.itemCount')}`,
+  href: `${base}${collection.id}/`,
+}));
+
+/** 右栏合计：全部从数据现算，加图不用回来改文案 */
+const facts = [
+  {
+    k: t('gallery.meta.collections'),
+    v: `${galleryTotals.collections} ${t('gallery.collectionUnit')}`,
+  },
+  { k: t('gallery.meta.photos'), v: `${galleryTotals.photos} ${t('gallery.itemCount')}` },
+  { k: t('gallery.meta.years'), v: galleryTotals.years },
+];
+
+const hero = collections[0]?.cover.src ?? `${import.meta.env.BASE_URL}banner.jpg`;
 ---
 
 <BaseLayout
   profile={p}
   locale={locale}
   title={`${t('gallery.title')} · ${p.name}`}
-  description={t('gallery.desc')}
+  description={t('gallery.spread.intro')}
+  hero="backdrop"
+  heroImage={hero}
+  heroHeight="13rem"
 >
-  <Section title={t('gallery.title')} icon="🖼">
-    <RoomIndex view="theme" locale={locale} />
-  </Section>
+  <GalleryShell
+    locale={locale}
+    no="01"
+    name={t('gallery.nav.index')}
+    intro={t('gallery.spread.intro')}
+    entries={galleryNav(locale, base, 'index')}
+    dirTitle={t('gallery.dir.title')}
+    dirItems={dirItems}
+    noteTitle={t('gallery.note.title')}
+    noteBody={t('gallery.note.body')}
+    noteFacts={facts}
+    noteGear={galleryTotals.gear}
+    noteTags={galleryTotals.tags.slice(0, 8)}
+  >
+    <CollectionIndex locale={locale} base={base} />
+  </GalleryShell>
 </BaseLayout>
+
+<script>
+  import { initGalleryStudio } from '../../lib/gallery/studio';
+  initGalleryStudio();
+</script>

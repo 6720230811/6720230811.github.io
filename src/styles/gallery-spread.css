@@ -1,0 +1,363 @@
+/* ============================================================
+   画廊的跨页外壳 —— /gallery/ 下**所有**页面共用的一套版面语言
+
+   四个页面（合集封面页、合集详情页、3D 展厅门排、私人放映室）都用同一副骨架：
+     左栏 = 目录｜中栏 = 内容｜右栏 = 说明
+   内容各不相同（封面 / 照片流 / 门 / 放映机），但「页头 + 两侧栏」是同一套，
+   所以从一页切到另一页时不会换一副面孔。
+
+   它和房间页那套「降级网格」（gallery.css 的 .gal-grid）不是一回事：
+   那边是 3D 起不来时的替补、排得工工整整；这边是主动排过版的跨页。
+
+   为什么单独一个文件：这一套**不套共享的 .section 卡片** —— 跨页要自己向两侧的
+   留白借宽；而且 gallery.css 是 CRLF，往它里面追加得格外小心，新文件没这个负担。
+   合集页面专有的部分（封面索引、照片流）在 gallery-collections.css。
+   ============================================================ */
+
+/* ---------- 跨页骨架 ---------- */
+
+.gal-spread {
+  /* 突破 .page 的 75rem：向左右留白各借一点宽，最多 6rem。
+     下限 0、上限 6rem，中间按「当前离视口边还有多远」算，再减 1rem 保底 ——
+     所以它在窄屏自动退化成 0，也永远不会撑出横向滚动条。
+     只允许用在 margin-inline 上：百分比要按包含块的**行内尺寸**解析。 */
+  --bleed: clamp(0px, calc((100vw - 100%) / 2 - 1rem), 6rem);
+  margin-inline: calc(-1 * var(--bleed));
+
+  /* 顶栏下面留一口气：顶栏是 sticky 卡片，内容贴着它起跑会显得是被压在底下。
+     这一段也是「门面带」能看见的部分（见 .hero--backdrop）。 */
+  padding-top: 1.75rem;
+
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr) 16rem;
+  gap: 1.5rem 1.75rem;
+  align-items: start;
+}
+
+/* 中栏：页头 + 正文。
+   **页头必须留在中栏里**，不能横跨整幅 —— 一旦横跨，它会占满第一行，
+   两侧栏就被推到第二行、起跑线被压低到标题之下；而右栏的让位量是按
+   「栏顶 = 顶栏下方」算的，起跑线一低，右下角的宠物照样压上来
+   （实测栏顶被推到 529，可用的只剩 35px，max-height 392 根本救不了）。 */
+.gal-spread__main {
+  min-width: 0;
+}
+
+.gal-spread__head {
+  margin-bottom: 2rem;
+}
+
+.gal-spread__label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin: 0;
+  font-size: clamp(1.5rem, 2.6vw, 2.35rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.gal-spread__no {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--c-accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+/* 细线坐在名称的基线上，从名称那头往右长 —— 与首页板块头同一套语言 */
+.gal-spread__rule {
+  flex: 1;
+  align-self: center;
+  height: 1px;
+  background: var(--c-border);
+}
+
+.gal-spread__intro {
+  max-width: 46ch;
+  margin: 0.85rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--c-text-muted);
+}
+
+.gal-spread__head .gal-head__tools {
+  margin-top: 1.1rem;
+}
+
+/* ---------- 两侧栏 ---------- */
+
+.gal-rail {
+  position: sticky;
+  top: calc(var(--nav-h) + 1.5rem);
+  max-height: calc(100vh - var(--nav-h) - 3rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* 右栏要躲开右下角的宠物浮层。
+   横向没得让（栏本来就贴右缘），只能纵向错开：把 max-height 砍掉宠物那一截，
+   长内容改成栏内滚动。--toc-pet-reserve 是全局现成的（由 global.css 的
+   html:has(.pet-layer…) 按宠物外观档位给，数值含宠物本体 + 头顶那列气泡），
+   这里**复用**而不是另起一个变量 —— 改宠物尺寸时只改一处。
+   注意 sticky 同时给 top 和 bottom 时 top 优先、bottom 被忽略，所以只能砍高度。 */
+.gal-rail--note {
+  max-height: calc(100vh - var(--nav-h) - 3rem - var(--toc-pet-reserve, 0rem));
+}
+
+.gal-rail__title {
+  margin: 0 0 0.7rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--c-text-faint);
+}
+
+.gal-rail__title + .gal-rail__title,
+.gal-rail > * + .gal-rail__title {
+  margin-top: 1.6rem;
+}
+
+/* 目录：每行「编号 + 名称 + 一行副文」。
+   它和正文里对应的那块**互相点亮**（见 lib/gallery/studio.ts）。 */
+.gal-dir {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gal-dir__row {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 0.4rem;
+  padding: 0.42rem 0.5rem 0.42rem 0.35rem;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.gal-dir__row:hover,
+.gal-dir__row:focus-visible,
+.gal-dir__row.is-lit {
+  background: var(--c-card-hover);
+  text-decoration: none;
+}
+
+/* 纯清单行：不是链接，就不该有「可以点」的反馈 */
+.gal-dir__row--plain,
+.gal-dir__row--plain:hover {
+  background: none;
+  cursor: default;
+}
+
+.gal-dir__no {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.gal-dir__row.is-lit .gal-dir__no {
+  color: var(--c-accent);
+}
+
+.gal-dir__name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.gal-dir__sub {
+  grid-column: 2;
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  color: var(--c-text-muted);
+}
+
+/* 说明正文 */
+.gal-rail__body {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--c-text-muted);
+}
+
+/* 合计 / 器材 / 关键词：dt 安静、dd 明确，靠间距分组，不划线 */
+.gal-facts {
+  margin: 1.2rem 0 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.gal-facts__row {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 0.5rem;
+}
+
+.gal-facts__row dt {
+  font-size: 0.74rem;
+  color: var(--c-text-faint);
+}
+
+.gal-facts__row dd {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.gal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gal-tags li {
+  padding: 0.18rem 0.55rem;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--c-text-muted);
+}
+
+/* ---------- 行动按钮 ---------- */
+
+.gal-enter {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 999px;
+  background: var(--c-card);
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--c-text);
+  text-decoration: none;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.gal-enter:hover,
+.gal-enter:focus-visible {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -10px var(--c-shadow-md);
+}
+
+.gal-enter__arrow {
+  color: var(--c-text-faint);
+  transition: transform 0.18s ease;
+}
+
+.gal-enter:hover .gal-enter__arrow {
+  transform: translateX(3px);
+}
+
+/* ---------- 收尾块 ----------
+   一个合集读完 / 一页看到底之后的下一步：一句说明 + 一个去处。
+   它和顶上那排入口不是一回事 —— 顶上那是导航（我现在在哪一页），
+   这里是「接下来去哪」，所以只给一个去处。
+
+   两个对齐上的讲究：
+   ① 左侧那条发丝线是这个空列**唯一**的凭据：没有它，图上那两百多像素空白
+      看着像排版漏了东西；有了它，空白就成了「边栏」——与 .gal-spread__rule
+      是同一套语言。线由 ::before 撑满盒高。
+   ② 用 --c-border 而不是 --c-border-soft：后者（浅色 #eef0f2）是给白卡片当
+      描边用的，压在页面底色（#f0f2f5）上只差 2/255，等于没画。 */
+.gal-cue {
+  position: relative;
+  display: grid;
+  align-content: space-between;
+  gap: 0.9rem;
+  padding: 1.15rem 0 0.35rem 1.15rem;
+}
+
+.gal-cue::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: var(--c-border);
+}
+
+.gal-cue__note {
+  margin: 0;
+  font-size: clamp(0.9rem, 1.05vw, 1rem);
+  line-height: 1.75;
+  color: var(--c-text-muted);
+}
+
+/* ---------- 窄屏 ---------- */
+
+/* 两侧栏收不住时改成上下：页头 → 目录 → 正文 → 说明。
+   中栏 `display: contents` 是为了让「页头」和「正文」各自成为网格项，
+   否则标题被关在中栏里、调不动它在阅读序里的位置。 */
+@media (max-width: 1080px) {
+  .gal-spread {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gal-spread__main {
+    display: contents;
+  }
+
+  .gal-spread__head {
+    order: 1;
+  }
+
+  .gal-rail--dir {
+    order: 2;
+  }
+
+  .gal-spread__body {
+    order: 3;
+  }
+
+  .gal-rail--note {
+    order: 4;
+  }
+
+  .gal-rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* 目录改成横向铺开的三列，不再占掉一整屏高度。
+     写死 3 列而不是 auto-fill：件数不整除时会断成「5+1」那种落单行
+     （900px 实测就是这么断的），看着像漏排。3 列最多 2 行，稳。 */
+  .gal-dir {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.15rem 0.75rem;
+  }
+
+  .gal-rail--note {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--c-border-soft);
+  }
+}
+
+/* 减动效：位移与聚光全部退成静态，只留边框/颜色这类不动的反馈 */
+@media (prefers-reduced-motion: reduce) {
+  .gal-enter,
+  .gal-enter__arrow {
+    transition: none;
+  }
+
+  .gal-enter:hover,
+  .gal-enter:focus-visible {
+    transform: none;
+  }
+}

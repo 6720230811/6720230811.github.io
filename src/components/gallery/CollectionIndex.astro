@@ -1,0 +1,116 @@
+---
+import { collections, photoAR, type Collection } from '../../data/gallery';
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+/**
+ * 画廊首页的正文：**每个合集一块封面**，封面右边是这本合集的说明。
+ *
+ * 版面意图（2026-09-15）：
+ * - 这一页只负责「选一本进去」，所以封面是主角、信息是配角 ——
+ *   信息永远在封面**右侧**，前言点到为止，要读全文得进详情页。
+ * - 第一本做开篇：封面通栏、说明分两栏压在下面。它是这一页的视觉入口。
+ * - 封面比例用图片自己的（--ar），所以竖构图那本天然比横构图那本高，
+ *   整页不用刻意错落就有节奏；再叠一层三块一循环的下沉量。
+ * - 不写死「一共几本」：加合集只需往 public/gallery/ 里加目录，
+ *   这里自然多一块，编号也跟着长。
+ *
+ * 3D 展厅门排（/gallery/rooms/）用的是**同一个组件**，只是传进来的是
+ * threeDCollections —— 两页因此天然同款，不会各写一遍再慢慢漂移。
+ */
+interface Props {
+  locale: Locale;
+  /** 画廊根地址（'/gallery/' 或 '/en/gallery/'） */
+  base: string;
+  /** 要展出哪些合集；省略 = 全部 */
+  list?: readonly Collection[];
+}
+
+const { locale, base, list = collections } = Astro.props;
+const t = useTranslations(locale);
+
+/** 两位编号：目录栏、封面、详情页共用同一套，切页时不会跳号 */
+const no = (index: number) => String(index + 1).padStart(2, '0');
+
+/** 封面比例与尺寸：给 width/height 是为了首屏不抖（读不到尺寸时按 3:2） */
+const coverW = (w?: number, h?: number) => (w && h ? w : 1200);
+const coverH = (w?: number, h?: number) => (w && h ? h : 800);
+
+/**
+ * 封面左上那行小字：先看合集自己写的副标题；没写就退到「形制」（3D 展厅）
+ * 或主题键。这样 3D 那一页不用另写一套标题就能说清「这是哪种厅」。
+ */
+const kickerOf = (collection: Collection) =>
+  collection.subtitle?.[locale] ??
+  (collection.mode === '3d'
+    ? t(`gallery.style.${collection.style}`)
+    : collection.theme);
+---
+
+<div class="gal-covers" data-gal-dim>
+  {
+    list.map((collection, index) => (
+      <article
+        class:list={['gal-cover', { 'gal-cover--feature': index === 0 }]}
+        id={collection.id}
+        data-gal-block={collection.id}
+      >
+        <a
+          class="gal-cover__frame"
+          href={`${base}${collection.id}/`}
+          style={`--ar: ${photoAR(collection.cover)}`}
+          aria-label={collection.title[locale]}
+        >
+          <img
+            src={collection.cover.thumb}
+            alt={collection.title[locale]}
+            width={coverW(collection.cover.w, collection.cover.h)}
+            height={coverH(collection.cover.w, collection.cover.h)}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            transition:name={`g-${collection.id}`}
+          />
+          <span class="gal-cover__no">{no(index)}</span>
+          <span class="gal-cover__cta">
+            {t('gallery.enter.collection')}
+            <span aria-hidden="true">→</span>
+          </span>
+        </a>
+
+        <div class="gal-cover__panel">
+          <div class="gal-cover__lead">
+            <span class="gal-cover__kicker">
+              <span>{kickerOf(collection)}</span>
+              <span class:list={['gal-mode', { 'gal-mode--3d': collection.mode === '3d' }]}>
+                {collection.mode === '3d' ? t('gallery.mode.3d') : t('gallery.mode.flat')}
+              </span>
+            </span>
+            <h3 class="gal-cover__name">{collection.title[locale]}</h3>
+            {collection.note && <p class="gal-cover__note">{collection.note[locale]}</p>}
+          </div>
+
+          <div class="gal-cover__meta">
+            <dl class="gal-facts">
+              <div class="gal-facts__row">
+                <dt>{t('gallery.meta.total')}</dt>
+                <dd>
+                  {collection.photos.length} {t('gallery.itemCount')}
+                </dd>
+              </div>
+              <div class="gal-facts__row">
+                <dt>{t('gallery.meta.years')}</dt>
+                <dd>{collection.years}</dd>
+              </div>
+            </dl>
+
+            {collection.tags.length > 0 && (
+              <ul class="gal-tags">
+                {collection.tags.slice(0, 5).map((tag) => (
+                  <li>{tag}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </article>
+    ))
+  }
+</div>

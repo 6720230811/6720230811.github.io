@@ -24,8 +24,17 @@ export const paths = {
   cv: (name: string) => `public/cv/${name}`,
   /** 头像放 public/ 根下（页面用 /<文件名> 引用）；换图时换个文件名就能绕开缓存 */
   avatar: (name: string) => `public/${name}`,
-  /** 画廊数据（素材页扫引用时要用它，见 lib/admin/assets.ts） */
-  gallery: () => 'src/data/gallery.json',
+  /**
+   * 画廊：一个合集 = public/gallery/<合集 id>/ 一个目录
+   * （目录里是图片 + meta.json；构建期扫描，见 src/data/gallery.ts）。
+   * 所以没有「一份画廊数据文件」可改，改的是各目录下的 meta.json。
+   */
+  galleryDir: () => 'public/gallery',
+  galleryMeta: (id: string) => `public/gallery/${id}/meta.json`,
+  galleryPhoto: (id: string, file: string) => `public/gallery/${id}/${file}`,
+  galleryThumb: (id: string, file: string) => `public/gallery/${id}/thumbs/${file}`,
+  /** 合集改名后旧地址的登记表（后台写入，构建期读，见 data/gallery.ts 的 legacyRoutes） */
+  galleryRedirects: () => 'src/data/gallery-redirects.json',
   /**
    * 封面 URL → 仓库里的路径；不是站内配图（外链 / 没写封面）返回 null。
    * 只匹配 /illustrations/ 之后那一段：站点挂在子路径时 URL 会带 base 前缀。

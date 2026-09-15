@@ -275,7 +275,16 @@ async function scanRefs(token: string): Promise<void> {
       renderMeta(filtered().length);
     }
 
-    for (const path of [paths.gallery(), paths.profile('zh'), paths.profile('en')]) {
+    // 画廊：文案散在各合集目录的 meta.json 里，先列目录再逐份读
+    const collectionDirs = (await listDir(repo as Repo, paths.galleryDir(), token)).filter(
+      (entry) => entry.type === 'dir'
+    );
+    const metas = await Promise.all(
+      collectionDirs.map((entry) => readFile(repo as Repo, paths.galleryMeta(entry.name), token))
+    );
+    for (const meta of metas) if (meta) texts.push(meta.text);
+
+    for (const path of [paths.profile('zh'), paths.profile('en')]) {
       const file = await readFile(repo as Repo, path, token);
       if (file) texts.push(file.text);
     }

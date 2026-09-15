@@ -1,0 +1,29 @@
+---
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+/**
+ * 合集详情页（mode: '3d'）的「房间 / 网格」视图切换。
+ *
+ * 它被投进 GalleryShell 的 tools 插槽 —— 与跨页导航同处一排。
+ * 早先 CollectionHall 自带一整行 `.gal-hall__tools`，于是 3D 合集页顶部叠了两排
+ * 一模一样的胶囊，另外三页只有一排：2026-09-15 那轮「四个页面统一设计」就是被它破的。
+ *
+ * 两个 id 不能改：`lib/gallery/index.ts` 靠 getElementById 拿它们做状态同步，
+ * 拿不到 WebGL 时还要把这两枚收掉（degrade()）。
+ */
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+---
+
+<div class="gal-views gal-views--local" data-gal-view-switch>
+  <button class="gal-view" id="gal-mode-3d" type="button" aria-pressed="false">
+    {t('gallery.roomMode')}
+  </button>
+  <button class="gal-view" id="gal-mode-grid" type="button" aria-pressed="true">
+    {t('gallery.gridMode')}
+  </button>
+</div>

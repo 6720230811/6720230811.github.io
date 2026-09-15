@@ -1,0 +1,142 @@
+---
+import Icon from '../Icon.astro';
+
+/**
+ * 「画廊」分区（2026-09-15 合集制）。
+ * 逻辑在 lib/admin/gallery.ts（列目录 / 传图 / 改 meta.json / 调序 / 改名 / 删除）。
+ *
+ * 这里只有骨架，有两个刻意的取舍：
+ *
+ * ① 单张照片的标题 / 说明那一组输入框**不在这个文件里** —— 它们是
+ *    lib/admin/gallery.ts 按目录里真实的文件生成的（`<details>` 折起来那种）。
+ *    写死在模板里就等于「有几张图」这件事被抄了两份，迟早对不上。
+ *
+ * ② 分区里所有写操作都带 `data-gal-write`：写仓库期间统一 disabled，
+ *    避免「表格还没存完就点删除」这种自相矛盾的操作。
+ */
+const base = import.meta.env.BASE_URL;
+---
+
+<section class="panel">
+  <div class="panel__head">
+    <h2>画廊（public/gallery）</h2>
+    <div class="panel__tools">
+      <a class="btn btn--ghost" href={`${base}gallery/`} target="_blank" rel="noreferrer">
+        <Icon name="external" />
+        线上画廊
+      </a>
+    </div>
+  </div>
+
+  <p class="panel__hint">
+    一个合集 = <code>public/gallery/&lt;合集 id&gt;/</code> 一个目录：目录里的图片就是展出的照片（构建期扫目录，
+    不用列清单），<code>meta.json</code> 放文案与顺序，<code>thumbs/</code> 放可选缩略图。
+    所以加图 = 传文件、删图 = 删文件，没有一份需要手工对账的中心清单。
+  </p>
+
+  <p id="gal-placeholder" class="galp-placeholder">
+    左栏选一个合集（或者点左栏的「新建合集」开一个）。
+  </p>
+
+  <div id="gal-editor" hidden>
+    <div class="galp-bar">
+      <code id="gal-crumb" class="galp-crumb"></code>
+      <span id="gal-photo-count" class="galp-count"></span>
+      <span class="galp-spacer"></span>
+      <button id="gal-save" class="btn btn--sm" type="button" data-gal-write>保存 meta.json</button>
+      <button id="gal-rename" class="btn btn--sm btn--ghost" type="button" data-gal-write>改目录名…</button>
+      <button id="gal-delete-all" class="btn btn--sm btn--danger" type="button" data-gal-write>删除合集</button>
+    </div>
+
+    <p id="gal-detected" class="galp-warn" hidden></p>
+
+    <p class="panel__sub">合集文案</p>
+    <div class="json-grid">
+      <label class="galp-field">
+        <span>标题 zh</span>
+        <input id="gal-title-zh" class="input" type="text" spellcheck="false" />
+      </label>
+      <label class="galp-field">
+        <span>标题 en</span>
+        <input id="gal-title-en" class="input" type="text" spellcheck="false" />
+      </label>
+
+      <label class="galp-field">
+        <span>副标题 zh<small>目录行、封面上那行小字</small></span>
+        <input id="gal-subtitle-zh" class="input" type="text" spellcheck="false" placeholder="城市 · 三条街" />
+      </label>
+      <label class="galp-field">
+        <span>副标题 en</span>
+        <input id="gal-subtitle-en" class="input" type="text" spellcheck="false" placeholder="The city · three streets" />
+      </label>
+
+      <label class="galp-field galp-field--wide">
+        <span>展览前言 zh<small>合集封面页右栏、详情页开篇都读它</small></span>
+        <textarea id="gal-note-zh" class="input" rows="3" spellcheck="false"></textarea>
+      </label>
+      <label class="galp-field galp-field--wide">
+        <span>展览前言 en</span>
+        <textarea id="gal-note-en" class="input" rows="3" spellcheck="false"></textarea>
+      </label>
+
+      <label class="galp-field">
+        <span>展示方式<small>flat = 杂志式照片流；3d = 复刻展厅</small></span>
+        <select id="gal-mode" class="input">
+          <option value="flat">flat · 照片流</option>
+          <option value="3d">3d · 复刻展厅</option>
+        </select>
+      </label>
+      <label class="galp-field" id="gal-style-row" hidden>
+        <span>展厅形制<small>只对 3d 有意义</small></span>
+        <select id="gal-style" class="input"></select>
+      </label>
+
+      <label class="galp-field">
+        <span>主题键<small>小写 ASCII，如 city / sea</small></span>
+        <input id="gal-theme" class="input" type="text" spellcheck="false" placeholder="misc" />
+      </label>
+      <label class="galp-field">
+        <span>年份<small>照片没单独写年份时继承它</small></span>
+        <input id="gal-year" class="input" type="number" min="1900" max="2999" step="1" />
+      </label>
+
+      <label class="galp-field">
+        <span>封面<small>留空＝排序后的第一张</small></span>
+        <select id="gal-cover" class="input"></select>
+      </label>
+      <label class="galp-field">
+        <span>关键词<small>逗号分隔，会与单张的合并</small></span>
+        <input id="gal-tags" class="input" type="text" spellcheck="false" placeholder="夜景, 街拍" />
+      </label>
+      <label class="galp-field galp-field--wide">
+        <span>器材<small>逗号分隔；照片自己写了就以它为准</small></span>
+        <input id="gal-gear" class="input" type="text" spellcheck="false" placeholder="Sony A7C · 35mm f/1.8" />
+      </label>
+    </div>
+    <p id="gal-style-hint" class="galp-note" hidden>
+      选 3d 之后这个合集也会出现在「3D 展厅」页（<code>/gallery/rooms/</code>）的门排里；
+      设备跑不动 WebGL 时会自动退回照片流。
+    </p>
+
+    <p class="panel__sub">照片</p>
+    <div id="gal-drop" class="assets__drop" role="button" tabindex="0">
+      <input id="gal-file" type="file" accept="image/*" multiple hidden />
+      <span class="assets__drop-icon" aria-hidden="true">🖼</span>
+      <span class="assets__drop-text">
+        拖入图片即上传（自动压到长边 2400px WebP），或点击选择文件
+      </span>
+    </div>
+    <label class="galp-check">
+      <input id="gal-thumbs" type="checkbox" checked />
+      <span>同时生成 720px 缩略图放进 <code>thumbs/</code>（列表与照片流用，省流量）</span>
+    </label>
+
+    <ul id="gal-photos" class="galp-photos"></ul>
+
+    <p class="galp-note">
+      顺序只写在 <code>meta.json</code> 的 <code>order</code> 里，不改文件名 ——
+      靠重命名来排序会把 URL 改掉，外面引用过这张图的地方就断了。
+      删掉目录里的图之后，这条记录也会从 <code>order</code> 与 <code>photos</code> 里一起摘掉。
+    </p>
+  </div>
+</section>

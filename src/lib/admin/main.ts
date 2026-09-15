@@ -3,6 +3,7 @@ import { initPost, refreshPostList } from './post';
 import { initProfile } from './profile';
 import { initFriends } from './friends';
 import { initAssets } from './assets';
+import { initGallery } from './gallery';
 import { initResize } from './resize';
 import { initCrawlSettings } from './crawl';
 import { initImportDialog } from './importDialog';
@@ -49,6 +50,7 @@ const SECTION_PATH: Record<string, string> = {
   profile: 'src/data/profile.{zh,en}.json',
   friends: 'src/data/friends.json',
   assets: 'public/illustrations',
+  gallery: 'public/gallery/',
 };
 
 for (const tab of tabs) {
@@ -113,6 +115,7 @@ initPost();
 initProfile();
 initFriends();
 initAssets();
+initGallery();
 initUnsavedGuard('有未保存的改动，确定离开吗？');
 
 showTab('post');

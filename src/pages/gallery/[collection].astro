@@ -1,0 +1,149 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import GalleryShell from '../../components/gallery/GalleryShell.astro';
+import CollectionStream from '../../components/gallery/CollectionStream.astro';
+import CollectionHall from '../../components/gallery/CollectionHall.astro';
+import HallModeSwitch from '../../components/gallery/HallModeSwitch.astro';
+import GalleryLightbox from '../../components/gallery/GalleryLightbox.astro';
+import '../../styles/gallery.css';
+import '../../styles/gallery-spread.css';
+import '../../styles/gallery-collections.css';
+import { profile } from '../../data/profile';
+import {
+  collectionById,
+  collections,
+  legacyRoutes,
+  threeDCollections,
+} from '../../data/gallery';
+import { galleryNav, no2 } from '../../lib/gallery/shell';
+import { toLocale, useTranslations } from '../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+/**
+ * 合集详情：/gallery/<合集 id>/
+ *
+ * 两种展示方式共用这一页：
+ *   · mode: 'flat' —— CollectionStream，杂志式照片流（默认）
+ *   · mode: '3d'   —— CollectionHall，复刻展厅（无 WebGL 时自己降级成网格）
+ * 换的只是中栏；页头、左右两栏、配色、间距全都来自 GalleryShell，
+ * 所以在这本合集里和在画廊首页是同一套语言。
+ *
+ * 旧地址要靠这里兜住：画廊在 2026-09 换过两轮信息架构，
+ * /gallery/theme-city/、/gallery/hall-night-walk/ 这类地址已经推上线过，
+ * 直接删会 404 —— 见下面的 legacyRoutes()。
+ */
+interface PathProps {
+  id: string;
+  /** 旧地址：非空就 301 到新地址，不渲染内容 */
+  redirectTo: string | null;
+}
+
+export function getStaticPaths() {
+  const known = new Set(collections.map((collection) => collection.id));
+  const paths: { params: { collection: string }; props: PathProps }[] = collections.map(
+    (collection) => ({
+      params: { collection: collection.id },
+      props: { id: collection.id, redirectTo: null },
+    })
+  );
+
+  for (const legacy of legacyRoutes()) {
+    // 万一哪天有个合集的目录名正好叫 theme-city，以真合集为准
+    if (known.has(legacy.from)) continue;
+    paths.push({
+      params: { collection: legacy.from },
+      props: { id: legacy.to, redirectTo: legacy.to },
+    });
+  }
+  return paths;
+}
+
+const { id, redirectTo } = Astro.props as PathProps;
+
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+const base = getRelativeLocaleUrl(locale, 'gallery');
+
+if (redirectTo) return Astro.redirect(`${base}${redirectTo}/`, 301);
+
+const collection = collectionById(id);
+if (!collection) return Astro.redirect(base, 302);
+
+const index = collections.findIndex((item) => item.id === collection.id);
+
+/** 左栏目录：这本合集的照片，悬停时点亮正文里对应的那张 */
+const dirItems = collection.photos.map((photo, i) => ({
+  id: photo.id,
+  no: no2(i),
+  name: photo.title[locale],
+  sub: String(photo.year),
+}));
+
+const facts = [
+  {
+    k: t('gallery.meta.total'),
+    v: `${collection.photos.length} ${t('gallery.itemCount')}`,
+  },
+  { k: t('gallery.meta.years'), v: collection.years },
+  {
+    k: t('gallery.meta.mode'),
+    v: collection.mode === '3d' ? t('gallery.mode.3d') : t('gallery.mode.flat'),
+  },
+];
+
+const intro =
+  collection.subtitle?.[locale] ??
+  `${collection.photos.length} ${t('gallery.itemCount')} · ${collection.years}`;
+
+const hero = collection.cover.src;
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${collection.title[locale]} · ${t('gallery.title')}`}
+  description={collection.note?.[locale] ?? intro}
+  hero="backdrop"
+  heroImage={hero}
+  heroHeight="13rem"
+  smoothScroll={collection.mode !== '3d'}
+>
+  <GalleryShell
+    locale={locale}
+    no={no2(index < 0 ? 0 : index)}
+    name={collection.title[locale]}
+    intro={intro}
+    entries={galleryNav(locale, base)}
+    dirTitle={t('gallery.dir.title')}
+    dirItems={dirItems}
+    noteTitle={t('gallery.note.title')}
+    noteBody={collection.note?.[locale] ?? t('gallery.detail.noteFallback')}
+    noteFacts={facts}
+    noteGear={collection.gear}
+    noteTags={collection.tags}
+  >
+    {/* 视图切换与跨页导航同一排：见 HallModeSwitch 的注释 */}
+    {collection.mode === '3d' && <HallModeSwitch slot="tools" locale={locale} />}
+    {
+      collection.mode === '3d' ? (
+        <CollectionHall
+          collection={collection}
+          siblings={threeDCollections}
+          locale={locale}
+          exitUrl={base}
+        />
+      ) : (
+        <>
+          <CollectionStream photos={collection.photos} locale={locale} />
+          <GalleryLightbox locale={locale} selector=".gal-plate__tile" />
+        </>
+      )
+    }
+  </GalleryShell>
+</BaseLayout>
+
+<script>
+  import { initGalleryStudio } from '../../lib/gallery/studio';
+  initGalleryStudio();
+</script>

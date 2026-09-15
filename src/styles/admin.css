@@ -388,13 +388,21 @@ body.admin-shell {
 /* 非文章分区不需要右栏 */
 .workbench[data-section='profile'],
 .workbench[data-section='friends'],
-.workbench[data-section='assets'] {
+.workbench[data-section='assets'],
+.workbench[data-section='gallery'] {
   grid-template-columns: var(--adm-sb-w) minmax(0, 1fr) 0;
 }
 
+/* data-only 是一张「只在某个分区里出现」的白名单，所以每个分区都要
+   把别家的块显式关掉 —— 新加一个分区时，上面两处和下面这组都要补上 */
 .workbench[data-section='profile'] [data-only='post'],
 .workbench[data-section='friends'] [data-only='post'],
-.workbench[data-section='assets'] [data-only='post'] {
+.workbench[data-section='assets'] [data-only='post'],
+.workbench[data-section='gallery'] [data-only='post'],
+.workbench[data-section='post'] [data-only='gallery'],
+.workbench[data-section='profile'] [data-only='gallery'],
+.workbench[data-section='friends'] [data-only='gallery'],
+.workbench[data-section='assets'] [data-only='gallery'] {
   display: none;
 }
 
@@ -3743,7 +3751,8 @@ select.input {
   .workbench[data-sidebar='closed'][data-inspector='closed'],
   .workbench[data-section='profile'],
   .workbench[data-section='friends'],
-  .workbench[data-section='assets'] {
+  .workbench[data-section='assets'],
+  .workbench[data-section='gallery'] {
     grid-template-columns: 0 minmax(0, 1fr) 0;
   }
 
@@ -4157,4 +4166,233 @@ body.is-resizing .workbench {
   .gutter--pv {
     display: none;
   }
+}
+
+/* ============================================================
+   画廊（合集制，2026-09-15）
+   ============================================================ */
+
+/* 左栏的合集卡：骨架复用 .pcard，这里只补两条状态 */
+.galp-card.is-active {
+  border-color: var(--adm-accent);
+  box-shadow: 0 0 0 3px var(--adm-ring);
+}
+
+.galp-card.is-broken .pcard__meta {
+  color: #b4472f;
+}
+
+.galp-new {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.galp-placeholder {
+  margin: 0;
+  padding: 2.5rem 1rem;
+  border: 1px dashed var(--adm-line);
+  border-radius: var(--adm-r);
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--adm-faint);
+}
+
+.galp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--adm-r);
+  background: var(--adm-soft);
+}
+
+.galp-crumb {
+  font-size: 0.76rem;
+  color: var(--adm-muted);
+}
+
+.galp-count {
+  font-size: 0.72rem;
+  color: var(--adm-faint);
+}
+
+.galp-spacer {
+  flex: 1;
+}
+
+.galp-warn {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid #d98b00;
+  border-radius: var(--adm-r);
+  background: rgba(217, 139, 0, 0.09);
+  font-size: 0.78rem;
+}
+
+.galp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* 字段名 + 一行小字说明：说明换行时不能被挤成一列 */
+.galp-field > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--adm-muted);
+}
+
+.galp-field > span small {
+  font-weight: 400;
+  font-size: 0.68rem;
+  color: var(--adm-faint);
+}
+
+.galp-field--wide {
+  grid-column: 1 / -1;
+}
+
+.galp-textarea {
+  min-height: 3.2rem;
+  resize: vertical;
+  font: inherit;
+}
+
+.galp-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  font-size: 0.74rem;
+  color: var(--adm-faint);
+  cursor: pointer;
+}
+
+.galp-check input {
+  accent-color: var(--adm-accent);
+  cursor: pointer;
+}
+
+.galp-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.galp-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r);
+  background: var(--adm-surface);
+}
+
+.galp-item__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.galp-item__thumb {
+  width: 4.5rem;
+  height: 3.4rem;
+  flex: none;
+  border-radius: 6px;
+  background: var(--adm-soft);
+  object-fit: cover;
+}
+
+/* raw.githubusercontent 对私有仓库或刚推上去的图会 404：给一块斜纹底色，
+   别让浏览器的裂图图标占着版面（后台是公开仓库时基本看不到） */
+.galp-item__thumb.is-broken {
+  background:
+    repeating-linear-gradient(45deg, var(--adm-line-soft) 0 6px, transparent 6px 12px),
+    var(--adm-soft);
+}
+
+.galp-item__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* 文件名可能很长：一行截断，别把后面的按钮顶出去 */
+.galp-item__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.74rem;
+}
+
+.galp-item__bits {
+  font-size: 0.68rem;
+  color: var(--adm-faint);
+}
+
+.galp-item__tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  max-width: 7rem;
+}
+
+.galp-tool {
+  padding: 0.1rem 0.35rem;
+  font-size: 0.68rem;
+}
+
+.galp-item__more summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--adm-muted);
+}
+
+.galp-fields {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.galp-input {
+  font-size: 0.74rem;
+}
+
+.galp-note {
+  margin: 0.9rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.7;
+  color: var(--adm-faint);
+}
+
+.galp-note code,
+.galp-check code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: var(--adm-soft);
+}
+
+.galp-empty,
+.galp-list-empty {
+  grid-column: 1 / -1;
+  padding: 1.2rem 0.75rem;
+  border: 1px dashed var(--adm-line);
+  border-radius: var(--adm-r);
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--adm-faint);
+  list-style: none;
 }
