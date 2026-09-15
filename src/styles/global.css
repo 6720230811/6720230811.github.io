@@ -29,6 +29,10 @@
   --c-accent: #2563eb;
   --c-accent-hover: #1d4ed8;
   --c-accent-soft: #eff4ff;
+  /* 指针聚光（首页卡片背景上的径向光斑）。单独一个带 alpha 的变量，
+     是因为 CSS 里没法给 `var(--c-accent)` 现加透明度（color-mix 要 Safari 16.2+，
+     而本仓 cssTarget 是 safari15）。 */
+  --c-accent-glow: rgba(37, 99, 235, 0.085);
   --c-tag-bg: #f1f3f5;
   --c-tag-text: #495057;
   --c-note-text: #b45309; /* 论文备注徽章 Oral / Spotlight */
@@ -55,6 +59,8 @@
   --c-accent: #58a6ff;
   --c-accent-hover: #79b8ff;
   --c-accent-soft: #16243a;
+  /* 暗色更亮一档：同样的 alpha 在深底上比浅底弱得多 */
+  --c-accent-glow: rgba(88, 166, 255, 0.115);
   --c-tag-bg: #2b2f35;
   --c-tag-text: #adb7c2;
   --c-note-text: #fbbf24;
@@ -148,6 +154,29 @@ h4 {
   line-height: 1.35;
   margin: 0;
   font-weight: 650;
+}
+
+/* ============================================================
+   仅供读屏 / 搜索引擎的标题
+
+   用于「页面上必须有、但视觉上已经由别处表达过」的标题 —— 目前是 /about 页的
+   h1（人名）。该页是从原首页整块搬过来的，原有结构里第一个标题就是板块的 h2，
+   于是整页没有 h1。补一个不可见的 h1 既修好标题层级，又不动任何一个像素。
+
+   用 clip-path 而不是只写 clip：clip 只对 absolute/fixed 定位生效，而这里是
+   普通流内的元素；用 1px 而不是 display:none / visibility:hidden —— 后两者会把
+   元素从无障碍树里摘掉，等于白写。
+   ============================================================ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ============================================================
@@ -298,10 +327,19 @@ h4 {
 }
 
 /* ============================================================
-   顶部导航栏（sticky）
-   逐条对齐 Fuwari 的 Navbar.astro / NavMenuPanel.astro：
-   页面宽度内的一张卡片，上角方（贴视口顶边）、下角圆，高 4.5rem、左右 px-4；
-   品牌与链接都是 btn-plain + scale-animation，768px 以下收进浮层面板
+   顶部导航栏（sticky）—— 刊物的「眉批条」
+
+   底子仍是 Fuwari 的一张卡片：上角方（贴视口顶边）、下角圆、高 4.5rem、
+   左右 px-4，品牌与链接都是 btn-plain + scale-animation。改掉的是**版面**：
+   从「居中的一排链接」改成两端分居 —— 左端字标与访客时钟、右端编号导航与
+   工具簇。版心正中不立一条对称轴，与首屏「左刊头 / 右一句小字」同构。
+
+   三件机关（各自在那一段里另有说明）：
+     ① 导航项带 01–05 编号，**CSS 生成、不进 DOM 文本**（.navbar__link::after）
+     ② 当前项下面一条会滑动的细线（.navbar__ink），位置由脚本量
+     ③ 卡片下缘一条滚动进度发丝线（.navbar__progress），滚过 8px 才淡入
+
+   断点：1024px 以下整组收进悬浮面板（原来是 768px —— 加上编号后 768 下放不下）。
    ============================================================ */
 .navbar {
   position: sticky;
@@ -393,8 +431,10 @@ h4 {
   transform: scale(0.95);
 }
 
-/* 链接组：Fuwari 是 hidden md:flex，768px 以下收进菜单面板 */
+/* 链接组：1024px 以下整组收进汉堡菜单（断点为什么从 768 抬上来，见下面那段）。
+   它同时是那条滑动细线的包含块，也是 link.offsetLeft 的基准坐标。 */
 .navbar__nav {
+  position: relative;
   display: none;
   align-items: center;
 }
@@ -405,6 +445,28 @@ h4 {
   padding: 0 1.25rem;
 }
 
+/* 导航项的 01–05 编号。**CSS 生成、不进 DOM 文本** —— 写进标签里的话，
+   链接的 textContent 会变成「01首页」，读屏会连编号一起念，既有断言也没法用。
+   order: -1 把它排到文字左边（链接是 inline-flex，::after 本来是收尾的）；
+   ::before 已经让给 hover / 当前项那层底色了，编号只能借 ::after。 */
+.navbar__link::after {
+  content: attr(data-no);
+  order: -1;
+  margin-right: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-faint);
+  transition: color 0.15s ease;
+}
+
+.navbar__link:hover::after,
+.navbar__link[aria-current]::after {
+  color: var(--c-accent);
+}
+
 /* 当前页面（由 Navbar 按路径首段设置 aria-current="page"） */
 .navbar__link[aria-current] {
   color: var(--c-accent);
@@ -413,6 +475,31 @@ h4 {
 .navbar__link[aria-current]::before {
   transform: scale(1);
   background: var(--c-accent-soft);
+}
+
+/* 当前项下面那条会滑动的细线：位置与宽度由脚本写进 --nav-ink-x / --nav-ink-w。
+   没量到之前（或在导航之外的页面，例如 /admin）不显示 —— 宁可没有，也不要指错地方。
+   DOM 里必须排在链接之后，且 z-index 高于链接：排前面会被链接自己那层
+   hover 底色（::before，inset: 0）整个盖住。 */
+.navbar__ink {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  bottom: 0.5rem;
+  width: var(--nav-ink-w, 0px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--c-accent);
+  opacity: 0;
+  transform: translateX(var(--nav-ink-x, 0px));
+  transition:
+    transform 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease;
+}
+
+.navbar__nav--inked .navbar__ink {
+  opacity: 1;
 }
 
 /* ---------- 窄屏：链接收进汉堡菜单 ---------- */
@@ -456,17 +543,34 @@ h4 {
   pointer-events: none;
 }
 
-/* py-2 pl-3 pr-1，文字与右侧箭头之间留 gap-8 */
+/* py-2 pl-3 pr-1。gap 从 2rem 收到 0.6rem：窄屏菜单的第一格现在是编号，
+   文字靠 margin-right: auto 把箭头推到右端，不再靠 gap 撑宽度 */
 .nav-menu__link {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 0.6rem;
   padding: 0.5rem 0.25rem 0.5rem 0.75rem;
   border-radius: 0.5rem;
   font-weight: 700;
   color: var(--c-text-muted);
   transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+/* 编号与顶栏同源（同样是 content: attr(data-no)）：窄屏菜单与宽屏链接是同一套视觉 */
+.nav-menu__link::before {
+  content: attr(data-no);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-faint);
+}
+
+.nav-menu__text {
+  margin-right: auto;
 }
 
 .nav-menu__link:hover {
@@ -482,17 +586,126 @@ h4 {
   color: var(--c-accent);
 }
 
+/* 当前页：整条铺主色底、编号换主色。
+   **顺手修掉一个静默失效**：高亮原来挂在 `.nav-menu__link[aria-current]::before` 上，
+   但那条 ::before 从来没有 `content`，伪元素根本不会生成 —— 窄屏菜单的当前页
+   高亮一直是没生效的（宽屏看不出来，那边走的是 ::before 底色那一套）。
+   现在 ::before 让给编号，高亮改落在整条上。 */
 .nav-menu__link[aria-current] {
   color: var(--c-accent);
-}
-
-.nav-menu__link[aria-current]::before {
-  transform: scale(1);
   background: var(--c-accent-soft);
 }
 
-/* Fuwari 的 md 断点 = 768px：以上是横排链接，以下是汉堡菜单 */
-@media (min-width: 768px) {
+.nav-menu__link[aria-current]::before {
+  color: var(--c-accent);
+}
+
+/* ------------------------------------------------------------
+   两端分居的版面（见文件顶部那段注释）
+   ------------------------------------------------------------ */
+
+.navbar__card {
+  /* 滚动进度线的包含块。position: relative **不会**改变 fixed 后代的包含块，
+     所以搜索面板与窄屏菜单照旧相对视口定位 —— 会改变它们的是 transform /
+     filter / backdrop-filter，那三个一个都不能加在这张卡片上 */
+  position: relative;
+  gap: 1rem;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* 左端：字标与访客时钟。min-width: 0 让城市名过长时先在这里截断，
+   不把右端的导航顶出去 */
+.navbar__lead {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.navbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.navbar__brand:hover {
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+/* 字标前面那枚方块：hover 时转 45° 变菱形 —— 一个不喧宾夺主的小动作 */
+.navbar__mark {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--c-accent);
+  transition: transform 0.4s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.navbar__brand:hover .navbar__mark {
+  transform: rotate(45deg);
+}
+
+.navbar__wordmark {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.navbar__sep {
+  flex: none;
+  width: 1px;
+  height: 1.1rem;
+  background: var(--c-border);
+}
+
+.navbar__trail {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+}
+
+/* 卡片下缘的滚动进度：滚过 8px 才淡入（没滚动时它对页面没有意义，
+   而首屏顶部已经有一条换页进度条 .nav-progress，两条不该同时亮着） */
+.navbar__progress {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.navbar--scrolled .navbar__progress {
+  opacity: 1;
+}
+
+/* 不写 transition：这个值每帧都在变，加了只会变成「拖着走」 */
+.navbar__progress-bar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--c-accent);
+  transform: scaleX(var(--nav-p, 0));
+  transform-origin: left center;
+}
+
+/* 滚起来之后卡片再抬一点。**只用阴影与边框色表达**（理由见 .navbar__card 那段） */
+.navbar--scrolled .navbar__card {
+  border-color: var(--c-border);
+  box-shadow: 0 1px 2px var(--c-shadow-sm), 0 12px 26px -14px var(--c-shadow-md);
+}
+
+/* 断点从 Fuwari 的 768px 抬到 1024px。理由是可算的：导航项多了 01–05 编号，
+   每项宽约 +21px，五项 +107px —— 768 下「字标 + 时钟 + 编号导航 + 工具簇」需要
+   约 856px，硬挤只能压字距，不如让这一段收进汉堡菜单。 */
+@media (min-width: 1024px) {
   .navbar__nav {
     display: flex;
   }
@@ -505,6 +718,27 @@ h4 {
      用 id 而不是 .float-panel：搜索面板在宽屏也要能用 */
   #nav-menu-panel {
     display: none;
+  }
+}
+
+/* 窄屏：整组导航收进汉堡菜单（.navbar__nav 默认就是 display: none，这里只是
+   让 ≥1024 那条断开）。字标留下、时钟让位 —— 字标是功能（回首页），时钟是装饰
+   （访客城市 + 时间）；375 下这几样加四个工具按钮放不下，让位的是装饰那一个。 */
+@media (max-width: 1023px) {
+  .navbar__sep,
+  .navbar .clock {
+    display: none;
+  }
+}
+
+/* 减动效：那条线不做滑动位移，只换位置；卡片也不做过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .navbar__card,
+  .navbar__mark,
+  .navbar__ink,
+  .navbar__progress,
+  .navbar__link::after {
+    transition: none;
   }
 }
 
@@ -907,6 +1141,43 @@ h4 {
 /* 支持 View Transitions 的浏览器会自己加一次整页交叉淡化，
    和上面这一进一出叠在一起就成了「淡一次再淡一次」。关掉它，
    进出都由我们自己这组动画负责，各浏览器看起来才一致。 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* 命名元素的跨页共享元素过渡（见
+   docs/superpowers/specs/2026-09-14-home-motion-design.md §6）。
+   名字由 PostCard / PostLayout / GalleryGrid / HomeBody 上的 transition:name 给出。
+
+   两点必须写在这里、而不是各组件里：
+   - **「飞过去」那一半不是 Astro 给的，是浏览器 UA 的默认行为** —— 命名 group 在两态
+     都存在时自动插值 box 的位置与尺寸。Astro 7 的内置动画只有 fade 与 slide
+     （node_modules/astro/dist/transitions/index.js 只导出这两个），
+     transition:name 不写 transition:animate 时它给这一对套的是 fade。
+     所以我们能调的只有时长与曲线。
+   - 默认 250ms 在「从卡片角飞到正文栏」这种跨半个屏幕的距离上显得毛躁，
+     拉到 420ms；old/new 的交叉淡化反而要压短，让注意力落在「飞」而不是「化」上。 */
+::view-transition-group(*) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.22, 0.68, 0.3, 1);
+}
+
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 220ms;
+}
+
+/* 根快照仍然保持瞬时 —— 整页的进出场由上面 .main 的 nav-enter / nav-leave 负责，
+   两套叠在一起就是「淡一次再淡一次」（上面那段注释说的正是这件事）。
+
+   这两条**必须排在上面的通配之后**：通配与具名 ident 的优先级相同，
+   规则一样长的时候胜负只由书写顺序决定；写反了根快照会跟着动。 */
+::view-transition-group(root) {
+  animation: none;
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
@@ -1913,9 +2184,20 @@ a.heat__cell.is-open {
   margin-top: 0.7rem;
 }
 
-/* 正文 + 右侧插画：没有配图时 .post__body 只是个透明容器，版式和以前一样 */
+/* 正文 + 右侧插画：没有配图时 .post__body 只是个透明容器，版式和以前一样。
+
+   grid-template-columns 必须显式写成 minmax(0, 1fr)，不能省。
+   省掉时这一列是**隐式轨道**、尺寸函数为 auto，而 auto 轨道的下限是内容的
+   min-content —— 正文里的 <pre> 是 white-space: pre，它的 min-content 就是
+   最长那一行的宽度。文章里粘一段几百字符的单行终端记录，轨道就会被撑到上万像素：
+   .prose 跟着变宽 → <pre> 拿到同样宽的包含块 → overflow-x: auto 没得可滚，
+   整个代码块横着甩出去，压到右侧 TOC 底下（实测 pre 宽 16116px）。
+   minmax(0, …) 把下限钉成 0，轨道才会老实等于容器宽，overflow-x 才真正生效。
+
+   下面 --split 那条早就写了 minmax(0, 1fr)（有配图的一路），漏的是没配图的这一路。 */
 .post__body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
 }
 

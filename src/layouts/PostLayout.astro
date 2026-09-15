@@ -87,7 +87,21 @@ const hideLiftedCss = liftedImageCss(cover);
       {cover && (
         <aside class="post__aside">
           <figure class="post__figure">
-            <img src={cover.src} alt={cover.alt} loading="lazy" decoding="async" />
+            {/*
+              与 PostCard 的封面图同名 —— 从首页或列表页点进来时，
+              卡片上那张缩略图会「飞」到这一格的位置上。
+
+              这一格是 sticky 的第二列（≥900px）/ 排在正文之上（<900px），
+              两种排法都在首屏之内，所以落点是看得见的。
+              两边都走 resolveCover()，是同一张源图，飞过去不会跳色。
+            */}
+            <img
+              src={cover.src}
+              alt={cover.alt}
+              loading="lazy"
+              decoding="async"
+              transition:name={`p-cover-${entry.slug}`}
+            />
           </figure>
         </aside>
       )}

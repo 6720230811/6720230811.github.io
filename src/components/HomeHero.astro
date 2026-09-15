@@ -1,0 +1,350 @@
+---
+import type { Profile } from '../data/profile';
+import type { Locale } from '../i18n/ui';
+import { useTranslations } from '../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { visibleSections } from '../data/sections';
+import '../styles/home.css';
+
+/**
+ * 沉浸式首屏（只用在站点首页）。
+ *
+ * 一屏一幅画：同一幅抽象画拆成远 / 中 / 近三层重叠，滚动时各层以不同速率上移，
+ * 画面像被「拉开」，首屏文字反向小幅下移 —— 相对观感就是文字从层缝里浮起。
+ * 首屏之下的内容区见 HomeBody.astro。
+ *
+ * 渲染位置由 BaseLayout 的 `hero="immersive"` 决定：它在 `.page` **之外**，
+ * 与既有静态横幅 `.hero` 同一个位置，所以天然全出血（不受 --page-max 限制）。
+ *
+ * 文案上首屏是「刊头」而不是简历，而且**不出现任何身份信息**：单位、所在地、
+ * 学位这三样原来就挂在刊头上（`profile.affiliation` / `location` / `title`），
+ * 一屏大字下面挂三行简历抬头，是它一路像 CV 的根源。现在它们只属于 /about，
+ * 首屏只描述「这个站在收什么」—— 左上一行站点自述（`home.eyebrow`）、名字
+ * 右边一行收纳物（`home.kicker`）、右栏一句站点自己的话（`home.lede.*`）。
+ * 三处都走文案表，改文案不用碰组件。
+ *
+ * 视差为什么自己读 window.scrollY、不挂 Lenis 的回调：
+ * Lenis 改的是真实滚动位置（它的 setScroll 用 behavior:'instant'），所以
+ * window.scrollY 始终最新。这样首屏与 Lenis **完全解耦** —— 移动端
+ * syncTouch:false 走原生滚动时一样有效，将来首页关掉 Lenis 也不受影响。
+ */
+interface Props {
+  profile: Profile;
+  locale: Locale;
+}
+
+const { profile, locale } = Astro.props;
+const t = useTranslations(locale);
+const base = import.meta.env.BASE_URL;
+const aboutUrl = getRelativeLocaleUrl(locale, 'about');
+
+/**
+ * 首屏那句「站点自己的话」，按行拆开、右栏逐行排。
+ *
+ * 这里**没有** `profile.affiliation` / `location` / `title` 了：它们曾经拼成
+ * 刊头那一行身份信息，是首屏唯一泄露「这是谁的简历」的地方。身份信息全部
+ * 留给 /about —— `profile` 这个 prop 现在只用来取站名（字标）与板块 id。
+ */
+const note = [t('home.lede.1'), t('home.lede.2')].filter(Boolean);
+
+const jumps = [
+  { href: aboutUrl, label: t('nav.about') },
+  { href: getRelativeLocaleUrl(locale, 'blog'), label: t('nav.blog') },
+  { href: getRelativeLocaleUrl(locale, 'gallery'), label: t('nav.gallery') },
+];
+
+/** 编号是排版的骨架，不是顺序含义 —— 补齐两位是为了等宽对齐 */
+const numbered = jumps.map((jump, index) => ({
+  ...jump,
+  no: String(index + 1).padStart(2, '0'),
+}));
+
+/**
+ * 旧锚点垫片要送的板块 id，**构建期从 sections.ts 求值**，不在脚本里硬编码。
+ * 脚本若自己抄一份，就等于把「关于页有哪些板块」这条知识记了两遍。
+ */
+const sectionIds = visibleSections(profile)
+  .map((section) => section.id)
+  .join(',');
+---
+
+<section
+  class="hh"
+  data-about-url={aboutUrl}
+  data-about-sections={sectionIds}
+  aria-labelledby="hh-name"
+>
+  {/* 三层视差：纯装饰，对读屏隐藏 */}
+  <div class="hh__scene" aria-hidden="true">
+    <div class="hh__layer hh__layer--far" style={`--layer-img: url('${base}home/far.webp')`}></div>
+    <div class="hh__layer hh__layer--mid" style={`--layer-img: url('${base}home/mid.webp')`}></div>
+    <div class="hh__layer hh__layer--near" style={`--layer-img: url('${base}home/near.webp')`}></div>
+  </div>
+
+  {/* 版面：左上刊头 / 右栏一句站点自己的话 / 底部编号索引。
+      刻意不做「左对齐竖直堆叠」—— 那在超大字号下会变成一个整齐的矩形，
+      和画面本身的纵深互相抵消。三块的位置关系见 home.css 的 .hh__content */}
+  <div class="hh__content">
+    <div class="hh__head">
+      <p class="hh__eyebrow">{t('home.eyebrow')}</p>
+
+      <div class="hh__headline">
+        <h1 class="hh__name" id="hh-name">{profile.name}</h1>
+        {/* 细线纯装饰：它把版面从名字一路拉到右端，是「刊头」感的来源 */}
+        <span class="hh__rule" aria-hidden="true"></span>
+        <p class="hh__kicker">{t('home.kicker')}</p>
+      </div>
+    </div>
+
+    {
+      note.length > 0 && (
+        <div class="hh__note">
+          {note.map((line) => (
+            <p class="hh__note-line">{line}</p>
+          ))}
+        </div>
+      )
+    }
+
+    <nav class="hh__jump" aria-label={t('home.entries')}>
+      {
+        numbered.map((jump) => (
+          <a class="hh__jump-link" href={jump.href}>
+            <span class="hh__no" aria-hidden="true">
+              {jump.no}
+            </span>
+            <span class="hh__label">{jump.label}</span>
+            <span class="hh__go" aria-hidden="true">
+              →
+            </span>
+          </a>
+        ))
+      }
+    </nav>
+  </div>
+
+  <a class="hh__more" href="#home-body">
+    <span>{t('home.scroll')}</span>
+    <span class="hh__more-arrow" aria-hidden="true">↓</span>
+  </a>
+</section>
+
+{/* 旧锚点垫片。
+    外链与搜索引擎可能存了 /#about、/#publications 这类老锚点，而首页改版后
+    这些板块都在 /about。静态站没有服务端重定向，只能在首页兜住。
+
+    三个刻意的实现细节：
+    - 目标地址走 data-about-url（构建期由 getRelativeLocaleUrl 求值），
+      不在脚本里拼语言前缀 —— 那等于把路由规则抄了第二份（同 Search.astro 的 data-base）
+    - is:inline：模块脚本会被推迟到解析之后执行，而这段要在渲染前就把人送走
+    - 放在 .hh 之后：这样才读得到它的 data 属性 */}
+<script is:inline>
+  (() => {
+    const hero = document.querySelector('.hh');
+    if (!hero) return;
+    const ids = (hero.dataset.aboutSections || '').split(',').filter(Boolean);
+    const hash = location.hash.slice(1);
+    if (!ids.includes(hash)) return;
+    const url = hero.dataset.aboutUrl;
+    if (url) location.replace(`${url}#${hash}`);
+  })();
+</script>
+
+<script>
+  /**
+   * 视差驱动：每帧只做一件事 —— 把滚动进度写成一个 CSS 变量。
+   * 三层的位移交给 CSS 自己算（calc(var(--hh-p) * var(--rate))），
+   * 于是 JS 每帧只碰一处 DOM，三个合成层由浏览器自己算；窄屏要从 3 层降到
+   * 2 层时也只改 CSS 一处，这里不用动。
+   */
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /** 省流 / 慢网：中景与近景干脆不加载（节点移除，背景图自然不发请求） */
+  const shouldTrim = () => {
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } })
+      .connection;
+    if (!connection) return false;
+    return Boolean(connection.saveData) || /^(slow-)?2g$|^3g$/.test(connection.effectiveType ?? '');
+  };
+
+  const setup = () => {
+    // 本仓被「首屏脚本 + astro:page-load 跑两遍」坑过两次（搜索按钮、宠物），
+    // 这里同样要防：先撤上一份，再清空句柄，保证任何时刻最多一个 rAF 循环。
+    const previous = (window as Window & { __homeHeroCleanup?: null | (() => void) })
+      .__homeHeroCleanup;
+    if (typeof previous === 'function') previous();
+    (window as Window & { __homeHeroCleanup?: null | (() => void) }).__homeHeroCleanup = null;
+
+    const hero = document.querySelector<HTMLElement>('.hh');
+    if (!hero) return;
+
+    if (shouldTrim()) {
+      hero.querySelectorAll('.hh__layer--mid, .hh__layer--near').forEach((el) => el.remove());
+    }
+
+    type HomeHeroDiag = { started: number; stopped: number; active: number; ticks: number };
+    const win = window as Window & {
+      __homeHero?: HomeHeroDiag;
+      __homeHeroCleanup?: null | (() => void);
+    };
+    /**
+     * 诊断计数，给 e2e 用：
+     * - `active`：此刻有几个循环在跑（0 / 1）
+     * - `started` / `stopped`：建过几次、撤过几次
+     * - `ticks`：每帧 +1。**这是唯一能证明「只有一份循环」的量** ——
+     *   active 是脚本自己贴的标签，撤不掉的那份旧循环不会改写它；
+     *   而旧循环若还活着，ticks 的增速会变成两倍。
+     */
+    const diag: HomeHeroDiag = (win.__homeHero ??= { started: 0, stopped: 0, active: 0, ticks: 0 });
+
+    let raf = 0;
+    let running = false;
+    let height = hero.offsetHeight || 1;
+
+    const apply = () => {
+      const progress = Math.min(1, Math.max(0, window.scrollY / height));
+      hero.style.setProperty('--hh-p', String(progress));
+    };
+
+    // 关掉动画偏好：不启动循环，只把进度按 0 写一次，三层静态叠合成一幅画
+    if (reduceMotion()) {
+      apply();
+      win.__homeHeroCleanup = () => hero.style.removeProperty('--hh-p');
+      return;
+    }
+
+    const measure = () => {
+      height = hero.offsetHeight || 1;
+    };
+
+    /**
+     * 指针视差的原始状态。
+     *
+     * **事件里只记坐标，换算留到帧里。** 归一化要拿首屏矩形来算，而在事件里读矩形
+     * 等于每个 `pointermove` 都逼一次布局（前一帧刚写过样式）—— 一秒钟一百多次。
+     * 这与 home-motion.ts 那边是同一条纪律：先读完再写，且都发生在帧里。
+     */
+    let pxRaw = 0;
+    let pyRaw = 0;
+    /** 有新的指针状态要落到 CSS 上（移动或归位） */
+    let pointing = false;
+    /** 指针已经离开首屏 —— 目标恒为 0，连矩形都不必读 */
+    let offHero = true;
+
+    /** 夹到 ±1：指针能甩到窗口外，不夹的话层会被推出画面的量级 */
+    const clamp1 = (v: number) => Math.min(1, Math.max(-1, v));
+
+    const onPointerMove = (event: PointerEvent) => {
+      // 触屏没有 hover；手指滑过时整块画布跟着漂会晕，也白烧电
+      if (event.pointerType === 'touch') return;
+      pxRaw = event.clientX;
+      pyRaw = event.clientY;
+      pointing = true;
+      offHero = false;
+      if (!hero.dataset.lit) hero.dataset.lit = 'true';
+    };
+
+    /**
+     * 指针离开就回中位。**不能停在最后一处** —— 指针都走了画还歪着，读起来是卡住了。
+     * 回中是 `translate` 上的那条过渡负责，这里只把目标值置 0。
+     */
+    const onPointerLeave = () => {
+      offHero = true;
+      pointing = true;
+      delete hero.dataset.lit;
+    };
+
+    const tick = () => {
+      if (!running) return;
+      diag.ticks += 1;
+
+      // 先读完再写：这一帧要读 scrollY 与（可能）首屏矩形，之后只碰变量
+      const progress = Math.min(1, Math.max(0, window.scrollY / height));
+      let hx = 0;
+      let hy = 0;
+      let write = false;
+
+      if (pointing) {
+        pointing = false;
+        write = true;
+        if (!offHero) {
+          const rect = hero.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            // 以首屏中心为原点归一化到 ±1，交给 CSS 乘各自的系数
+            hx = clamp1((pxRaw - (rect.left + rect.width / 2)) / (rect.width / 2));
+            hy = clamp1((pyRaw - (rect.top + rect.height / 2)) / (rect.height / 2));
+          }
+        }
+      }
+
+      hero.style.setProperty('--hh-p', String(progress));
+      if (write) {
+        hero.style.setProperty('--hx', hx.toFixed(4));
+        hero.style.setProperty('--hy', hy.toFixed(4));
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+
+    const start = () => {
+      if (running) return;
+      running = true;
+      measure();
+      diag.started += 1;
+      diag.active = 1;
+      raf = requestAnimationFrame(tick);
+    };
+
+    const stop = () => {
+      if (!running) return;
+      running = false;
+      cancelAnimationFrame(raf);
+      diag.stopped += 1;
+      diag.active = 0;
+    };
+
+    // 首屏滚出视口就停掉循环（首页很长，没必要一直空转）
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) start();
+      else stop();
+    });
+    observer.observe(hero);
+
+    window.addEventListener('resize', measure);
+
+    /**
+     * 指针那套只在**没省流**时挂。
+     *
+     * `shouldTrim()` 上面已经问过一次（中景/近景两层已摘）；这里再问一次而不是存个
+     * 变量，是因为中间隔着 `reduceMotion()` 那条提前 return —— 存变量反而要在两条
+     * 返回路径上都维护它。
+     */
+    const bindPointer = !shouldTrim();
+    if (bindPointer) {
+      hero.addEventListener('pointermove', onPointerMove);
+      hero.addEventListener('pointerleave', onPointerLeave);
+    }
+
+    // 先跑一帧：IntersectionObserver 的首次回调是异步的，否则首屏会空一帧
+    measure();
+    apply();
+    start();
+
+    win.__homeHeroCleanup = () => {
+      stop();
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+      if (bindPointer) {
+        hero.removeEventListener('pointermove', onPointerMove);
+        hero.removeEventListener('pointerleave', onPointerLeave);
+      }
+      hero.style.removeProperty('--hh-p');
+      hero.style.removeProperty('--hx');
+      hero.style.removeProperty('--hy');
+      delete hero.dataset.lit;
+    };
+  };
+
+  setup();
+  document.addEventListener('astro:page-load', setup);
+</script>

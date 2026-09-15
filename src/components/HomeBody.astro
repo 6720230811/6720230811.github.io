@@ -1,0 +1,215 @@
+---
+import type { Profile } from '../data/profile';
+import type { Locale } from '../i18n/ui';
+import { useTranslations } from '../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { postsOf } from '../lib/posts';
+import { gallery, mediaUrl } from '../data/gallery';
+import PostCard from './PostCard.astro';
+
+/**
+ * 首页首屏之下的内容区：目录 + 最新文章 + 画廊精选。
+ *
+ * **刻意不用共享的 `Section`**：那个组件是「白卡 + 左侧竖条 + 标题」的列表页语言，
+ * 三张卡摞起来就是「卡里再装卡」的方框感。这里改成刊物内页的编排 ——
+ * 板块头是「编号 + 栏目名 + 一条横贯细线」，与首屏刊头的 `.hh__rule` 同源；
+ * 内容不套外壳，直接落在页面底色上，靠留白与细线分隔。三块各用不同编排
+ * （目录行 / 一大两小 / 一大两小错落），不再是一排等宽盒子。
+ *
+ * 三块全部**构建期渲染**，页面上没有任何运行时请求；连数量（文章数 / 作品数）
+ * 也是构建期算好直接写进 HTML 的，不需要 JSON island。
+ * 这是有意的：少一个运行时依赖，就少一处可能坏的地方。
+ *
+ * **动效层**（第五轮加）：`data-rv` 标「滚动落版」的目标、`data-ink` / `data-ink-row`
+ * 标目录行的墨条、`data-lens` 标画廊的镜头推移，`data-motion-root` 是那一套监听的
+ * 挂载点。逻辑在 src/lib/home-motion.ts，样式在 home.css 末尾那一块，
+ * 设计见 docs/superpowers/specs/2026-09-14-home-motion-design.md。
+ *
+ * 首屏（沉浸式门面）见 HomeHero.astro。
+ */
+interface Props {
+  profile: Profile;
+  locale: Locale;
+}
+
+const { profile, locale } = Astro.props;
+const t = useTranslations(locale);
+
+const posts = await postsOf(locale);
+const latest = posts.slice(0, 3);
+
+const galleryBase = getRelativeLocaleUrl(locale, 'gallery');
+const shots = gallery.items.slice(0, 3);
+
+/** 四个入口：顺序与顶栏导航一致（首页之外的主要目的地） */
+const entries = [
+  {
+    href: getRelativeLocaleUrl(locale, 'about'),
+    title: t('nav.about'),
+    desc: t('home.card.about'),
+    meta: '',
+  },
+  {
+    href: getRelativeLocaleUrl(locale, 'blog'),
+    title: t('nav.blog'),
+    desc: t('home.card.blog'),
+    meta: posts.length > 0 ? `${posts.length} ${t('rail.postsUnit')}` : '',
+  },
+  {
+    href: galleryBase,
+    title: t('nav.gallery'),
+    desc: t('home.card.gallery'),
+    meta: gallery.items.length > 0 ? `${gallery.items.length} ${t('gallery.itemCount')}` : '',
+  },
+  {
+    href: getRelativeLocaleUrl(locale, 'friends'),
+    title: t('nav.friends'),
+    desc: t('home.card.friends'),
+    meta: '',
+  },
+];
+---
+
+{/*
+  落版的隐藏态**在服务端就写死**（`data-rv-state="out"`，见下面各处 data-rv），
+  这样首帧之前元素就是收着的，不会「先看见内容、再收走、再放出来」。
+
+  代价是：JS 万一不来，它们就永远收着。所以配四道各自独立的兜底 ——
+  ① 这一条 noscript（关掉 JS）；② home.css 里 reduced-motion 那道；
+  ③ 文件末尾那段看门狗（模块加载失败）；④ 省流设备由脚本主动推成 'in'。
+  任何一道单独成立，内容都读得到。
+*/}
+<noscript>
+  <style>
+    [data-rv] {
+      opacity: 1 !important;
+      transform: none !important;
+      clip-path: none !important;
+    }
+  </style>
+</noscript>
+
+<div class="home-body" id="home-body" data-motion-root>
+  <section class="hbs">
+    {/* 板块头：编号与栏目名先落，细线晚一档从栏目名那头长出去 */}
+    <h2 class="hbs__label" data-rv data-rv-state="out">
+      <span class="hbs__no">01</span>
+      <span class="hbs__name">{t('home.entries')}</span>
+      <span class="hbs__rule" aria-hidden="true"></span>
+    </h2>
+
+    {/*
+      墨条要包一层：它是绝对定位的一小截线，而 <ul> 的子元素只能是 <li> ——
+      塞进去就成了「一个不是内容的列表项」，读屏会念出来。包一层 div 还有个好处：
+      它是 position: relative 的，行高从它算起，将来给 <ul> 加边框也不会让墨条错位。
+    */}
+    <div class="entries-wrap" data-ink>
+      <span class="entries__ink" aria-hidden="true"></span>
+      <ul class="entries" data-rv data-rv-state="out">
+        {
+          entries.map((entry) => (
+            <li>
+              <a class="entry" href={entry.href} data-ink-row>
+                <span class="entry__title">{entry.title}</span>
+                <span class="entry__desc">{entry.desc}</span>
+                {entry.meta && <span class="entry__meta">{entry.meta}</span>}
+                <span class="entry__go" aria-hidden="true">
+                  →
+                </span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  {
+    latest.length > 0 && (
+      <section class="hbs">
+        <h2 class="hbs__label" data-rv data-rv-state="out">
+          <span class="hbs__no">02</span>
+          <span class="hbs__name">{t('home.latest')}</span>
+          <span class="hbs__rule" aria-hidden="true" />
+        </h2>
+
+        {/* 首篇是头条（图右文左的大牌），后两篇是副条（图上文下）—— 见 home.css */}
+        <div class="post-list" data-rv data-rv-state="out">
+          {latest.map((post) => (
+            <PostCard post={post} locale={locale} />
+          ))}
+        </div>
+
+        <a class="home-more" href={getRelativeLocaleUrl(locale, 'blog')} data-rv data-rv-state="out">
+          <span class="home-more__rule" aria-hidden="true" />
+          <span>{t('home.viewAll')} →</span>
+        </a>
+      </section>
+    )
+  }
+
+  {
+    shots.length > 0 && (
+      <section class="hbs">
+        <h2 class="hbs__label" data-rv data-rv-state="out">
+          <span class="hbs__no">03</span>
+          <span class="hbs__name">{t('home.gallery')}</span>
+          <span class="hbs__rule" aria-hidden="true" />
+        </h2>
+
+        {/* data-lens-group：画廊的**聚焦容器**。指针压住哪张，其余两张退到 0.6。
+            聚焦状态写在容器上而不是靠 CSS 的 `:hover`：网格有间隙，指针落在两张
+            之间的缝里时容器同样 `:hover`，那一下会把三张全压暗（闪一帧）。
+            与 `data-ink` 是同一个模式 —— 状态写在容器、样式按容器选择。 */}
+        <ul class="shots" data-rv data-rv-state="out" data-lens-group>
+          {shots.map((item) => (
+            <li>
+              {/* 点进去落在它所属主题的房间（/gallery/theme-city/ 这类）。
+                  transition:name 与 GalleryGrid 里同一件展品同名 ——
+                  点下去时这张缩略图会「飞」到房间页网格里它的位置上。
+                  名字用 id 而不是下标：下标会在改 JSON 顺序时错位，
+                  而重名的后果不是这一对失效，是整次导航的 View Transition 全被跳过。
+
+                  名字挂在 <img> 上而不是外层 <a> 上：对面 GalleryGrid 里也是个裸 <img>，
+                  图对图才是同一对；挂在外层会把底下的标题蒙版一起卷进快照。 */}
+              <a class="shot" href={`${galleryBase}theme-${item.theme}/`} data-lens>
+                <img
+                  class="shot__img"
+                  src={mediaUrl(item.thumb)}
+                  alt={item.title[locale]}
+                  loading="lazy"
+                  decoding="async"
+                  transition:name={`g-${item.id}`}
+                />
+                <span class="shot__title">{item.title[locale]}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+
+        <a class="home-more" href={galleryBase} data-rv data-rv-state="out">
+          <span class="home-more__rule" aria-hidden="true" />
+          <span>{t('home.viewAll')} →</span>
+        </a>
+      </section>
+    )
+  }
+</div>
+
+{/*
+  看门狗。它只在「模块 chunk 没来」时才有意义，所以放在内容之后即可，
+  不必抢在首帧之前（初始隐藏态已经在服务端写好了）。
+  4 秒还没等到 window.__homeMotion，就把全部初始态清成 'in' ——
+  宁可没有动效，也不能让人对着一片空白。
+*/}
+<script is:inline>
+  setTimeout(function () {
+    if (window.__homeMotion) return;
+    var nodes = document.querySelectorAll('[data-rv-state="out"]');
+    for (var i = 0; i < nodes.length; i += 1) nodes[i].setAttribute('data-rv-state', 'in');
+  }, 4000);
+</script>
+
+<script>
+  import '../lib/home-motion';
+</script>

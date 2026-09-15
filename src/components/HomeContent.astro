@@ -26,6 +26,15 @@ const has = (id: string) => visible.some((s) => s.id === id);
 const sortedPubs = [...profile.publications].sort((a, b) => b.year - a.year);
 ---
 
+{/* 整页的 h1。
+
+    这块内容原本是首页，结构里第一个标题就是下面板块的 h2 —— 整个文档没有 h1。
+    搬到 /about 之后仍然如此。补一个只有读屏与搜索引擎看得见的 h1（.sr-only 见
+    global.css），标题层级变成 h1 → h2 → h3，视觉上一个像素都不变。
+
+    与首页保持一致：那边沉浸首屏的 h1 也是 profile.name。 */}
+<h1 class="sr-only">{profile.name}</h1>
+
 {/* ---------- 个人简介 + 研究方向 + 最新动态 ---------- */}
 <Section title={t('section.about')} icon="👤" id="about">
   <div class="bio">

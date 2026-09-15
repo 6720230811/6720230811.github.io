@@ -8,7 +8,12 @@ export interface SectionDef {
   key: UIKey;
 }
 
-/** About 页（`src/pages/index.astro`）的板块顺序：正文与右侧目录共用，改动此处即可调整顺序 */
+/**
+ * 关于页（`src/pages/about.astro`）的板块顺序：正文与右侧目录共用，改动此处即可调整顺序。
+ *
+ * 这些 id 还有第二处用途：首页的**旧锚点垫片**会把 `/#about` 这类老链接送到
+ * `/about#about`（见 `src/components/HomeHero.astro`）。改 id 会让那条路断掉。
+ */
 export const sections: readonly SectionDef[] = [
   { id: 'about', key: 'section.about' },
   { id: 'publications', key: 'section.publications' },

@@ -1,0 +1,1646 @@
+/* ============================================================
+   沉浸式首页（/）—— 首屏 `.hh` 与首屏之下的内容区 `.home-body`
+
+   为什么单独一个文件：与 pet.css / gallery.css 同一套组织方式 —— 一个特性
+   一份样式表、由它的组件 import，而不是全部堆进 global.css。
+
+   注意它**不等于「只有首页才下载」**：HomeHero.astro 由 BaseLayout import
+   （hero prop 要用），所以这份 CSS 会进「所有页面共用的那个 chunk」，
+   处境与 pet.css 完全一样。这不额外花钱 —— URL 相同，浏览器首次加载后即命中缓存，
+   翻页不重复下载；而那份 chunk 本来就含 global.css，每页都得下。
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   首屏
+   ------------------------------------------------------------ */
+.hh {
+  /* 图层盒比首屏高出来的两段余量。它们和下面 --rate 是一组，改要一起改：
+     ① --hh-overscan：顶部余量，给图层一点上浮空间
+     ② --hh-shift：底部余量，**必须 ≥ 三层里最大的位移绝对值**，
+        否则近景层上移后盒子底边会抬到首屏底边之上，露出一条空带
+
+     310 而不是 280（原来只算滚动视差的 260 + 20 余量）：⑦ 组给每层加了指针漂移
+     `--dy`（近景最大 23px），而漂移与视差在纵轴上是**相加**的 ——
+     p=1 且指针在最上方时近景层一共上移 260 + 23 = 283px，280 就差 3px 露空。
+     改这里的任何一条都要回头核对 ⑦ 组那三个 `--dy`。 */
+  --hh-overscan: 48px;
+  /* 近景层 260px 视差 + 26px 指针漂移 + 24px 安全余量 */
+  --hh-shift: 310px;
+  /* 横向余量。⑦ 组给每层加了指针漂移，层是整体平移的、盒边跟着走 ——
+     盒子原本是 left/right: 0，往右漂就会在左侧露出 .hh 的兜底底色。
+     56 ≥ 46（最大的 --dx），和纵向那两段是同一个道理。
+     e2e 有一条断言把指针顶到角上、量「盒子是否仍包住首屏」—— 改 --dx 要同步改这里。 */
+  --hh-bleed: 56px;
+
+  /* 首屏永远压在一幅暗色画上，所以文字色固定在「亮」这一侧，**不跟随明暗主题** ——
+     跟随的话，亮色主题会拿深灰字去压深色画，读不出来 */
+  --hh-fg: #f2f6fb;
+  --hh-fg-muted: rgba(212, 225, 240, 0.82);
+  --hh-fg-line: rgba(226, 236, 248, 0.3);
+
+  position: relative;
+  z-index: 0;
+  /* 与既有 .hero 同一个位置、同一种处理：负 margin 让下方 .page 盖住底部 */
+  margin-bottom: calc(-1 * var(--banner-overlap));
+  /* 两行兜底：不认 svh 的老浏览器吃第一行；认的用第二行
+     （第二行减掉顶栏，因为 --nav-h 是 sticky、占着文档流） */
+  height: 100vh;
+  height: calc(100svh - var(--nav-h));
+  overflow: hidden;
+  /* 兜底底色：三张图都没加载出来时也不至于是一片白 */
+  background-color: #141b26;
+  /* 把混合模式的范围关在首屏内部，别让图层去和页面底色做 screen */
+  isolation: isolate;
+}
+
+.hh__scene {
+  position: absolute;
+  inset: 0;
+}
+
+.hh__layer {
+  position: absolute;
+  /* 横向也留余量（见 --hh-bleed 那段）。**这一步不改变取景**：图是 2560×1300，
+     而这个盒子纵向更高，`cover` 由**高度**定标（0.9185），加宽盒子不参与定标；
+     盒子的水平中心也没变，`background-position: center` 的落点自然一样 ——
+     只是把原本就裁掉的两侧各多露出 48px。 */
+  left: calc(-1 * var(--hh-bleed));
+  right: calc(-1 * var(--hh-bleed));
+  top: calc(-1 * var(--hh-overscan));
+  height: calc(100% + var(--hh-overscan) + var(--hh-shift));
+  background-image: var(--layer-img);
+  background-size: cover;
+  background-position: center;
+  will-change: transform;
+  transform: translate3d(0, calc(var(--hh-p, 0) * var(--rate) * 1px), 0);
+}
+
+/* 速率比要拉得够开（近景 ≈ 远景的 4 倍）才看得出纵深；
+   比值一接近，三层就退化成整块平移，等于白做 */
+.hh__layer--far {
+  --rate: -60;
+}
+
+.hh__layer--mid {
+  --rate: -140;
+  /* 中景与近景是纯黑底的笔触层，screen 叠加后黑处等于透明，只留发亮的笔触 */
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+.hh__layer--near {
+  --rate: -260;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+}
+
+/* 版面：刊头式，刻意做成非对称。
+
+   为什么不是「左对齐竖直堆叠 + 一排等宽胶囊按钮」：超大字号下那种排法会收成
+   一个整齐的矩形，而首屏本身就是三层视差 —— 版面再方正，纵深就被抵消掉了。
+   三个装置把它拆开：
+     ① 刊头一条细线（.hh__rule）：从名字一路拉到右端的小字，横向量被撑开
+     ② 右栏一句话（.hh__note）：右对齐、与左边的身份信息同顶线，两条小字分居两端
+     ③ 编号索引（.hh__jump）：数字 + 文字 + 一条细线，取代胶囊按钮 ——
+        边框会把版面重新框回方块，一条线加一个编号就够
+
+   垂直节奏：上带（小字 + 大字）→ 一大段留白给画面 → 下带（索引）。
+   留白不是没排满，是让这张画有地方露出来。
+
+   文字块（.hh__eyebrow 顶 → .hh__jump 底）仍整体居中，只靠 padding-bottom
+   抬半个身位 —— e2e 有断言盯着这个比例，改 padding 前先看下面那段注释。 */
+.hh__content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  /* 底部留出的空档，给「向下滚动」提示与底部渐隐区让位。
+
+     **必须是长度，不能用百分比**：百分比 padding 是按**包含块的宽度**解析的，
+     而 .hh 是全出血的（包含块宽 = 视口宽 1440），于是 `30%` 会变成 432px ——
+     不是「首屏高度 828 的 30%＝248px」。第一版正是这么写的，实测把整块文字顶到
+     首屏中心以上 216px、下面空出 464px（首屏高度的 56%），而且窄屏完全反过来
+     （375 宽时同一个 24% 只剩 90px，手机上是居中的）—— 同一个类在两个断点下
+     表现相反，就是这个陷阱的典型指纹。
+
+     5.5rem 的落点：块中心比首屏中心高 44px（5.3%）—— 只抬半个身位，
+     索引因此停在 567..612，离底部渐隐区（740 起）还有 128px。 */
+  padding: 0 1rem 5.5rem;
+
+  /* 两行两列：刊头在左上、索引在左下、右栏那句话只占第一行。
+     索引行的右半格故意留空（`.`）—— 那半格不是浪费，宠物层就固定在右下角
+     （pet 的 right/bottom 1rem），版面把那里让出来，两者才不打架。 */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 19rem);
+  grid-template-areas:
+    'head note'
+    'index .';
+  align-content: center;
+  /* 4rem 而不是 3rem：学位那行小字与右栏那句是两块不相干的小字，
+     拉宽一点，免得被读成同一行 */
+  column-gap: 4rem;
+  /* 两带之间的空档用 vh 而不是固定值：矮屏（笔记本横屏）才不会被撑破 */
+  row-gap: clamp(2.5rem, 17vh, 14rem);
+
+  transform: translate3d(0, calc(var(--hh-p, 0) * 40px), 0);
+  opacity: calc(1 - var(--hh-p, 0) * 0.75);
+}
+
+/* 三块各自认领网格区域。显式写出来而不是靠自动放置 —— 靠自动放置只是
+   「碰巧落对」，以后往 DOM 里加一个块就会悄悄错位。 */
+.hh__head {
+  grid-area: head;
+}
+
+.hh__eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.7rem;
+  margin: 0 0 0.9rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+  color: var(--hh-fg-muted);
+}
+
+/* 身份信息前的一小截横线：与刊头那条长线是一套语言（都是 1px 细线） */
+.hh__eyebrow::before {
+  content: '';
+  flex: none;
+  width: 2.25rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+/* 刊头一行：名字 + 细线 + 右端的小字。用 baseline 对齐，细线才正好坐在名字的
+   基线上（空盒子的基线是它的下外边距边，所以 margin-bottom 就是把线抬起来的量）。 */
+.hh__headline {
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+}
+
+.hh__name {
+  margin: 0;
+  font-size: clamp(3rem, 8.5vw, 7rem);
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  color: var(--hh-fg);
+  text-shadow: 0 2px 48px rgba(4, 8, 16, 0.6);
+}
+
+/* 细线：flex:1 吃掉名字与小字之间的全部余量，于是它天然「接到版面右端」。
+   min-width 防止窄一点时被挤没。 */
+.hh__rule {
+  flex: 1 1 auto;
+  min-width: 2rem;
+  height: 1px;
+  margin-bottom: 0.5rem;
+  background: var(--hh-fg-line);
+}
+
+/* 原来那行「计算机科学与技术 · 硕士研究生」降级成刊头右端的小字：
+   它本来是独立一行、与名字差不多同量级，一竖着堆就是简历的味道 */
+.hh__kicker {
+  flex: none;
+  margin: 0;
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--hh-fg-muted);
+}
+
+/* 右栏那句「站点自己的话」：右对齐、顶在版面上缘，与左边的身份信息同一条顶线 ——
+   顶带于是成了「左一句身份、右一句站点的话」，两条小字分居两端。
+
+   为什么不沉到底（试过）：右下角被浮动的宠物层占着（pet 的气泡与按钮从
+   right/bottom 1rem 处往上展开），句子放过去会跟它重叠。
+
+   读线因此是斜的：左上身份 → 大字 → 右上句子 → 左下索引，
+   而不是一条竖着排下来的清单。 */
+.hh__note {
+  grid-area: note;
+  align-self: start;
+  margin: 0;
+  text-align: right;
+}
+
+.hh__note-line {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.9;
+  color: var(--hh-fg-muted);
+}
+
+/* 编号索引：横向铺满整幅，每项自带一条细线。
+   刻意不用胶囊边框 —— 边框会把版面重新框回方块（见 .hh__content 的说明） */
+.hh__jump {
+  grid-area: index;
+  display: flex;
+  gap: 2.25rem;
+  margin: 0;
+}
+
+.hh__jump-link {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  column-gap: 0.7rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--hh-fg-line);
+  color: var(--hh-fg);
+  text-decoration: none;
+  transition: border-color 0.25s ease;
+}
+
+.hh__no {
+  grid-column: 1;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+  color: var(--hh-fg-muted);
+  transition: color 0.25s ease;
+}
+
+.hh__label {
+  grid-column: 2;
+  font-size: 1.0625rem;
+  font-weight: 500;
+}
+
+/* 箭头推到本栏最右：细线 + 拉开的箭头是「这整栏都可点」的暗示，不必画边框 */
+.hh__go {
+  grid-column: 3;
+  justify-self: end;
+  font-size: 0.9375rem;
+  color: var(--hh-fg-muted);
+  opacity: 0.45;
+  transform: translateX(-0.35rem);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+.hh__jump-link:hover,
+.hh__jump-link:focus-visible {
+  border-top-color: var(--hh-fg);
+}
+
+.hh__jump-link:hover .hh__no,
+.hh__jump-link:focus-visible .hh__no {
+  color: var(--hh-fg);
+}
+
+.hh__jump-link:hover .hh__go,
+.hh__jump-link:focus-visible .hh__go {
+  opacity: 1;
+  transform: none;
+}
+
+.hh__jump-link:focus-visible {
+  outline: 2px solid var(--hh-fg);
+  outline-offset: 4px;
+}
+
+/* 向下提示从「底部居中」挪到「左下角、与刊头左缘对齐」：
+   ① 居中会在版面正中再立一条对称轴，正是要拆的东西；
+   ② 右下角被浮动的宠物层占着（pet.css 里是 right/bottom: 1rem），放过去会打架。
+
+   它落在底部渐隐区里（那里已基本是页面底色），所以用**主题文字色** ——
+   用 --hh-fg 的话，亮色主题下会变成浅灰压在近白底上，看不见。
+   底部留 5.5rem：`.page` 会盖住首屏最后 --banner-overlap（3.5rem），
+   再往下挪就会被第一张卡片压住。 */
+.hh__more {
+  position: absolute;
+  left: max(1rem, calc((100% - var(--page-max)) / 2 + 1rem));
+  bottom: 5.5rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--c-text-muted);
+  font-size: 0.8125rem;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.hh__more:hover {
+  color: var(--c-accent);
+}
+
+.hh__more-arrow {
+  font-size: 1.05rem;
+  animation: hh-bob 2.6s ease-in-out infinite;
+}
+
+@keyframes hh-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+/* 底部渐隐到页面底色（沿用既有 .hero::after 的做法），再往下就是内容区。
+
+   **高度封顶，不能照抄 40%**：既有 .hero 只有 315px 高，它的「40%」= 126px，
+   是个把横幅尾巴轻轻抹开的量；而首屏高 828px，40% = 331px —— 整整刷掉画的下
+   三分之一。浅色主题下 --c-page 是近白，那一截就成了灰白雾，画面「发灰」，
+   正是规格 §8 回退规则要拦的症状（深色主题下 --c-page 本来就是深色，所以看不
+   出来，第一版是在浅色主题下才暴露的）。封到 160px 只做收边，笔触完整保留。 */
+.hh::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: 1;
+  height: min(40%, 160px);
+  background: linear-gradient(to bottom, transparent, var(--c-page));
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------
+   首屏之下的内容区 —— 刊物内页的编排
+
+   **刻意不用共享的 `.section`**（那是「白卡 + 左侧竖条 + 标题」的列表页语言，
+   三张摞起来就是「卡里再装卡」的方框感）。这里：不套外壳、内容直接落在
+   页面底色上，板块头是「编号 + 栏目名 + 一条横贯细线」—— 与首屏刊头
+   `.hh__rule` 同一套手法，于是封面与内页是同一本刊物。
+
+   横向 padding 留 0：`.page` 已给 1rem，正好落在与首屏刊头同一条左缘线上
+   （首屏是 `max(1rem, (100% - --page-max) / 2 + 1rem)`，两边算出来一样）。
+   ------------------------------------------------------------ */
+.home-body {
+  /* 向下箭头是 #home-body 锚链接；Lenis 的 anchors 会读这个值留出顶栏高度 */
+  scroll-margin-top: var(--nav-h);
+  display: grid;
+  /* 板块之间靠大留白分开，不再靠卡片间距 */
+  gap: clamp(3rem, 7vw, 5.5rem);
+  padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(3rem, 7vw, 5rem);
+}
+
+/* 板块头：`01 ─── 从这里开始 ───────────────────` */
+.hbs__label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.85rem;
+  margin: 0 0 1.4rem;
+}
+
+.hbs__no {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--c-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.hbs__name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+
+/* 细线从栏目名一路拉到版心右缘：横向量被撑开，板块头不是一个小标签 */
+.hbs__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--c-border);
+}
+
+/* --- 入口 = 目录四行 --- */
+.entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--c-border);
+}
+
+.entries > li {
+  border-bottom: 1px solid var(--c-border);
+}
+
+/*
+  四列分别是「名称 / 描述 / 数量 / 箭头」。**每列都显式指定 grid-column** ——
+  数量（entry__meta）在「关于」「友链」上是空的、整条不渲染，若靠自动放置，
+  箭头会掉进数量那一列。显式定位后，缺数量时箭头仍在最右。
+*/
+.entry {
+  display: grid;
+  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr) auto 1.25rem;
+  align-items: baseline;
+  gap: 0 1.75rem;
+  padding: 1rem 0.25rem 1rem 0;
+  color: var(--c-text);
+  text-decoration: none;
+  transition:
+    padding-left 0.22s ease,
+    background 0.22s ease;
+}
+
+/* hover 的反馈落在「行」上而不是「盒子」上：整行轻微亮起 + 左侧让出一点 */
+.entry:hover {
+  padding-left: 0.85rem;
+  background: linear-gradient(to right, var(--c-card-hover), transparent 78%);
+}
+
+.entry__title {
+  grid-column: 1;
+  font-size: 1.2rem;
+  font-weight: 650;
+  color: var(--c-text);
+  transition: color 0.18s ease;
+}
+
+.entry:hover .entry__title {
+  color: var(--c-accent);
+}
+
+.entry__desc {
+  grid-column: 2;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--c-text-muted);
+}
+
+.entry__meta {
+  grid-column: 3;
+  font-size: 0.8125rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 箭头平时不占视线，hover 时从左侧滑进来 */
+.entry__go {
+  grid-column: 4;
+  justify-self: end;
+  font-size: 0.9375rem;
+  color: var(--c-accent);
+  opacity: 0;
+  transform: translateX(-0.4rem);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.entry:hover .entry__go {
+  opacity: 1;
+  transform: none;
+}
+
+/* 板块尾部的「查看全部」：一条细线铺满、动作文字靠右 —— 与板块头同形，首尾收口 */
+.home-more {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+.home-more__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--c-border);
+}
+
+.home-more:hover {
+  color: var(--c-accent-hover);
+}
+
+/* ------------------------------------------------------------
+   最新文章：`1 大 + 2 小`
+   三张一样宽的横卡是「列表页」的排法；首页该有主次 ——
+   头条横跨整行、文字在左配图在右，后两篇并排、图上文下。
+   ------------------------------------------------------------ */
+.post-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+/* --- 头条：横跨整行，去掉卡片外壳 --- */
+
+/* 先定「跨满整行」：**无论有没有配图**都要跨，否则没配图时它会缩成半宽、
+   跟副刊并排，头条就不是头条了 */
+.home-body .post-list > .post-card:first-child {
+  grid-column: 1 / -1;
+  /* 下留白比上面大：头条与副刊之间要有一段「空气」，
+     否则同高之下看不出谁主谁次 */
+  padding: 0 0 2.2rem;
+  border: 0;
+  border-bottom: 1px solid var(--c-border);
+  border-radius: 0;
+  background: none;
+}
+
+/* 再定「图右文左」：只在**这篇文章有配图**时成立（`--with-cover` 由 PostCard 自己加），
+   否则右列会白空 17rem。没配图时它就是一块放大的文字，字号规则照样生效。 */
+.home-body .post-list > .post-card--with-cover:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 17rem);
+  gap: 2rem;
+  align-items: center;
+}
+
+/* DOM 里配图在前、文字在后；头条把它换到右侧，方向与下面两条相反 */
+.home-body .post-list > .post-card:first-child .post-card__thumb {
+  order: 2;
+}
+
+/* 日期从标题右边挪到标题**上方**、做成刊期：mono、拉开字距、主色小字。
+   头条没有配图时（很常见）全靠这套层级立住，不能只靠字号。 */
+.home-body .post-list > .post-card:first-child .post-card__head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.home-body .post-list > .post-card:first-child .post-card__date {
+  order: -1;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  color: var(--c-accent);
+}
+
+.home-body .post-list > .post-card:first-child .post-card__title {
+  font-size: clamp(1.5rem, 2.9vw, 2.1rem);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.home-body .post-list > .post-card:first-child .post-card__desc {
+  max-width: 54ch;
+  font-size: 0.95rem;
+}
+
+/* --- 副刊：左图右文的小条目 ---
+   方向与头条**相反**（头条文左图右），一眼能分出主次；
+   配图只有 6.5rem，整块因此比头条矮得多 —— 「图上文下 + 通栏大图」会让
+   副刊比头条还高（实测 592 vs 161），主次当场倒挂，所以不能那么排。
+   没配图时退回单列（靠 `--with-cover` 判断；图加载失败时 onerror 会摘掉
+   这个类，于是自动落到这里）。 */
+.home-body .post-list > .post-card:not(:first-child) {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.home-body .post-list > .post-card--with-cover:not(:first-child) {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* 副刊的标题独占一行、日期落到第二行 —— 不这样的话，标题长短不同会让
+   日期一会儿在标题右边、一会儿被挤到下面，两块副刊就对不齐了。
+   （头条相反：日期在上当「刊期」，所以这里不做 order 反转，两处有区分） */
+.home-body .post-list > .post-card:not(:first-child) .post-card__head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
+/* 副刊的摘要收到两行：它是「条目」，不是文章入口的正文预览 */
+.home-body .post-list > .post-card:not(:first-child) .post-card__desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* 卡片的外壳（边框 / 底色 / 上浮）在首页一律去掉；反馈改成配图轻微推近 */
+.home-body .post-list > .post-card:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.home-body .post-list .post-card__thumb {
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+
+.home-body .post-list .post-card__thumb img {
+  border: 0;
+  transition: transform 0.4s ease;
+}
+
+.home-body .post-list .post-card:hover .post-card__thumb img {
+  transform: scale(1.03);
+}
+
+/* 头条配图：横构图（17rem 宽下约 170 高） */
+.home-body .post-list > .post-card:first-child .post-card__thumb img {
+  aspect-ratio: 16 / 10;
+}
+
+/* 副刊配图：方构图，跟着 6.5rem 的列宽 */
+.home-body .post-list > .post-card:not(:first-child) .post-card__thumb img {
+  aspect-ratio: 1 / 1;
+}
+
+/* 画廊：左侧一张竖长图通高、右侧两张横图叠着 —— 三张不等宽也不等高。
+   大图的高度由它跨的两行决定（= 两张小图 + 行距），所以只需给小图定比例。 */
+.shots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  grid-template-areas:
+    'big a'
+    'big b';
+  gap: 0.9rem;
+}
+
+.shots > li:nth-child(1) {
+  grid-area: big;
+}
+
+.shots > li:nth-child(2) {
+  grid-area: a;
+}
+
+.shots > li:nth-child(3) {
+  grid-area: b;
+}
+
+.shot {
+  position: relative;
+  display: block;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--c-bg-soft);
+  text-decoration: none;
+}
+
+.shots > li:nth-child(2) .shot,
+.shots > li:nth-child(3) .shot {
+  aspect-ratio: 16 / 10;
+}
+
+.shot__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.shot:hover .shot__img {
+  transform: scale(1.04);
+}
+
+.shot__title {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 1.4rem 0.7rem 0.5rem;
+  font-size: 0.8125rem;
+  color: #eef3f9;
+  background: linear-gradient(to top, rgba(6, 10, 16, 0.78), transparent);
+}
+
+/* ------------------------------------------------------------
+   降级
+   ------------------------------------------------------------ */
+
+/* 中等宽度：两栏收成一栏 —— 右栏那句话挪到刊头下面，索引照旧横铺。
+   细线藏掉：一栏之下它接不到版面的右端，留着只是悬空的一小截。 */
+@media (max-width: 920px) {
+  .hh__content {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'note'
+      'index';
+    row-gap: 1.75rem;
+  }
+
+  .hh__note {
+    text-align: left;
+  }
+
+  .hh__rule {
+    display: none;
+  }
+
+  /* 细线没了，名字与小字改为上下排 */
+  .hh__headline {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .hh__kicker {
+    flex-basis: 100%;
+  }
+
+  /* 索引改竖排。横铺时最后一项一定伸进宠物层底下 —— 宠物固定在右下角
+     （pet 的 right/bottom 1rem），实测 375 下它占 x 171~363 / y 485~788、
+     820 下占 x 611~804，而横铺的索引行右端分别是 359 / 804，正中靶心。
+     竖排后每项收到内容宽度，整列只占左边约 100px，任何宽度都躲得开 ——
+     这比「把整块挪高/挪低」稳，不依赖宠物当时有多大。 */
+  .hh__jump {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.55rem;
+  }
+
+  .hh__jump-link {
+    flex: none;
+  }
+}
+
+/* 窄屏：去掉近景层（顺带省下它那份首屏字节），位移幅度减半 */
+@media (max-width: 767px) {
+  /* --- 内容区单列化：目录行压成两行、文章与画廊都收成一列 --- */
+  .entry {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.2rem 1rem;
+    padding: 0.9rem 0;
+  }
+
+  /* 描述换到第二行通栏，名称与数量留在第一行两端 */
+  .entry__desc {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .entry__meta {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  /* 触屏没有 hover，箭头永远不露面，别白占一列 */
+  .entry__go {
+    display: none;
+  }
+
+  .post-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 头条回到「上图下文」，与副刊同向 —— 窄屏容不下左右分栏 */
+  .home-body .post-list > .post-card:first-child {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .home-body .post-list > .post-card:first-child .post-card__thumb {
+    order: 0;
+  }
+
+  /* 画廊错落只在宽屏成立，窄屏三张同比例单列。
+     注意这里要显式写 height: auto 覆盖桌面的 `height: 100%` —— 单列时
+     大图的高度原本由「跨的两行」决定，没有行可跨就成了循环依赖，会塌成 0。 */
+  .shots {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'big'
+      'a'
+      'b';
+  }
+
+  .shots > li .shot {
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+
+  .hh {
+    --hh-shift: 140px;
+  }
+
+  .hh__layer--far {
+    --rate: -30;
+  }
+
+  .hh__layer--mid {
+    --rate: -70;
+  }
+
+  .hh__layer--near {
+    display: none;
+  }
+
+  .hh__content {
+    /* 首屏矮一点，底部空档同步收一点（见上面为什么用长度而非百分比） */
+    padding-bottom: 5.5rem;
+  }
+}
+
+/* 关掉动画偏好：三层静止叠合成一幅画。
+   JS 那边也不会启动 rAF；这里再兜一道，免得脚本没跑到时画面还在动 */
+/* 手机：副刊改回「图上文下」。
+   左图右文在 375 下文字列只剩不到 200px（= 375 − 两侧 1rem − 图 8rem − 间距），
+   中文一行放不下十来个字，读起来全是断行；图上文下后文字拿到整栏宽。 */
+@media (max-width: 520px) {
+  .home-body .post-list > .post-card--with-cover:not(:first-child) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .home-body .post-list > .post-card:not(:first-child) .post-card__thumb img {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hh__layer,
+  .hh__content {
+    transform: none;
+  }
+
+  .hh__content {
+    opacity: 1;
+  }
+
+  .hh__more-arrow {
+    animation: none;
+  }
+}
+
+/* 打印：首屏是纯装饰，内容区照常打印 */
+@media print {
+  .hh {
+    display: none;
+  }
+
+  .home-body {
+    scroll-margin-top: 0;
+  }
+
+  /* 打印时有些内容可能还收着（没滚到过它们），不放开就是印出一堆空白 */
+  .home-body [data-rv-state] > *,
+  .home-body .home-more[data-rv-state],
+  .home-body .shots[data-rv-state] > li .shot > * {
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+  }
+}
+
+/* ============================================================
+   第五轮：内容区的动效层
+
+   设计见 docs/superpowers/specs/2026-09-14-home-motion-design.md。
+   脚本在 src/lib/home-motion.ts，它只干两件事：给 [data-rv] 写
+   data-rv-state，给指针目标写 --mx / --my / --ink-x / --ink-y。
+   **算式全在这里**，脚本一行位移都不算 —— 与首屏视差同一套分工。
+
+   整块放在文件最末是有意的：它要盖掉上面几条早期的 hover 规则
+   （配图 scale(1.03)、画廊 scale(1.04)）。同名同优先级时后者胜，
+   于是不必回头去改那些已经验收过的规则，第几轮改的东西也一眼看得清。
+   ============================================================ */
+
+/* --- ① 落版 ---------------------------------------------------
+
+   阶梯用 --rv-d 而不是让脚本逐个写 transition-delay：序号在构建期就知道
+   （它就在 DOM 里那个位置），没有理由放到运行时算。 */
+
+.home-body .entries > li:nth-child(1),
+.home-body .post-list > .post-card:nth-child(1),
+.home-body .shots > li:nth-child(1) {
+  --rv-d: 0ms;
+}
+
+.home-body .entries > li:nth-child(2),
+.home-body .post-list > .post-card:nth-child(2),
+.home-body .shots > li:nth-child(2) {
+  --rv-d: 90ms;
+}
+
+.home-body .entries > li:nth-child(3),
+.home-body .post-list > .post-card:nth-child(3),
+.home-body .shots > li:nth-child(3) {
+  --rv-d: 180ms;
+}
+
+.home-body .entries > li:nth-child(4) {
+  --rv-d: 270ms;
+}
+
+/* 收着的状态。**初始态在服务端就写好了**（HomeBody.astro 里的
+   data-rv-state="out"）—— 这样首帧之前元素就是收着的，
+   不会「先看见内容、再收走、再放出来」。 */
+
+.home-body .hbs__label[data-rv-state='out'] .hbs__no,
+.home-body .hbs__label[data-rv-state='out'] .hbs__name {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* 细线**从栏目名那一头向右长出去**，不是从中心向两端。
+   它坐在栏目名后面，从文字那里长出去才读得成「这句话拉出了一条线」；
+   居中展开会让线和栏目名脱钩，变成两个不相干的元件。 */
+.home-body .hbs__label .hbs__rule {
+  transform-origin: left;
+}
+
+.home-body .hbs__label[data-rv-state='out'] .hbs__rule {
+  transform: scaleX(0);
+}
+
+.home-body .entries[data-rv-state='out'] > li {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.home-body .post-list[data-rv-state='out'] > .post-card {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+/* 画廊用「揭开」而不是位移：图本来就该从版面里显影出来，
+   位移会让三张图在网格里错位一瞬，反倒不像排版。
+
+   **擦除必须作用在 `<a>` 的内容上，不能作用在 `.shot` 本身。**
+   `clip-path` 不只影响绘制，**它也参与命中测试** —— 被裁掉的部分连指针都接不到。
+   裁在 `.shot` 上时，画廊刚开始揭开的那 0.68s（外加逐张 90/180ms 的错峰）里，
+   缩略图是**碰不到的**：滚过去甩鼠标，什么都不会发生。
+   这个窗口以前被「回退失效」掩盖着（画廊一旦落版就永远停在 in），
+   回退修对之后就露出来了。裁在图与标题上，`<a>` 自己的盒子始终可命中。 */
+.home-body .shots[data-rv-state='out'] > li .shot__img,
+.home-body .shots[data-rv-state='out'] > li .shot__title {
+  clip-path: inset(0 0 100% 0);
+}
+
+.home-body .home-more[data-rv-state='out'] {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* 落位 */
+
+.home-body .hbs__label[data-rv-state='in'] .hbs__no,
+.home-body .hbs__label[data-rv-state='in'] .hbs__name {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s cubic-bezier(0.22, 0.68, 0.3, 1);
+}
+
+.home-body .hbs__label[data-rv-state='in'] .hbs__rule {
+  transform: scaleX(1);
+  /* 比文字晚 90ms：先有字、再有线。顺序反了会像线在等字 */
+  transition: transform 0.62s cubic-bezier(0.22, 0.68, 0.3, 1) 90ms;
+}
+
+.home-body .entries[data-rv-state='in'] > li,
+.home-body .post-list[data-rv-state='in'] > .post-card,
+.home-body .shots[data-rv-state='in'] > li,
+.home-body .home-more[data-rv-state='in'] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.55s ease var(--rv-d, 0ms),
+    transform 0.6s cubic-bezier(0.22, 0.68, 0.3, 1) var(--rv-d, 0ms);
+}
+
+.home-body .shots[data-rv-state='in'] > li .shot__img,
+.home-body .shots[data-rv-state='in'] > li .shot__title {
+  clip-path: inset(0 0 0 0);
+  transition: clip-path 0.68s cubic-bezier(0.22, 0.68, 0.3, 1) var(--rv-d, 0ms);
+}
+
+/* --- ② 墨条：竖着跳行、横着跟手 -------------------------------- */
+
+.entries-wrap {
+  position: relative;
+}
+
+.entries__ink {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2.5rem; /* 与 home-motion.ts 的 INK_WIDTH 一致 */
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  /* 竖轴：跳行。慢一点、带回弹感 */
+  transform: translate3d(0, var(--ink-y, 0px), 0);
+  transition:
+    transform 0.28s cubic-bezier(0.22, 0.68, 0.3, 1),
+    opacity 0.2s ease;
+}
+
+/* 横轴：跟手。快、线性。
+
+   **必须分成两层**：一条 transform 只有一个时长，横竖共用一个的话，
+   横移会被那个 0.28s 拖慢成「飘过去」，就不像被手拖着走了。
+   外面这层走 y，::after 走 x。 */
+.entries__ink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--c-accent);
+  transform: translate3d(var(--ink-x, 0px), 0, 0);
+  transition: transform 0.1s linear;
+}
+
+.entries-wrap[data-ink-on] .entries__ink {
+  opacity: 1;
+}
+
+/* 墨条取代了整行底色 —— 整行亮起是「表格行 hover」的语言，跟刊物无关。
+   左侧那点让位（.entry:hover 的 padding-left）保留：它让整行有被拉开的感觉。 */
+.home-body .entry:hover,
+.home-body .entry[data-ink-on] {
+  background: none;
+}
+
+.home-body .entry:hover .entry__title,
+.home-body .entry[data-ink-on] .entry__title {
+  color: var(--c-accent);
+}
+
+/* --- ③ 卡片倾斜 ------------------------------------------------
+
+   指针推着图卡微转，**框内的图反向平移** —— 有这一对反向运动才有厚度；
+   只转盒子会像一张贴在玻璃上的纸。 */
+
+.home-body .post-card__thumb[data-tilt] {
+  transform:
+    perspective(760px)
+    rotateX(calc((0.5 - var(--my, 0.5)) * 14deg))
+    rotateY(calc((var(--mx, 0.5) - 0.5) * 14deg));
+  /* 变量是每帧被改写的，所以这一条同时管两件事：
+     跟手（数值追不上指针，于是有「被推着走」的手感）与
+     归位（指针离开时变量被删掉、兜回中位，走同一条曲线弹回去）。 */
+  transition: transform 0.32s cubic-bezier(0.22, 0.68, 0.3, 1);
+}
+
+.home-body .post-card__thumb[data-tilt] img {
+  transform:
+    scale(1.09)
+    translate(calc((var(--mx, 0.5) - 0.5) * -16px), calc((var(--my, 0.5) - 0.5) * -16px));
+  transition: transform 0.2s ease-out;
+}
+
+/* --- ④ 画廊推移 ------------------------------------------------
+
+   与 ③ 的区别是**没有 3D 旋转**：画廊里是作品，作品不该被拧。
+   指针在框内推镜头（图比框大 13%），标题同时从下缘抬起。 */
+
+.home-body .shots .shot[data-lens] .shot__img {
+  transform:
+    scale(1.13)
+    translate(calc((var(--mx, 0.5) - 0.5) * -20px), calc((var(--my, 0.5) - 0.5) * -12px));
+  transition: transform 0.22s ease-out;
+}
+
+/* 标题**不藏起来**，只是压低一点、略微下沉；hover 时抬起并恢复到满。
+
+   一开始写的是 `opacity: 0`（完全藏起来、hover 才滑出），实测截图里整块画廊
+   静止时一个名字都没有 —— 访客得先猜到那里可以悬停，代价比那点「揭晓感」大得多。
+   hover 那一下仍然存在（抬起 + 恢复不透明 + 图被推近），可玩性没丢。 */
+@media (hover: hover) {
+  .home-body .shot .shot__title {
+    opacity: 0.72;
+    transform: translateY(3px);
+    transition:
+      opacity 0.28s ease,
+      transform 0.28s cubic-bezier(0.22, 0.68, 0.3, 1);
+  }
+
+  .home-body .shot[data-lens]:hover .shot__title,
+  .home-body .shot[data-lens]:focus-visible .shot__title {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- ⑤ 卡片响应 ------------------------------------------------
+   指针面是**整张卡**（PostCard 根节点的 data-card），不是只有配图：
+   指针扫过标题、摘要、标签、留白时，配图一样跟着推 —— 一整张卡是一件东西，
+   不该是「只有角落里那张图能玩」。
+
+   卡里两个吃变量的盒子各按**自己的盒子**算坐标（脚本那边分的），这里只管用：
+   配图框吃 --mx / --my（倾斜），标题块吃 --cx（细线）。
+   变量写在子元素上而不是卡上，正是为了让这两套坐标互不干扰。 */
+
+/* 细线：一条主色的 1px 线，从标题块左缘**画到指针所在的位置**。
+   长度就是指针在块内的横向比例，所以它是「被手画出来的」，不是「淡入的」。
+   用 ::after 而不是真元素：它不参与排版（绝对定位），也不该被读屏念到。 */
+.home-body .post-card__head {
+  position: relative;
+  /* 给线留出跑道。不给内边距的话它只能贴着标题下缘，而 .post-card__desc 的
+     margin-top 只有 0.4rem —— 线会压在摘要的第一行上。 */
+  padding-bottom: 0.5rem;
+}
+
+.home-body .post-card__head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--c-accent);
+  /* 长度由脚本写的 --cx 决定，夹在 0~1 是脚本的活。
+     变量不在时兜底 0 —— 线不存在，而不是「默认一根满线」。 */
+  transform: scaleX(var(--cx, 0));
+  transform-origin: left;
+  opacity: 0;
+  /* 跟手要快而匀（与墨条的横轴同一条曲线）；显隐慢一点，免得贴着边沿闪 */
+  transition:
+    transform 0.14s linear,
+    opacity 0.24s ease;
+}
+
+/* hover 只负责把线「显影」；长短全由指针决定。触屏没有 hover，这条自然不生效
+   （脚本那边 pointerType === 'touch' 也直接返回，两端都拦）。 */
+@media (hover: hover) {
+  .home-body .post-list > .post-card:hover .post-card__head::after {
+    opacity: 1;
+  }
+}
+
+/* --- ⑥ 视觉冲击：上墨 / 聚光 / 照亮 -----------------------------
+
+   上一组的实际观感**不够**（用户原话：「只是一根线的变化不明显」）——
+   一条 1px 的线在高分屏上就是一根头发。这一组不是换风格，是把同一套语言
+   （墨 · 纸 · 光）的**量**提上去：
+
+   · 上墨  标题被指针**刷**成主色（不是 hover 那种整块跳变）
+   · 聚光  整张卡上有一片跟着指针走的光斑
+   · 照亮  画廊的图在指针处反光
+
+   共同点：**都从指针位置发出来**，指针动一下就有回应，不必等 hover 的
+   进入/离开事件。这是「可玩性」的来源 —— 反馈是连续的，不是开关式的。
+
+   变量分工（脚本写的，**各按自己的盒子算**，混用必错 —— 理由见 home-motion.ts
+   里 `boxesOf` 上面那段）：
+     --cx        写在 .post-card__head 上（标题块内比例）→ 上墨 + 细线
+     --gx / --gy 写在 .post-card 上（整卡内比例）      → 聚光 + 位移
+     --mx / --my 写在配图框 / 画廊格上（框内比例）     → 倾斜、推移、照亮
+
+   ⚠️ **下面两处故意不给 `var()` 兜底值**（写成 `var(--gx)` 而不是 `var(--gx, .5)`）。
+   这不是疏漏：没兜底时，变量缺席会让整条声明在计算值阶段失效、回退到 initial
+   （`background-image: none` / `transform: none`），于是**没被指针指到的卡一点光
+   都没有**。补上兜底反而会让所有卡都挂着 8% 的主色斑（触屏上尤其明显 ——
+   那里根本不绑指针监听）。要改之前先想清楚这一点。
+*/
+
+/* ① 聚光 + 位移：做在**卡自己的背景**上。
+   背景天然在内容之下 —— 若改成叠一个绝对定位的伪元素，就要处理层叠上下文
+   （没有层叠上下文时 `z-index: -1` 会跑到页面背景底下，直接看不见）。
+   而且背景会随 transform 一起走，不必额外同步。 */
+.home-body .post-list > .post-card:first-child,
+.home-body .post-list > .post-card:not(:first-child) {
+  background-image: radial-gradient(
+    26rem 18rem at calc(var(--gx) * 100%) calc(var(--gy) * 100%),
+    var(--c-accent-glow),
+    transparent 72%
+  );
+  background-repeat: no-repeat;
+  /* 位移与指针**同向**（指针在右、卡略微右移），读成「被推着走」。
+     只有 ±3px：这类反馈一旦明显起来，观感就从「卡在动」变成「整页在飘」。 */
+  transform: translate3d(calc((var(--gx) - 0.5) * 6px), 0, 0);
+  transition: transform 0.32s cubic-bezier(0.22, 0.68, 0.3, 1);
+}
+
+/* ② 上墨：标题的 `::after` 是**同字号的副本**，主色，靠 clip-path 只露出指针左侧
+   那一截。指针横移时露出的范围跟着变 —— 看上去就是一笔墨从左往右刷过去。
+
+   为什么不用 `background-clip: text`：那条要把 color 设成 transparent，
+   浏览器不认时**整个标题会消失**（不是变丑）。这里的失败形态只是「没效果」；
+   伪元素不参与 textContent，也不进无障碍树。 */
+.home-body .post-card__title {
+  position: relative;
+  /* 撑满标题块。**这一步是必需的，不是顺手**：--cx 是相对 .post-card__head 的宽度
+     算的，而 h3 是 flex item、宽度只由文字决定（头条的 head 是 column + flex-start，
+     连 stretch 都没有）。不撑满的话两个坐标系右端差一大截 —— 墨刷到 100% 时
+     右侧还剩一截标题没上色。 */
+  width: 100%;
+}
+
+.home-body .post-card__title::after {
+  content: attr(data-ink-title);
+  position: absolute;
+  inset: 0;
+  color: var(--c-accent);
+  pointer-events: none;
+  /* 兜底 0 = 完全裁掉（这条**要**兜底：clip-path 失效等于不裁，整块主色标题会露出来）。
+     真实值由脚本写，夹在 0~1 是脚本的活（见 clamp01）。 */
+  clip-path: inset(0 calc(100% - var(--cx, 0) * 100%) 0 0);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+/* 首页把「hover 整块变主色」让给上墨层：不留这一条的话整块先变蓝、墨层再叠一层
+   同色的蓝 —— 扫描的分界线根本看不出来。（`--c-text` 而不是 `inherit`：
+   这里要的是「维持原本的墨色」。） */
+.home-body .post-list > .post-card:hover .post-card__title {
+  color: var(--c-text);
+}
+
+/* ③ 照亮：画廊格上的一层白色径向光，跟着指针走。
+   用白色而不是主色 —— 画廊里是照片，「被照到」比「被染成蓝的」自然。
+   `isolation` 把层叠上下文封在格子内部，再让高光 z-index: 1、标题 z-index: 2：
+   否则 `::after` 排在 DOM 最后，会盖住标题那条从底部渐变的底。 */
+.home-body .shots .shot {
+  isolation: isolate;
+}
+
+.home-body .shots .shot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    18rem 14rem at calc(var(--mx, 0.5) * 100%) calc(var(--my, 0.5) * 100%),
+    rgba(255, 255, 255, 0.17),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.home-body .shots .shot__title {
+  z-index: 2;
+}
+
+/* hover 只负责「显影」，位置与范围全由指针决定。
+   触屏没有 hover，这两条自然不生效（脚本那边 pointerType === 'touch' 也直接返回，
+   两端都拦）。 */
+@media (hover: hover) {
+  .home-body .post-list > .post-card:hover .post-card__title::after,
+  .home-body .shots .shot:hover::after {
+    opacity: 1;
+  }
+}
+
+/* --- ⑦ 版面级冲击：景深 / 编排 / 光学 ---------------------------
+
+   ⑥ 加的是「同一块面积上的量」—— 把已经存在的那几条反馈做大。这一组换的是
+   **面积与机制**：前面所有效果都长在内容区的卡片 / 目录 / 画廊上，而页面上最大的
+   一块面积（首屏，100vh 全出血）从上线起**只响应滚动**。所以第一条落在首屏。
+
+   三条各自独立、互不重叠：
+
+     A 首屏·景深   指针 → 三层画面按不同系数漂移，文字反向，一片光跟手   （空间）
+     B 首屏·编排   加载 → 刊头 / 名字 / 细线 / 右栏 / 索引 依次浮现       （时间）
+     C 画廊·光学   指针 → 一道斜光横扫照片；非焦点退到 0.6               （光学）
+
+   A 与 B 同处首屏但不重叠：A 动「层」与光，B 动「字」。B 只把 opacity / transform
+   写到**文字子元素**上，A 写的是三层的 `translate` 与 `.hh__content` 自己的
+   `translate`，两套选择器没有交集。
+*/
+
+/* === A 首屏景深 === */
+
+/* 漂移用**独立的 `translate` 属性**，不并进 transform。这不是风格选择：
+   `.hh__layer` 的 transform 已经被滚动视差占着，而且它**每帧都被改写** ——
+   一旦给它挂上 transition，滚动视差立刻变成拖尾。`translate` 与 `transform` 是
+   两条互不干扰的通道，正好一边一条：滚动走 transform（无过渡、每帧写），指针走
+   translate（有过渡，跟手顺、回中位也顺）。合成顺序是 translate → transform，
+   两者都是纯平移，可交换。 */
+.hh__layer {
+  translate: calc(var(--hx, 0) * var(--dx, 0) * 1px) calc(var(--hy, 0) * var(--dy, 0) * 1px);
+  transition: translate 0.55s cubic-bezier(0.22, 0.68, 0.3, 1);
+  will-change: transform, translate;
+}
+
+/* 系数比照视差那套（近景 ≈ 远景的 4 倍）。**比值比总量重要** ——
+   只把三层一起放大，观感是「整页在晃」；把比值拉开，才是「画面有纵深」。
+   所以远景几乎不动（12），把量都放在中景与近景上。 */
+.hh__layer--far {
+  --dx: 12;
+  --dy: 8;
+}
+
+.hh__layer--mid {
+  --dx: 28;
+  --dy: 18;
+}
+
+.hh__layer--near {
+  --dx: 46;
+  --dy: 26;
+}
+
+/* 文字层**反向**、量比三层都小。同向移动会读成「整页在平移」；反向才把
+   「文字浮在画面之前」做出来。18px 是上限：再大就开始影响读数。 */
+.hh__content {
+  translate: calc(var(--hx, 0) * -18px) calc(var(--hy, 0) * -11px);
+  transition: translate 0.6s cubic-bezier(0.22, 0.68, 0.3, 1);
+}
+
+/* 跟着指针走的一片光。
+   **光斑自己 translate，不把渐变位置写成 calc(var(--hx))。** 后者也跟手，但那等于
+   每帧重算一次 100vw × 100vh 的全屏渐变；translate 走合成层，渐变只栅格化一次。
+   首屏是这个站最大的一块绘制面积，代价差得很远。
+
+   半径刻意收紧（26%/24% 而不是 42%/38%）：铺得太开是一片均匀的提亮，
+   读不出「有东西在跟着指针走」；收紧之后才是一盏灯。 */
+.hh__scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    26% 24% at 50% 50%,
+    rgba(190, 222, 255, 0.34),
+    rgba(190, 222, 255, 0.1) 52%,
+    transparent 74%
+  );
+  translate: calc(var(--hx, 0) * 38%) calc(var(--hy, 0) * 34%);
+  transition:
+    translate 0.7s cubic-bezier(0.22, 0.68, 0.3, 1),
+    opacity 0.45s ease;
+  opacity: 0;
+  /* 压在一幅暗色画上，读成「光」而不是「一层淡蓝的漆」 */
+  mix-blend-mode: screen;
+}
+
+/* 指针进来才亮。**不能只靠「变量有没有值」判断** —— --hx/--hy 没写时也是 `var()`
+   的兜底 0，光会以「停在正中」的形态一直挂着，等于首屏正中多一块淡蓝。 */
+.hh[data-lit] .hh__scene::after {
+  opacity: 1;
+}
+
+/* === B 首屏入场编排 ===
+
+   时间驱动，与滚动和指针都不同源：进入首页时刊头 → 名字 → 细线拉长 → 右栏 →
+   索引依次浮现。这是「到达感」的来源 —— 在此之前首屏是**直接就在那儿**的。
+
+   编排只写在**文字子元素**上，最小的那个容器（`.hh__content`）不参与：它身上挂着
+   滚动视差的 transform 与 opacity，再叠一层动画必然打架。
+
+   `animation-fill-mode: both` 是刻意的：延迟期间就吃 `from` 那一帧（隐藏），结束停在
+   `to`。于是**「隐藏」只存在于关键帧里、没有写进任何基础规则** —— reduced-motion
+   那道只要写 `animation: none` 就一步关干净，不会留下一片看不见的文字。 */
+@keyframes hh-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--hh-in-y, 10px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 细线单独一条：它的出场是「从左边拉出来」，不是浮起来 */
+@keyframes hh-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.hh__eyebrow {
+  --hh-in-y: -8px;
+  animation: hh-in 0.5s cubic-bezier(0.22, 0.68, 0.3, 1) 0.04s both;
+}
+
+.hh__name {
+  --hh-in-y: 20px;
+  animation: hh-in 0.62s cubic-bezier(0.22, 0.68, 0.3, 1) 0.1s both;
+}
+
+/* 细线坐在名字的基线上，从**名字那一头**往右长 —— 与板块头的 `.hbs__rule` 同一套。
+   顺序上晚于名字：先有字，线再从字那头拉出去。 */
+.hh__rule {
+  transform-origin: left;
+  animation: hh-draw 0.72s cubic-bezier(0.22, 0.68, 0.3, 1) 0.34s both;
+}
+
+.hh__kicker {
+  animation: hh-in 0.5s cubic-bezier(0.22, 0.68, 0.3, 1) 0.4s both;
+}
+
+/* 右栏那两行**逐行**进来，不是整块。整块的话两块小字同时出现，右栏就没有
+   「一句一句写上去」的节奏了。 */
+.hh__note-line:nth-child(1) {
+  animation: hh-in 0.5s cubic-bezier(0.22, 0.68, 0.3, 1) 0.24s both;
+}
+
+.hh__note-line:nth-child(2) {
+  animation: hh-in 0.5s cubic-bezier(0.22, 0.68, 0.3, 1) 0.3s both;
+}
+
+/* 索引三项按阅读顺序错峰 */
+.hh__jump-link:nth-child(1) {
+  --hh-in-y: 10px;
+  animation: hh-in 0.5s cubic-bezier(0.22, 0.68, 0.3, 1) 0.46s both;
+}
+
+.hh__jump-link:nth-child(2) {
+  --hh-in-y: 10px;
+  animation: hh-in 0.5s cubic-bezier(0.22, 0.68, 0.3, 1) 0.52s both;
+}
+
+.hh__jump-link:nth-child(3) {
+  --hh-in-y: 10px;
+  animation: hh-in 0.5s cubic-bezier(0.22, 0.68, 0.3, 1) 0.58s both;
+}
+
+/* 向下提示最后出现：它是「版面已就位、可以往下走了」的信号。
+   （它里面那个箭头的不停摆动 `hh-bob` 挂在**子元素**上，两条互不打扰。） */
+.hh__more {
+  animation: hh-in 0.5s cubic-bezier(0.22, 0.68, 0.3, 1) 0.66s both;
+}
+
+/* === C 画廊光学 === */
+
+/* 照亮（⑥）是「一点被照到」，扫光（这里）是「一道光扫过去」——
+   只有前者会让整张图蒙上一块雾，加上一道扫过的光才有照片的质感。 */
+.home-body .shots .shot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  /* 高光带的位置直接写在渐变的色标上：`--mx` 就是已有的指针横坐标，不必再来一套
+     坐标系。`background-image` 过渡不了、只能跟着变量跳，但指针是连续动的，
+     看上去就是连续扫过去 —— 与首屏那片光的取舍不同，因为画廊格子小得多。 */
+  background: linear-gradient(
+    104deg,
+    transparent calc(var(--mx, 0.5) * 100% - 16%),
+    rgba(255, 255, 255, 0.07) calc(var(--mx, 0.5) * 100% - 7%),
+    rgba(255, 255, 255, 0.5) calc(var(--mx, 0.5) * 100% - 2%),
+    rgba(255, 255, 255, 0.5) calc(var(--mx, 0.5) * 100% + 2%),
+    rgba(255, 255, 255, 0.07) calc(var(--mx, 0.5) * 100% + 7%),
+    transparent calc(var(--mx, 0.5) * 100% + 16%)
+  );
+  mix-blend-mode: screen;
+  transition: opacity 0.35s ease;
+}
+
+.home-body .shots > li .shot {
+  transition:
+    opacity 0.35s ease,
+    filter 0.35s ease;
+}
+
+/* 聚焦：指针压住哪一张，其余两张退后。
+   **状态来自脚本写在容器上的 `data-focus`**，不是 CSS 的 `:hover` —— 网格有 0.9rem
+   的间隙，`:hover` 版本会在指针落进缝里时把三张全压暗，闪一帧。
+   只留一手：触屏没有 hover，脚本那边 `pointerType === 'touch'` 直接返回，两端都拦。
+
+   「退后」由**去饱和**打主力，透明度只搭一点。纯靠 opacity 是往页面底色上兑 ——
+   浅色主题下照片会蒙上一层白雾，读起来像「还没加载完」；去饱和是「推到焦外」，
+   两种主题下语义一致。 */
+@media (hover: hover) {
+  .home-body .shots[data-focus] > li .shot {
+    opacity: 0.72;
+    filter: saturate(0.5);
+  }
+
+  .home-body .shots[data-focus] > li .shot[data-lit] {
+    opacity: 1;
+    filter: none;
+  }
+
+  .home-body .shots .shot:hover::before {
+    opacity: 1;
+  }
+}
+
+/* 窄屏：漂移收一半，**文字只上下、不动左右**。
+
+   文字那条是必需的，不是保守 —— 索引行横向铺满整版，而宠物层固定在右下角
+   （pet.css 里是 `right/bottom: 1rem`），文字往右漂 16px 就可能压到它。
+   窄屏本来也几乎不会有指针（真机是触屏，脚本那边 `pointerType === 'touch'`
+   直接返回），收掉不影响观感。 */
+@media (max-width: 767px) {
+  .hh__layer--far {
+    --dx: 6;
+    --dy: 4;
+  }
+
+  .hh__layer--mid {
+    --dx: 14;
+    --dy: 10;
+  }
+
+  .hh__content {
+    translate: 0 calc(var(--hy, 0) * -6px);
+  }
+}
+
+/* --- 降级 ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  /* 初始态是服务端写死的 'out'，这里必须显式放行 ——
+     关了动画偏好却对着一片空白，比有动画更糟。
+     （HomeBody 里那条 noscript 管的是「关掉 JS」那条路，两者不能互相替代。） */
+  .home-body .entries[data-rv-state] > li,
+  .home-body .post-list[data-rv-state] > .post-card,
+  .home-body .shots[data-rv-state] > li,
+  .home-body .home-more[data-rv-state],
+  .home-body .hbs__label[data-rv-state] .hbs__no,
+  .home-body .hbs__label[data-rv-state] .hbs__name {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .home-body .hbs__label[data-rv-state] .hbs__rule {
+    transform: none !important;
+  }
+
+  .home-body .shots[data-rv-state] > li .shot > * {
+    clip-path: none !important;
+  }
+
+  .entries__ink {
+    display: none;
+  }
+
+  /* 细线是纯装饰，而且它的长度完全取决于指针在哪 —— 关了动画偏好就别画了。
+     （上面那条 padding-bottom 保留：布局在两种偏好下保持一致，切换时不会跳。） */
+  .home-body .post-card__head::after {
+    display: none;
+  }
+
+  /* 上墨层与画廊高光同理：一个是标题的副本、一个是白色光斑，都不改变「读得到什么」。
+     直接撤掉，免得留下静止的色块。 */
+  .home-body .post-card__title::after,
+  .home-body .shots .shot::after {
+    display: none;
+  }
+
+  /* 聚光与整卡位移必须**显式**关掉，不能只靠「脚本在这条偏好下不绑监听」——
+     偏好是页面加载之后才改的情况下，卡上可能还留着上一秒写进去的变量。
+     位移尤其要关：留着就是一张永远歪 3px 的卡。 */
+  .home-body .post-list > .post-card:first-child,
+  .home-body .post-list > .post-card:not(:first-child) {
+    background-image: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* 指针那两组本来就不会触发（脚本在这条偏好下不绑监听）。
+     这里再兜一道：偏好若是页面加载之后才改的，已经写进去的变量也不该留下位移。 */
+  .home-body .post-card__thumb[data-tilt],
+  .home-body .post-card__thumb[data-tilt] img,
+  .home-body .shots .shot[data-lens] .shot__img {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* ---- ⑦ 组：首屏漂移 / 入场编排 / 画廊扫光与聚焦 ----
+
+     首屏那两条是**页面级**的，所以这段不在 `.home-body` 里。 */
+
+  /* 光斑撤掉，免得在正中央留下一块静止的淡蓝 */
+  .hh__scene::after {
+    display: none;
+  }
+
+  /* 漂移显式归零：偏好若是加载之后才改的，`--hx` / `--hy` 可能还留着值。
+     **只关 translate、不碰 transform** —— transform 是滚动视差，它在这条偏好下
+     本来就不跑（脚本提前 return，`--hh-p` 根本不写），这里不该越权去动它。 */
+  .hh__layer,
+  .hh__content {
+    translate: none !important;
+    transition: none !important;
+  }
+
+  /* 入场编排：`animation: none` 一步关干净 —— 「隐藏」只写在关键帧里，基础规则里
+     没有任何 `opacity: 0`，所以关掉动画就是**直接到位**，不会留下一片看不见的文字。 */
+  .hh__eyebrow,
+  .hh__name,
+  .hh__rule,
+  .hh__kicker,
+  .hh__note-line,
+  .hh__jump-link,
+  .hh__more {
+    animation: none !important;
+  }
+
+  .home-body .shots .shot::before {
+    display: none;
+  }
+
+  /* 聚焦是「其余两张退后」，纯粹是明暗与彩度变化 —— 关了动画偏好就别留一块暗的。
+     （脚本在这条偏好下不绑监听，正常路径上 `data-focus` 根本不会出现；
+     这一条防的是「偏好是页面加载之后才改的」。） */
+  .home-body .shots[data-focus] > li .shot {
+    opacity: 1 !important;
+    filter: none !important;
+  }
+}

@@ -18,9 +18,30 @@ const zh = {
   'nav.aria': '主导航',
   'nav.menu': '打开导航菜单',
   'nav.home': '首页',
+  'nav.about': '关于',
   'nav.friends': '友链',
   'nav.blog': '博客',
   'nav.gallery': '画廊',
+
+  // 沉浸式首页（/）—— 原来的简历式内容整体搬去了 /about
+  'home.scroll': '向下滚动',
+  'home.entries': '从这里开始',
+  // 首屏刊头那两行小字：**只描述这个站在收什么，不描述人**。
+  // 单位 / 地点 / 学位那三样原来就挂在首屏刊头上（affiliation / location /
+  // title），看着像把简历抬头搬上了封面 —— 现在一律撤掉，它们只留在 /about。
+  'home.eyebrow': '个人数字花园',
+  'home.kicker': '笔记 · 照片 · 书签',
+  // 首屏右栏那句「站点自己的话」。刻意与 profile.bio 无关 ——
+  // 首屏是刊头不是简历，自我介绍只留给 /about（改文案不用碰组件）
+  'home.lede.1': '写下来的东西，比记得住的更可靠。',
+  'home.lede.2': '所以想到的、看见的，都留在这里。',
+  'home.latest': '最新文章',
+  'home.gallery': '画廊精选',
+  'home.viewAll': '查看全部',
+  'home.card.about': '简介、论文、技术栈与经历',
+  'home.card.blog': '技术笔记与读书摘录',
+  'home.card.gallery': '按主题与年份布展的展厅',
+  'home.card.friends': '常看的博客，排名不分先后',
 
   // 画廊（/gallery）
   'gallery.title': '画廊',
@@ -267,9 +288,28 @@ const en: Record<keyof typeof zh, string> = {
   'nav.aria': 'Main navigation',
   'nav.menu': 'Open navigation menu',
   'nav.home': 'Home',
+  'nav.about': 'About',
   'nav.friends': 'Friends',
   'nav.blog': 'Blog',
   'nav.gallery': 'Gallery',
+
+  // 沉浸式首页（/）—— 原来的简历式内容整体搬去了 /about
+  'home.scroll': 'Scroll down',
+  'home.entries': 'Start here',
+  // 首屏刊头那两行小字：只描述这个站在收什么，不描述人（详见 zh 段注释）
+  'home.eyebrow': 'A personal digital garden',
+  'home.kicker': 'Notes · Photos · Bookmarks',
+  // 首屏右栏那句「站点自己的话」。刻意与 profile.bio 无关 ——
+  // 首屏是刊头不是简历，自我介绍只留给 /about
+  'home.lede.1': 'What I write down outlasts what I remember.',
+  'home.lede.2': 'So the thoughts and the pictures all stay here.',
+  'home.latest': 'Latest posts',
+  'home.gallery': 'From the gallery',
+  'home.viewAll': 'View all',
+  'home.card.about': 'Bio, publications, skills and experience',
+  'home.card.blog': 'Notes on systems, reading and everything else',
+  'home.card.gallery': 'Halls curated by theme and by year',
+  'home.card.friends': 'Blogs I read regularly, in no particular order',
 
   // 画廊（/gallery）
   'gallery.title': 'Gallery',

@@ -1,0 +1,33 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import HomeContent from '../components/HomeContent.astro';
+import { profile } from '../data/profile';
+import { toLocale } from '../i18n/ui';
+
+/**
+ * 关于页：原来的首页内容（简介 / 论文 / 技术栈 / 项目 / 教育 / 联系方式）。
+ * 首页改版成沉浸式门面后，这部分整体搬到这里，内容与渲染一字未改 ——
+ * 所以 title 仍用「姓名 · 头衔」，保持既有的收录结果。
+ *
+ * 板块 id（about / publications / skills / projects / education / contact）
+ * 被首页的**旧锚点垫片**引用：那段脚本会把 /#about 这类老链接送到这里。
+ * 改 id 会让老链接落空（见 src/components/HomeHero.astro）。
+ */
+const locale = toLocale(Astro.currentLocale);
+const p = profile[locale];
+
+// 头衔留空时别留个孤零零的「名字 · 」（后台个人信息里可以清空）
+const title = p.title ? `${p.name} · ${p.title}` : p.name;
+const description = p.bio[0]?.slice(0, 160) ?? '';
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={title}
+  description={description}
+  toc="sections"
+  showSidebar
+>
+  <HomeContent profile={p} locale={locale} />
+</BaseLayout>

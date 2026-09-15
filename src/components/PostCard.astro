@@ -15,22 +15,75 @@ const { title, description, date, category, tags } = post.data;
 const cover = resolveCover(post);
 ---
 
+{/*
+  data-card：**指针面**。首页的动效层拿它当「整张卡是一个可玩对象」的边界 ——
+  指针压在标题、摘要、标签、留白上，配图一样跟着推；只有离开整张卡才归位。
+  与下面那个 data-tilt 一样**无条件挂上**，而且只有首页的 home.css / home-motion.ts
+  认识它（样式收在 .home-body 作用域里），所以在列表页、归档页它就是个闲置属性。
+*/}
 <a
   class:list={['post-card', { 'post-card--with-cover': !!cover }]}
   href={postHref(locale, post.slug)}
+  data-card
 >
   {/* 缩略图在左、文字在右：阅读顺序上先看到图，再读标题 */}
+  {/*
+    data-tilt：指针推着图卡微转、框内图反向平移。**无条件挂上**，
+    但只有首页的 home.css 认识它（那套样式收在 `.home-body` 作用域内），
+    所以在列表页、归档页它就是个闲置属性，不会改变任何观感。
+    要开在别处，把 home.css 里那几条选择器放宽即可，不必改这里。
+
+    **注释不能写进下面 cover 那个括号里**：那是 JS 表达式的位置，只能放一个
+    表达式，多一个 JSX 注释容器就会报 Expected `,` or `)`。
+    （这句话本身原来举了个反例、把那个注释容器原样写了出来，结果里面的
+    星号斜杠提前把这段块注释闭合了 —— 编译期报 Unexpected token。）
+  */}
   {
     cover && (
-      <div class="post-card__thumb">
-        <img src={cover.src} alt="" loading="lazy" decoding="async" />
+      <div class="post-card__thumb" data-tilt>
+        {/*
+          图挂了就整块撤掉。`post-card--with-cover` 是**版式开关**：首页头条靠它
+          决定「图右文左」还是纯文字通栏、副刊靠它决定「左图右文」还是单列 ——
+          类不摘掉就会留下一个空图列。
+          封面有两个来源，两种都可能失效：① frontmatter 的 cover（本地文件可能被
+          误删）；② 正文第一张图（外链，实测有篇博客园文章的封面在本机 curl 返回
+          000）。所以这条兜底对两种来源都有效。
+          渐进增强：关掉 JS 时最坏就是留个破图框，与改动前一致。
+        */}
+        <img
+          src={cover.src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          transition:name={`p-cover-${post.slug}`}
+          onerror="const c=this.closest('.post-card');c.classList.remove('post-card--with-cover');this.closest('.post-card__thumb').remove()"
+        />
       </div>
     )
   }
 
   <div class="post-card__main">
-    <div class="post-card__head">
-      <h3 class="post-card__title">{title}</h3>
+  {/*
+    data-rule：首页那条「跟着指针画出来的细线」的挂载点。
+    变量 --cx 写在**这一块**上，因为线的长度要按标题块自己的坐标算 ——
+    相对整张卡算的话，指针在配图上时比例会跑到块外（副刊的图占着卡片左侧一大截），
+    线在画面上会跟指针对不上。
+  */}
+  <div class="post-card__head" data-rule>
+    {/*
+      标题上墨层用的是 `::after` + `attr(data-ink-title)`，不是「再渲染一遍标题」。
+
+      三条理由，前两条是硬的：
+      ① 叠加层在**列表页/归档页**会变成一段真的可见文字（那些页面没有那套 CSS），
+         标题会显示成「标题标题」；
+      ② 就算用 display:none 兜住，`textContent` 也已经是「标题标题」了 ——
+         读屏、检索、e2e 的文本断言全都跟着错。伪元素不进 textContent。
+      ③ 本仓已有这个模式（`.hbs__no::after` 的编号、`.post-card__head::after` 的细线），
+         属性名与用法一致。
+
+      ⚠️ 改这个属性名要**同时**改 home.css 里的 `content: attr(...)`，一处漏了
+      上墨层就整个空掉（而且是静默的）。 */}
+    <h3 class="post-card__title" data-ink-title={title}>{title}</h3>
       <time class="post-card__date" datetime={date.toISOString()}>{formatDate(date, locale)}</time>
     </div>
 

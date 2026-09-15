@@ -48,6 +48,7 @@ const { groups, locale } = Astro.props;
                 width={item.w}
                 height={item.h}
                 loading="lazy"
+                transition:name={`g-${item.id}`}
               />
               <span class="gal-tile__name">{item.title[locale]}</span>
             </button>

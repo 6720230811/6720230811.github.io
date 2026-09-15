@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import HomeContent from '../components/HomeContent.astro';
+import HomeBody from '../components/HomeBody.astro';
 import { profile } from '../data/profile';
 import { toLocale } from '../i18n/ui';
 
@@ -8,9 +8,22 @@ import { toLocale } from '../i18n/ui';
 const locale = toLocale(Astro.currentLocale);
 const p = profile[locale];
 
-// 头衔留空时别留个孤零零的「名字 · 」（后台个人信息里可以清空）
-const title = p.title ? `${p.name} · ${p.title}` : p.name;
-const description = p.bio[0]?.slice(0, 160) ?? '';
+/**
+ * 沉浸式门面：首屏由 BaseLayout 的 hero="immersive" 渲染（见 HomeHero.astro），
+ * 这里只放首屏之下的内容区。
+ *
+ * title / description 与关于页**刻意不同**：
+ *   - 关于页用「姓名 · 头衔」（改版前首页的原写法，保持既有收录）
+ *   - 首页用「姓名 · 研究方向」，面向「这个人做什么」的检索意图
+ * 研究方向直接取 profile.interests[0]，不另外维护一份文案 —— 与后台数据同源。
+ *
+ * description **不带 profile.title（学位）**：首屏已经把单位 / 地点 / 学位这类
+ * 身份信息撤干净了，meta 里再留一行「计算机科学与技术 · 硕士研究生」，就等于
+ * 它们又出现在搜索结果与分享卡片上 —— 页面干净、摘要里还挂着，等于没撤。
+ */
+const focus = p.interests[0];
+const title = focus ? `${p.name} · ${focus}` : p.name;
+const description = p.interests.slice(0, 2).join(' · ');
 ---
 
 <BaseLayout
@@ -18,8 +31,7 @@ const description = p.bio[0]?.slice(0, 160) ?? '';
   locale={locale}
   title={title}
   description={description}
-  toc="sections"
-  showSidebar
+  hero="immersive"
 >
-  <HomeContent profile={p} locale={locale} />
+  <HomeBody profile={p} locale={locale} />
 </BaseLayout>

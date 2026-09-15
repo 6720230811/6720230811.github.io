@@ -2,23 +2,49 @@
 import { navItems } from '../data/nav';
 import { useTranslations, type Locale } from '../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
+import type { Profile } from '../data/profile';
 import Icon from './Icon.astro';
 import Clock from './Clock.astro';
 import LangSwitcher from './LangSwitcher.astro';
 import Search from './Search.astro';
 import ThemeToggle from './ThemeToggle.astro';
 
+/**
+ * 顶部导航栏 —— 刊物的「眉批条」。
+ *
+ * 版面从 Fuwari 的「居中的一排链接」改成两端分居：
+ *
+ *   左端   ◆ 站名 ┃ 访客时钟              ← 字标 + 时间，一条竖线隔开
+ *   右端   01 关于 02 博客 03 画廊 …  搜索 主题 语言 菜单
+ *
+ * 为什么不做成居中一排：那会在版心正中立一条对称轴，正是首屏刻意要拆掉的东西
+ * （见 home.css 里 .hh__content 的说明）。两端分居反过来与首屏同构 ——
+ * 那边也是「左刊头 / 右一句小字」。
+ *
+ * 顶栏**不摆任何身份信息**：单位、学位、所在地都只在 /about。这里只有站名。
+ *
+ * 三件机关见 global.css 顶栏那一段：导航项的 01–05 编号、跟随当前项滑动的细线、
+ * 卡片下缘的滚动进度线。编号走 CSS 的 `content: attr(data-no)`，**不写进标签里** ——
+ * 写进去的话 textContent 会变成「01首页」，读屏会把编号念出来。
+ */
 interface Props {
   locale: Locale;
+  /** 只用来取站名（字标） */
+  profile: Profile;
 }
 
-const { locale } = Astro.props;
+const { locale, profile } = Astro.props;
 const t = useTranslations(locale);
 
-// 导航项链接：getRelativeLocaleUrl 会补上语言前缀（/en/…）与 base 前缀
-const links = navItems.map((item) => ({
+/** 字标点回语言根（`/` 或 `/en/`）；窄屏导航收进菜单后，它是顶栏上唯一的「回首页」 */
+const homeUrl = getRelativeLocaleUrl(locale, '');
+
+// 导航项链接：getRelativeLocaleUrl 会补上语言前缀（/en/…）与 base 前缀。
+// 编号是排版的骨架（与首屏那三个索引同一套），不是顺序含义；补两位为了等宽对齐。
+const links = navItems.map((item, index) => ({
   ...item,
   href: getRelativeLocaleUrl(locale, item.path),
+  no: String(index + 1).padStart(2, '0'),
 }));
 
 // 当前页高亮：去掉 base 与语言前缀后取路径首段（首页是空串）。
@@ -33,46 +59,67 @@ const isCurrent = (path: string) => current === path;
 
 <header class="navbar">
   <div class="navbar__card">
-    {/* 左侧：时间与位置组件（原品牌位） */}
-    <Clock locale={locale} />
-
-    <nav class="navbar__nav" aria-label={t('nav.aria')}>
-      {
-        links.map((item) => (
-          <a
-            class="navbar__link"
-            href={item.href}
-            aria-current={isCurrent(item.path) ? 'page' : undefined}
-          >
-            {t(item.key)}
-          </a>
-        ))
-      }
-    </nav>
-
-    <div class="navbar__tools">
-      <Search locale={locale} />
-      <ThemeToggle locale={locale} />
-      <LangSwitcher />
-      <button
-        class="navbar__menu"
-        type="button"
-        id="nav-menu-switch"
-        aria-label={t('nav.menu')}
-        aria-expanded="false"
-        aria-controls="nav-menu-panel"
-      >
-        <Icon name="menu" />
-      </button>
+    {/* 左端：字标 + 访客时钟。时钟原先独占这一格（品牌位）——
+        它俩都是「当下这一刻的注脚」，一条竖线隔开就够 */}
+    <div class="navbar__lead">
+      <a class="navbar__brand" href={homeUrl}>
+        <span class="navbar__mark" aria-hidden="true"></span>
+        <span class="navbar__wordmark">{profile.name}</span>
+      </a>
+      <span class="navbar__sep" aria-hidden="true"></span>
+      <Clock locale={locale} />
     </div>
 
-    {/* 窄屏下拉面板：结构与 Fuwari 的 NavMenuPanel 一致 */}
+    {/* 右端：编号导航 + 工具簇 */}
+    <div class="navbar__trail">
+      <nav class="navbar__nav" aria-label={t('nav.aria')}>
+        {
+          links.map((item) => (
+            <a
+              class="navbar__link"
+              href={item.href}
+              data-no={item.no}
+              aria-current={isCurrent(item.path) ? 'page' : undefined}
+            >
+              {t(item.key)}
+            </a>
+          ))
+        }
+        {/* 会滑动的当前项细线。**排在链接之后**（排前面会被链接自己那层 hover
+            底色盖住），位置与宽度由下面的脚本写进 --nav-ink-x / --nav-ink-w */}
+        <span class="navbar__ink" aria-hidden="true" />
+      </nav>
+
+      <div class="navbar__tools">
+        <Search locale={locale} />
+        <ThemeToggle locale={locale} />
+        <LangSwitcher />
+        <button
+          class="navbar__menu"
+          type="button"
+          id="nav-menu-switch"
+          aria-label={t('nav.menu')}
+          aria-expanded="false"
+          aria-controls="nav-menu-panel"
+        >
+          <Icon name="menu" />
+        </button>
+      </div>
+    </div>
+
+    {/* 卡片下缘的滚动进度。绝对定位、不占流，也不吃指针事件 */}
+    <span class="navbar__progress" aria-hidden="true">
+      <span class="navbar__progress-bar"></span>
+    </span>
+
+    {/* 窄屏下拉面板：结构与 Fuwari 的 NavMenuPanel 一致（编号与顶栏同源） */}
     <nav class="float-panel float-panel--closed" id="nav-menu-panel" aria-label={t('nav.aria')}>
       {
         links.map((item) => (
           <a
             class="nav-menu__link"
             href={item.href}
+            data-no={item.no}
             aria-current={isCurrent(item.path) ? 'page' : undefined}
           >
             <span class="nav-menu__text">{t(item.key)}</span>
@@ -85,6 +132,88 @@ const isCurrent = (path: string) => current === path;
 </header>
 
 <script>
+  /**
+   * 顶栏的两处「有状态」表现：
+   *   ① 当前项下面那条会滑动的细线 —— 量它的位置与宽度，写进 CSS 变量
+   *   ② 卡片下缘的滚动进度 + 滚过一点点之后卡片的抬升
+   *
+   * 换页后 DOM 是新的，所以「量」这件事每次 astro:page-load 都要重做；
+   * 而 scroll / resize 挂在 window 上，**回调里必须现查 DOM**，不能闭包住元素 ——
+   * 闭包住的那个元素在换页之后就成了一具尸体（本仓在搜索按钮与宠物上都栽过）。
+   */
+  const navbar = () => document.querySelector<HTMLElement>('.navbar');
+
+  /**
+   * 诊断计数，给 e2e 用（与首屏的 window.__homeHero 同一套路）：
+   * `binds - unbinds === 1` 是**唯一能证明「只挂了一份监听」**的量 ——
+   * scroll / resize 挂在 window 上，一份撤不掉的旧监听不会自己去改计数，
+   * 但它会让每次滚动的回调被执行两遍（越换页越卡）。
+   */
+  type NavbarDiag = { binds: number; unbinds: number; measures: number; scrolls: number };
+  const diag: NavbarDiag = ((window as Window & { __navbar?: NavbarDiag }).__navbar ??= {
+    binds: 0,
+    unbinds: 0,
+    measures: 0,
+    scrolls: 0,
+  });
+
+  const measureInk = () => {
+    diag.measures += 1;
+    const nav = navbar()?.querySelector<HTMLElement>('.navbar__nav');
+    if (!nav) return;
+    const current = nav.querySelector<HTMLElement>('.navbar__link[aria-current]');
+    // 不在导航里的页面（例如 /admin）没有当前项 —— 线就该消失，而不是随便指一项
+    if (!current) {
+      nav.classList.remove('navbar__nav--inked');
+      return;
+    }
+    // 线只铺在文字下面，不铺满整条链接（链接左右各有 1.25rem 内边距）
+    const style = getComputedStyle(current);
+    const padStart = parseFloat(style.paddingLeft) || 0;
+    const padEnd = parseFloat(style.paddingRight) || 0;
+    const left = current.offsetLeft + padStart; // offsetParent 就是 .navbar__nav（position: relative）
+    const width = Math.max(0, current.offsetWidth - padStart - padEnd);
+    nav.style.setProperty('--nav-ink-x', `${left}px`);
+    nav.style.setProperty('--nav-ink-w', `${width}px`);
+    nav.classList.add('navbar__nav--inked');
+  };
+
+  const syncScroll = () => {
+    diag.scrolls += 1;
+    const root = navbar();
+    if (!root) return;
+    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const p = Math.min(1, Math.max(0, window.scrollY / max));
+    root.style.setProperty('--nav-p', String(p));
+    root.classList.toggle('navbar--scrolled', window.scrollY > 8);
+  };
+
+  /**
+   * 挂 window 级监听。首屏「脚本执行 + astro:page-load」会跑两遍，所以先把上一份
+   * 撤掉再挂 —— 否则每换一次页就多一份监听（一次滚动回调被调 N 次）。
+   * 句柄挂在 window 上而不是元素上：元素每换页都换，window 不换。
+   */
+  const bind = () => {
+    type NavWindow = Window & { __navbarCleanup?: null | (() => void) };
+    const win = window as NavWindow;
+    if (typeof win.__navbarCleanup === 'function') win.__navbarCleanup();
+
+    const onResize = () => {
+      measureInk();
+      syncScroll();
+    };
+
+    window.addEventListener('scroll', syncScroll, { passive: true });
+    window.addEventListener('resize', onResize);
+    diag.binds += 1;
+
+    win.__navbarCleanup = () => {
+      window.removeEventListener('scroll', syncScroll);
+      window.removeEventListener('resize', onResize);
+      diag.unbinds += 1;
+    };
+  };
+
   // 窄屏导航菜单的开合。
   // 换页后 DOM 是新的，所以每次 astro:page-load 都要重新按 id 绑一次
   const initMenu = () => {
@@ -114,6 +243,15 @@ const isCurrent = (path: string) => current === path;
     }
   };
 
-  initMenu();
-  document.addEventListener('astro:page-load', initMenu);
+  const boot = () => {
+    bind();
+    initMenu();
+    measureInk();
+    syncScroll();
+  };
+
+  boot();
+  document.addEventListener('astro:page-load', boot);
+  // 字体到位前量出来的是回退字体的宽度，字距一变线就歪了 —— 加载完重量一次
+  if (document.fonts) document.fonts.ready.then(measureInk).catch(() => {});
 </script>

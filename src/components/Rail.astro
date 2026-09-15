@@ -27,6 +27,8 @@ const { locale, profile } = Astro.props;
 const t = useTranslations(locale);
 const base = import.meta.env.BASE_URL;
 const home = getRelativeLocaleUrl(locale);
+/** 关于页：原来首页那套简历内容搬去了这里，左侧「查看更多」指向它 */
+const aboutUrl = getRelativeLocaleUrl(locale, 'about');
 
 const posts = await postsOf(locale);
 
@@ -123,7 +125,7 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
   <div class="rail__inner" data-lenis-prevent>
     {/* ① 迷你资料卡 */}
     <div class="card rail__card mini-profile">
-      <a class="mini-profile__avatar" href={`${home}#about`} tabindex="-1" aria-hidden="true">
+      <a class="mini-profile__avatar" href={`${aboutUrl}#about`} tabindex="-1" aria-hidden="true">
         <img src={resolveAvatar(profile.avatar, base)} alt="" width="512" height="512" />
       </a>
       <div class="mini-profile__name">{profile.name}</div>
@@ -147,7 +149,7 @@ const fallbackHref = hrefs.length ? hrefs[Math.floor(Math.random() * hrefs.lengt
           )
         }
       </div>
-      <a class="mini-profile__more" href={`${home}#about`}>
+      <a class="mini-profile__more" href={`${aboutUrl}#about`}>
         {t('rail.aboutMe')} →
       </a>
     </div>
