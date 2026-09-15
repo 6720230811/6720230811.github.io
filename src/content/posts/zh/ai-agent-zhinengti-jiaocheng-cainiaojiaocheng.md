@@ -12,7 +12,7 @@ source: "https://www.runoob.com/ai-agent/ai-agent-tutorial.html"
 
 ## 原文
 
-![](https://www.runoob.com/wp-content/uploads/2025/12/1745211719204.jpeg)
+![AI Agent 图标](/posts/ai-agent-tutorial/agent-logo.jpeg)
 AI Agent（Artificial Intelligence Agent） 称为智能体，本质是自动执行任务的程序，核心在于让模型不只回答问题，而是按步骤完成动作。
 **AI Agent（人工智能代理）** 是一个能够感知环境、进行决策并执行行动，以达成特定目标的智能软件实体，它不仅仅是回答问题的聊天机器人，更是能够动手做事的智能执行者。
 Agent = LLM (大脑) + Planning (规划) + Tool use (执行) + Memory (记忆)。
@@ -31,7 +31,7 @@ Agent = LLM (大脑) + Planning (规划) + Tool use (执行) + Memory (记忆)�
 Agent 就是一个能干活的智能助手。
 Agent = LLM (大脑) + Planning (规划) + Tool use (执行) + Memory (记忆)。
 学习 Agent 需要思维转变： 从对话框问答进化为目标驱动的任务执行。
-![](https://www.runoob.com/wp-content/uploads/2025/12/0_0_ezapX2F_7BOysP.png)
+![AI Agent 架构：User Request / Agent / Tools / Memory / Planning](/posts/ai-agent-tutorial/agent-architecture.png)
 传统的软件程序遵循固定的指令流程：输入 → 处理 → 输出，而 AI Agent 则更像一个有自主性的员工，它能够：
   * **理解任务目标** ：明白你想要什么结果
   * **制定计划** ：思考如何达成目标
@@ -65,5 +65,5 @@ Agent = LLM (大脑) + Planning (规划) + Tool use (执行) + Memory (记忆)�
   * 生成行程方案
   * 满足条件时继续完成预订
 
-![](https://www.runoob.com/wp-content/uploads/2025/12/75e97117-0606-41cb-a044-bb38a4858735.jpg)
+![AI Agent 结构组成与运行流程总览](/posts/ai-agent-tutorial/agent-overview.jpg)
 * * *

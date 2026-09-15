@@ -157,7 +157,14 @@ sudo tailscale up \ --accept-routes \ --advertise-exit-node \ --hostname=my-serv
 ### Docker
 
 ```
-docker run -d \ --name=tailscale \ -v /var/lib:/var/lib \ -v /dev/net/tun:/dev/net/tun \ --network=host \ --cap-add=NET_ADMIN \ --cap-add=NET_RAW \ tailscale/tailscale
+docker run -d \
+  --name=tailscale \
+  -v /var/lib:/var/lib \
+  -v /dev/net/tun:/dev/net/tun \
+  --network=host \
+  --cap-add=NET_ADMIN \
+  --cap-add=NET_RAW \
+  tailscale/tailscale
 
 ```
 
@@ -280,7 +287,10 @@ Tailscale 默认只能访问安装了 Tailscale 的设备。如果你的 NAS 接
 把一台安装了 Tailscale 的设备（比如家里的 NAS 或树莓派）设置为**子网路由器** ，它就会把本地局域网的其他设备「广播」到 Tailscale 网络中。其他 Tailscale 设备就能直接访问这些局域网设备了。
 
 ```
-┌─────────┐                              ┌──────────────┐ │ 远程笔记本 │── Tailscale 加密隧道 ──►│ NAS (子网路由) │──► 打印机 192.168.1.50 │ 100.x.x.x│                              │ 192.168.1.10 │──► 智能电视 192.168.1.20 └─────────┘                              └──────────────┘
+┌─────────┐                              ┌──────────────┐
+│ 远程笔记本 │── Tailscale 加密隧道 ──►│ NAS (子网路由) │──► 打印机 192.168.1.50
+│ 100.x.x.x│                              │ 192.168.1.10 │──► 智能电视 192.168.1.20
+└─────────┘                              └──────────────┘
 
 ```
 
@@ -443,18 +453,30 @@ tailscale funnel status
 在 [Admin Console](https://login.tailscale.com/admin/acls) 中编辑 ACL：
 
 ```
-{ // 定义用户组"groups": { "group:admins": ["allen@example.com"], "group:devs": ["bob@example.com", "carol@example.com"] },
+{
+  // 定义用户组
+  "groups": { "group:admins": ["allen@example.com"], "group:devs": ["bob@example.com", "carol@example.com"] },
 
   // 定义主机属性（标签）
   "tagOwners": { "tag:prod": ["group:admins"], "tag:staging": ["group:devs"] },
 
-  // ACL 规则"acls": [ // 管理员可以访问所有设备的所有端口{ "action": "accept", "src": ["group:admins"], "dst": ["*:*"] },
+  // ACL 规则
+  "acls": [
+    // 管理员可以访问所有设备的所有端口
+    { "action": "accept", "src": ["group:admins"], "dst": ["*:*"] },
 
-    // 开发者可以 SSH 到生产服务器{ "action": "accept", "src": ["group:devs"], "dst": ["tag:prod:22"], "users": ["dev"] },
+    // 开发者可以 SSH 到生产服务器
+    { "action": "accept", "src": ["group:devs"], "dst": ["tag:prod:22"], "users": ["dev"] },
 
-    // 所有人可以访问 staging 的 80 和 443 { "action": "accept", "src": ["*"], "dst": ["tag:staging:80,443"] } ],
+    // 所有人可以访问 staging 的 80 和 443
+    { "action": "accept", "src": ["*"], "dst": ["tag:staging:80,443"] }
+  ],
 
-  // SSH 用户映射"ssh": [ { "action": "accept", "src": ["group:admins"], "dst": ["tag:prod"], "users": ["root"] } ] }
+  // SSH 用户映射
+  "ssh": [
+    { "action": "accept", "src": ["group:admins"], "dst": ["tag:prod"], "users": ["root"] }
+  ]
+}
 
 ```
 

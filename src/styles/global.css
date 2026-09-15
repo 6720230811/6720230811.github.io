@@ -1621,8 +1621,14 @@ h4 {
     /* top 和 bottom 都必须给：只给 top 时绝对定位盒的高度是 auto（=目录自身高度，
        实测 243px），sticky 的子元素没有可移动的空间，吸顶会完全失效
        （实测滚动 2064px 后目录 top 变成 -1739，整个跟着滚走）。
-       撑满 .page 整高之后，.toc__inner 才有地方"跟着滚"。 */
-    top: 0;
+       撑满 .page 整高之后，.toc__inner 才有地方"跟着滚"。
+
+       顶上再往上挪一个视口高：.toc 是 .page 的绝对定位子元素，而 .page 前面还有
+       吸顶栏与文章头（实测 .page 顶就在视口 y≈331）。照原样 top:0 的话，滚动为 0
+       时 .toc__inner 会先停在那儿，要滚过 243px 才被 sticky 拉到吸顶位 —— 那一段
+       正好把目录下缘送进右下角宠物的地盘（见 .toc__inner 的 --toc-pet-reserve）。
+       挪到视口之上后 sticky 立刻接管，而且不依赖那 331 到底由什么构成。 */
+    top: calc(var(--nav-h) + 1rem - 100vh);
     bottom: 0;
     margin-left: 1rem;
     /* 页面右侧留白宽度 - 两侧各留 1rem，最多 14rem */
@@ -1632,10 +1638,44 @@ h4 {
   .toc__inner {
     position: sticky;
     top: calc(var(--nav-h) + 1rem);
-    max-height: calc(100vh - var(--nav-h) - 2rem);
+    /* 右下角的宠物浮层会压住目录下缘 —— 1536~1984px 之间，版心外那点右侧空白正好被
+       目录占满，而宠物又贴死右缘，横向没有可让的余地（再宽一点就够，可这段正是最常见的
+       笔记本/外接屏宽度）。所以只能纵向错开：目录让出底部那一截，长目录改成内部滚动，
+       宠物与目录都不牺牲。见 memory/topics/blog-post.md「坑 2」。
+       --toc-pet-reserve 由下面两条 :has 规则按宠物的外观档位给。
+
+       避让靠的是「起点挪到视口之上（见 .toc 的 top）」+「max-height 砍掉宠物那一截」
+       这一对，**不能**指望在这里再补一条 bottom：sticky 同时给 top 和 bottom 时，
+       规范里 top 优先、bottom 直接被忽略（实测确实是这个行为）。 */
+    max-height: calc(100vh - var(--nav-h) - 2rem - var(--toc-pet-reserve, 0rem));
     overflow-y: auto;
     scrollbar-width: thin;
   }
+}
+
+/* 目录给右下角的宠物让出底部。数值 = 宠物自身高度 + .pet 的 bottom: 1rem
+   + **头顶那一列浮层**（.pet__dock 里的互动气泡 .pet__chips 与回复气泡 .pet__bubble）。
+
+   这一列容易被漏掉：它在 .pet__dock 里，dock 是 .pet 的绝对定位子元素、
+   bottom: calc(100% + 0.4rem) —— 也就是浮在宠物**盒子之外、正上方**。
+   只按本体高度让位（6.5+1 / 18+1）时，末条目录链接会被它盖住，
+   而量 .pet 矩形的判据完全看不出来（实测 tailscale 页就是这么漏的）。
+
+   三段加起来：
+     ① 互动气泡行 ≈ 0.72rem×1.4 行高 + 0.22×2 内边距 + 1px×2 描边 ≈ 1.6rem，
+        加 dock 的 0.4rem 间隙 → 2rem；给 2.25rem 留余量。
+     ② 回复气泡：宠物**空闲会自己冒话**，气泡浮在气泡行**更上方**（实测 183×38，
+        在 1600×900 下稳定压住 1 条目录链接、约 6 秒后自动消失）。它高度随文案变
+        （.pet__bubble-body 上限 22rem），**没法全额兜住**；这里只按「一行台词」再留 3rem
+        —— 更长的回复气泡仍会压到，那是用户主动戳宠物时才会出现的场景，可接受。
+   → 两档：内置精灵 6.5 + 1 + 2.25 + 3 = 12.75rem；Live2D 12×1.5=18 + 1 + 2.25 + 3 = 24.25rem。
+
+   整组被关掉时（.pet--hidden）不必让。**改 pet.css 里那几个尺寸变量时这里要跟着改。** */
+html:has(.pet-layer:not(.pet--hidden)) {
+  --toc-pet-reserve: 12.75rem;
+}
+html:has(.pet-layer.has-l2d:not(.pet--hidden)) {
+  --toc-pet-reserve: 24.25rem;
 }
 
 .toc__list {

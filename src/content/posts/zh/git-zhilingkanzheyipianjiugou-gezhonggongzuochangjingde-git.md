@@ -21,7 +21,7 @@ source: "https://www.cnblogs.com/jamiechoo/articles/18408791"
   * 本地仓库：通过 `git commit` 指令，会将暂存区变动的代码提交到本地仓库中，本地仓库位于你的电脑上
   * 远程仓库：远端用来托管代码的仓库，通过 `git push` 指令，会将本地仓库的代码推送到远程仓库中
 
-![](https://img2024.cnblogs.com/blog/1928016/202409/1928016-20240911185334490-1889863844.png)
+![git 四个工作区域与常用指令的流转示意](/posts/git-cheatsheet/git-workflow-areas.png)
 
 ## 初始配置
 
@@ -632,7 +632,33 @@ Amazon CodeCommit 提供 HTTPS 和 SSH 两种方式访问仓库。
 
 ### **完整命令总结**
 以下是所有命令的顺序：
-`# 配置 AWS CLI ` `aws configure ` `# 配置 Git HTTPS 凭证助手 ` `git config --global``credential.helper '!aws codecommit credential-helper $@' ` `git config --global credential.UseHttpPath true ` `# 克隆仓库 ` `git clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/MyRepo ` `cd MyRepo ` `# 添加代码文件 ` `echo "# My First CodeCommit Project" > README.md ` `mkdir src ` `echo "print('Hello, CodeCommit!')" > src/main.py ` `# 查看 Git 状态 ` `git status ` `# 添加文件到暂存区 ` `git add . ` `# 提交到本地仓库 ` `git commit -m "Initial commit: added README and main script" ` `# 推送到远程仓库 ` `git push -u origin main` **1， 错误修复Untracked files: (use "git add <file>..." to include in what will be committed) .idea/vcs.xml，**
+
+```bash
+# 配置 AWS CLI
+aws configure
+# 配置 Git HTTPS 凭证助手
+git config --global credential.helper '!aws codecommit credential-helper $@'
+git config --global credential.UseHttpPath true
+# 克隆仓库
+git clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/MyRepo
+cd MyRepo
+# 添加代码文件
+echo "# My First CodeCommit Project" > README.md
+mkdir src
+echo "print('Hello, CodeCommit!')" > src/main.py
+# 查看 Git 状态
+git status
+# 添加文件到暂存区
+git add .
+# 提交到本地仓库
+git commit -m "Initial commit: added README and main script"
+# 推送到远程仓库
+git push -u origin main
+```
+
+**1， 错误修复**
+
+Untracked files: (use "git add <file>..." to include in what will be committed) .idea/vcs.xml
 
 ### 错误分析
 错误提示表明，`.idea/vcs.xml` 文件是**未跟踪文件** （Untracked file），但还未被添加到 Git 的跟踪中。这会导致 Git 在你尝试推送或提交时报告错误。
