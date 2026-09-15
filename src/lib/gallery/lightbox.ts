@@ -19,6 +19,17 @@ export function initGridLightbox(): void {
   const selector = dialogEl.dataset.tiles || '.gal-tile';
   const tiles = Array.from(document.querySelectorAll<HTMLButtonElement>(selector));
   if (tiles.length === 0) return;
+
+  /*
+    接过一次的别再接（watchGridLightbox 会在首屏先后调两次）。
+    接两遍不是「多一次无用调用」：一次点击开两回灯箱，第二回 showModal() 直接抛
+    InvalidStateError；而且两份独立的 current 索引，翻页会各翻各的。
+    标记打在 <dialog> 上 —— 它每换一页都是新节点，换页后自然会重接一次。
+    注意标记只能打在「瓦片检查之后」：换页途中 #gal-lightbox 可能先于正文出现。
+  */
+  if (dialogEl.dataset.lbBound === '1') return;
+  dialogEl.dataset.lbBound = '1';
+
   // 闭包里要用，先收成非空常量：TS 的 narrowing 进不了闭包
   const dialog: HTMLDialogElement = dialogEl;
 
@@ -83,4 +94,22 @@ export function initGridLightbox(): void {
   dialog.addEventListener('close', () => {
     current = -1;
   });
+}
+
+/**
+ * 换页之后重新接一次灯箱 —— 与 lib/gallery/index.ts 的 mountGalleryHall 同一条理由：
+ * <script> 是模块，一次会话只求值一次，换页后新 DOM 里的 #gal-lightbox 就没人接了
+ * （症状：从索引点进合集，点照片没反应）。
+ *
+ * 每页都调用一次没有成本：页面上没有 #gal-lightbox 时，initGridLightbox 第一行就返回。
+ */
+export function watchGridLightbox(): void {
+  const boot = (): void => initGridLightbox();
+
+  const win = window as Window & { __galLbBound?: true };
+  if (!win.__galLbBound) {
+    win.__galLbBound = true;
+    document.addEventListener('astro:page-load', boot);
+  }
+  boot();
 }

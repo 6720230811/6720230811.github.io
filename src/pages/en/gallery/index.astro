@@ -7,7 +7,7 @@ import '../../../styles/gallery-spread.css';
 import '../../../styles/gallery-collections.css';
 import { profile } from '../../../data/profile';
 import { collections, galleryTotals } from '../../../data/gallery';
-import { galleryNav, no2 } from '../../../lib/gallery/shell';
+import { collectionHref, galleryNav, no2 } from '../../../lib/gallery/shell';
 import { toLocale, useTranslations } from '../../../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
@@ -36,7 +36,7 @@ const dirItems = collections.map((collection, index) => ({
   sub:
     collection.subtitle?.[locale] ??
     `${collection.photos.length} ${t('gallery.itemCount')}`,
-  href: `${base}${collection.id}/`,
+  href: collectionHref(base, collection.id, 'flat'),
 }));
 
 const facts = [

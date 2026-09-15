@@ -1,0 +1,114 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import GalleryShell from '../../../../components/gallery/GalleryShell.astro';
+import CollectionHall from '../../../../components/gallery/CollectionHall.astro';
+import HallModeSwitch from '../../../../components/gallery/HallModeSwitch.astro';
+import '../../../../styles/gallery.css';
+import '../../../../styles/gallery-spread.css';
+import '../../../../styles/gallery-collections.css';
+import { profile } from '../../../../data/profile';
+import { collectionById, threeDCollections } from '../../../../data/gallery';
+import { collectionHref, galleryNav, no2 } from '../../../../lib/gallery/shell';
+import { toLocale, useTranslations } from '../../../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+// One room in the 3D halls: /en/gallery/rooms/<collection id>/
+//
+// Two URLs, two ways of looking at the same collection:
+//   clicking a cover in the Collections index → the photo stream;
+//   clicking a door on the 3D halls row       → this page (a walkable hall).
+// Why they are separate: see collectionHref() in lib/gallery/shell.ts.
+//
+// Only `mode: '3d'` collections have this page — no 3D form, no room, no URL,
+// and the door row will not list it. The photo stream page exists for all.
+//
+// Left rail = the rooms of this connected hall (walking through an arch switches
+// rooms), with the current one marked. It deliberately does not list this
+// collection's photos: those hang on the walls here and are one click away in
+// the grid view, so a third listing would just be repetition.
+//
+// smoothScroll is off: the hall owns drag-to-look and WASD, and inertial
+// scrolling would fight it for gestures (same reason as the screening room).
+export function getStaticPaths() {
+  return threeDCollections.map((collection) => ({
+    params: { id: collection.id },
+  }));
+}
+
+const { id } = Astro.params;
+
+const locale = toLocale('en');
+const t = useTranslations(locale);
+const p = profile[locale];
+const base = getRelativeLocaleUrl(locale, 'gallery');
+
+const collection = collectionById(id ?? '');
+if (!collection) return Astro.redirect(`${base}rooms/`, 302);
+
+const roomIndex = threeDCollections.findIndex((room) => room.id === collection.id);
+
+/** Left rail: every room in the hall; clicking one walks you over */
+const dirItems = threeDCollections.map((room, i) => ({
+  id: room.id,
+  no: no2(i),
+  name: room.title[locale],
+  sub: t(`gallery.style.${room.style}`),
+  href: collectionHref(base, room.id, 'hall'),
+  current: room.id === collection.id,
+}));
+
+const facts = [
+  {
+    k: t('gallery.meta.total'),
+    v: `${collection.photos.length} ${t('gallery.itemCount')}`,
+  },
+  { k: t('gallery.meta.years'), v: collection.years },
+  { k: t('gallery.meta.mode'), v: t('gallery.mode.3d') },
+];
+
+const intro =
+  collection.subtitle?.[locale] ??
+  `${collection.photos.length} ${t('gallery.itemCount')} · ${collection.years}`;
+
+const hero = collection.cover.src;
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${collection.title[locale]} · ${t('gallery.title')}`}
+  description={collection.note?.[locale] ?? intro}
+  hero="backdrop"
+  heroImage={hero}
+  heroHeight="13rem"
+  smoothScroll={false}
+>
+  <GalleryShell
+    locale={locale}
+    no={no2(roomIndex < 0 ? 0 : roomIndex)}
+    name={collection.title[locale]}
+    intro={intro}
+    entries={galleryNav(locale, base, 'rooms')}
+    dirTitle={t('gallery.dir.title')}
+    dirItems={dirItems}
+    noteTitle={t('gallery.note.title')}
+    noteBody={collection.note?.[locale] ?? t('gallery.detail.noteFallback')}
+    noteFacts={facts}
+    noteGear={collection.gear}
+    noteTags={collection.tags}
+  >
+    {/* The view switch shares the cross-page row: see HallModeSwitch */}
+    <HallModeSwitch slot="tools" locale={locale} />
+    <CollectionHall
+      collection={collection}
+      siblings={threeDCollections}
+      locale={locale}
+      exitUrl={`${base}rooms/`}
+    />
+  </GalleryShell>
+</BaseLayout>
+
+<script>
+  import { initGalleryStudio } from '../../../../lib/gallery/studio';
+  initGalleryStudio();
+</script>

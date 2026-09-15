@@ -7,7 +7,7 @@ import '../../../styles/gallery-spread.css';
 import '../../../styles/gallery-collections.css';
 import { profile } from '../../../data/profile';
 import { threeDCollections } from '../../../data/gallery';
-import { galleryNav, no2 } from '../../../lib/gallery/shell';
+import { collectionHref, galleryNav, no2 } from '../../../lib/gallery/shell';
 import { toLocale, useTranslations } from '../../../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
@@ -33,7 +33,7 @@ const dirItems = list.map((collection, index) => ({
   no: no2(index),
   name: collection.title[locale],
   sub: t(`gallery.style.${collection.style}`),
-  href: `${base}${collection.id}/`,
+  href: collectionHref(base, collection.id, 'hall'),
 }));
 
 const facts = [
@@ -67,7 +67,7 @@ const hero = list[0]?.cover.src ?? `${import.meta.env.BASE_URL}banner.jpg`;
     noteFacts={facts}
     noteTags={[...new Set(list.flatMap((item) => item.tags))].slice(0, 8)}
   >
-    <CollectionIndex locale={locale} base={base} list={list} />
+    <CollectionIndex locale={locale} base={base} list={list} view="hall" />
   </GalleryShell>
 </BaseLayout>
 

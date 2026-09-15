@@ -72,6 +72,7 @@ const aside = entries.filter((entry) => entry.accent);
                 class="gal-dir__row"
                 href={item.href ?? `#${item.id}`}
                 data-gal-jump={item.id}
+                aria-current={item.current ? 'page' : undefined}
               >
                 {item.no && <span class="gal-dir__no">{item.no}</span>}
                 <span class="gal-dir__name">{item.name}</span>

@@ -1,12 +1,17 @@
 # 画廊第三轮重构：合集即一等公民
 
-日期：2026-09-15
+日期：2026-09-15（同日晚二次改版：**地址决定视图** + 换页重挂，见 §2.1 与 §5.3）
 状态：已实现。规格相关的代码：
 `src/data/gallery.ts`、`src/lib/gallery/imageSize.ts`、`src/components/gallery/{GalleryShell,CollectionIndex,CollectionStream,CollectionHall,HallModeSwitch}.astro`、
 `src/styles/gallery-{spread,collections}.css`、`src/lib/admin/gallery.ts`
 
 > 本文件取代 `2026-09-15-gallery-art-spread.md`（那版描述的「艺术平铺 = 全站照片拼贴」
 > 已被本轮推翻）。仍然成立的那几条约束在下文第 6 节原样带过来了。
+>
+> 二次改版的起因是三句反馈：**①** 从合集索引点合集，应该看到图片平铺而不是 3D 房间；
+> **②** 从 3D 艺术展厅点合集，应该看到房间而不是图片平铺；
+> **③** 从 3D 艺术展厅点进去「房间好像不加载，要刷新页面才加载」。
+> ①② 同一件事（入口的来意被 `mode` 覆盖），③ 是另一个独立的 bug（§5.3）。
 
 ## 一、为什么改
 
@@ -56,9 +61,10 @@ src/data/gallery-redirects.json    ← 后台改名合集时登记的旧地址�
 
 | 路由 | 是什么 | 组件 |
 |---|---|---|
-| `/gallery/` | **合集封面索引**（首页）：每个合集一块封面，信息在封面右侧 | `CollectionIndex` + `GalleryLightbox` |
-| `/gallery/<合集 id>/` | **合集详情**。`mode: 'flat'` → 杂志式照片流；`mode: '3d'` → 复刻展厅 | `CollectionStream` / `CollectionHall` |
-| `/gallery/rooms/` | **3D 展厅门排**：只列 `mode: '3d'` 的合集 | `CollectionIndex`（传 `threeDCollections`） |
+| `/gallery/` | **合集封面索引**（首页）：每个合集一块封面，信息在封面右侧 | `CollectionIndex`（`view="flat"`） |
+| `/gallery/<合集 id>/` | **图片平铺**：杂志式照片流。**每本合集都有这一页**，与 `mode` 无关 | `CollectionStream` + `GalleryLightbox` |
+| `/gallery/rooms/` | **3D 展厅门排**：只列 `mode: '3d'` 的合集 | `CollectionIndex`（传 `threeDCollections`、`view="hall"`） |
+| `/gallery/rooms/<合集 id>/` | **3D 展厅**：复刻展厅。只为 `mode: '3d'` 的合集生成 | `CollectionHall` + `HallModeSwitch` |
 | `/gallery/screening-room/` | **暮色放映室**（独立 3D，`lib/screening-room.ts`） | `ScreeningRoom` |
 
 `/en/gallery/…` 是同构的一套（`src/pages/en/gallery/`）。
@@ -66,6 +72,36 @@ src/data/gallery-redirects.json    ← 后台改名合集时登记的旧地址�
 **`/gallery/rooms/` 与 `/gallery/` 用同一个组件**，只是传进去的 `list` 不同 ——
 两页因此天然同款，不会各写一遍再慢慢漂移。这正是第 1 条要求「统一设计」最省力的落法：
 不是把两页做得像，而是让它们本来就是同一段代码。
+
+### 2.1 地址决定视图
+
+**同一本合集有两个地址，是两个产品，不是同一页的两个渲染分支。**
+
+第一版把两种视图挤在 `/gallery/<id>/` 上、由 `meta.json` 的 `mode` 决定渲染哪个。
+结果：从「合集」索引点封面想看照片，却落进一间要拖拽的展厅；从门排点门想走动，
+又可能因为脚本没接手（§5.3）停在兜底网格上 —— **入口的来意被数据覆盖掉了**。
+「你从哪来」是页面记不住的状态，不该由它决定看到什么；写进地址就既记得住、又能分享、还能回退。
+
+| 从哪进来 | 落到哪 | 看到什么 |
+|---|---|---|
+| 「合集」索引点封面 | `/gallery/<id>/` | 图片平铺（杂志式照片流） |
+| 「3D 艺术展厅」点门 | `/gallery/rooms/<id>/` | 3D 展厅，可走动 |
+
+- 生成地址只有一处实现：`lib/gallery/shell.ts` 的 `collectionHref(base, id, view)`
+  （`'flat'` → `${base}${id}/`；`'hall'` → `${base}rooms/${id}/`）。
+  索引页与门排各传各的 `view`，`CollectionIndex` 只管拼。
+- `meta.json` 的 `mode` 随之**降级为一个布尔问题**：这本合集有没有可走动的展厅。
+  有 → 出现在门排上、并且有 `/rooms/<id>/` 这个地址；没有 → 只有平铺页。
+  **它不再决定任何页面渲染成什么。**
+- 平铺页**每本合集都有**；展厅页只为 `mode: '3d'` 的合集生成 ——
+  没有 3D 形制就没有房间，不给地址比给一个空地址诚实。
+- 展厅页左栏是**这个连通展厅里的房间**（走过拱门换一间），当前那间标 `aria-current="page"`。
+  它不再重复列「这本合集的照片」：作品挂在墙上、切到网格也在同一页，列第三遍是冗余。
+- 旧地址 `hall-<id>` 当年打开的就是那间展厅，所以 301 到 `/gallery/rooms/<id>/`，
+  不是平铺页。`legacyRoutes()` 的 `to` 因此从「合集 id」改成「**画廊根下的路径**」；
+  `theme-<主题>` 仍去该主题第一本合集的平铺页。
+- **保留段保护**：合集目录名不许叫 `rooms` / `screening-room`（会把画廊自己的路由顶掉），
+  扫到就抛（`src/data/gallery.ts` 的 `RESERVED_SEGMENTS`）。
 
 ### 已删掉的（本轮清理）
 
@@ -168,8 +204,8 @@ frontmatter 里 `Astro.redirect(newUrl, 301)` 后立即返回，不渲染内容�
 改法：
 
 - `GalleryShell` 的 `.gal-head__tools` 里开一个 `<slot name="tools" />`；
-- 视图切换单独成 `HallModeSwitch.astro`，由页面投进那个插槽
-  （`{collection.mode === '3d' && <HallModeSwitch slot="tools" locale={locale} />}`）——
+- 视图切换单独成 `HallModeSwitch.astro`，由**展厅页**（`/gallery/rooms/<id>/`）投进那个插槽
+  （`<HallModeSwitch slot="tools" locale={locale} />`）——
   **`slot` 属性在表达式里也能正常投影**，构建产物里三枚一组、顺序正确；
 - `CollectionHall` 摘掉自己那排，**连「所有房间」一起摘**：它与跨页条的「3D 艺术展厅」
   和画面内 HUD 的「离开展厅」是三处重复出口，留一处。
@@ -211,14 +247,17 @@ frontmatter 里 `Astro.redirect(newUrl, 301)` 后立即返回，不渲染内容�
 
 `pointer-events: none` 是必须的：带子横跨顶栏所在的高度，不关掉会挡住导航点击。
 
-## 五、两种展示模式
+## 五、两个地址各自的中栏
 
-### 5.1 `flat` —— `CollectionStream`（杂志式照片流）
+页头、左右两栏、配色、间距全都来自 `GalleryShell` —— 所以在这本合集里、在展厅里、
+在画廊首页，都是同一套语言。下面只是 §2.1 那张表里两个地址各自的**中栏**。
+
+### 5.1 平铺页 —— `CollectionStream`（杂志式照片流）
 
 一本合集一页摊开，宽度档位交替（`1 / -1` 通栏 ↔ `1 / span 7` 缩进），
 标题与说明压在照片外。e2e 会读回宽度档位断言「不是等宽网格」。
 
-### 5.2 `3d` —— `CollectionHall`（复刻展厅）
+### 5.2 展厅页 —— `CollectionHall`（复刻展厅）
 
 - 展厅里摆的是**所有 3D 合集**（走过拱门换一间 —— 这是 3D 展厅本来的意思），
   出生点是当前这个合集；下面的网格只列**当前合集**的照片。
@@ -226,6 +265,41 @@ frontmatter 里 `Astro.redirect(newUrl, 301)` 后立即返回，不渲染内容�
 - 服务端渲染的默认态是 `data-mode='grid'`：无 WebGL / 无 JS / 弱设备都停在网格上，
   脚本确认跑得动才切到 `3d`。**降级不是「出错」，是常态路径**。
 - 该页 `smoothScroll={false}`：Lenis 的惯性滚动会与画布里的拖拽/键盘移动打架。
+- 画面内 HUD 的「离开展厅」回**门排**（`/gallery/rooms/`）：展厅页现在挂在门排底下，上一级就是它。
+
+### 5.3 换页之后必须自己重挂（本轮修的一处真 bug）
+
+症状：从别的页面点进 3D 展厅，**房间不加载，刷新一下才有**。
+
+根因不在 3D 那套代码，在 Astro 的 `<script>` 语义：**它是模块，浏览器按 URL 缓存，
+一次会话只求值一次。** 首屏那次跑完之后，换页时新 DOM 里的 `#gal` 就再没人接管 ——
+`.gal-page` 一直停在服务端渲染的 `data-mode="grid"` 上，于是看到的是那张兜底网格
+（**看起来正好就是「图片平铺」**，所以它还顺手解释了第 ② 句反馈）。
+刷新之所以管用，正是因为刷新会重新求值一次这个模块。
+
+改法（`lib/gallery/index.ts` 的 `mountGalleryHall()`）：把挂载交给 `astro:page-load`
+（每次换页、新 DOM 就位之后触发），**并用元素上的标记去重**：
+
+```ts
+const boot = () => {
+  const root = document.getElementById('gal');
+  if (!root || root.dataset.galMounted === '1') return;
+  root.dataset.galMounted = '1';
+  mountGallery(root);
+};
+```
+
+`#gal` 是普通组件、不是 `transition:persist`，每换一页都是新节点，标记随旧节点一起消失 ——
+「恰好挂一次」于是是天然的。首屏会「模块求值 + `astro:page-load`」先后各来一次
+（本仓的老坑，见 `Navbar.astro` 的长注释），去重就是为它准备的。
+
+**同一个坑还有第二处**：`lib/gallery/lightbox.ts` 的 `initGridLightbox()` 也是模块顶层调用，
+换页后新的 `<dialog>` 没人接（症状：从索引点进合集，点照片没反应）。
+同样加了 `watchGridLightbox()` + `<dialog>` 上的 `data-lb-bound` 标记。
+
+> 这类问题要问的是「**这个模块有没有可能不被重新求值**」，不是「DOM 在不在」。
+> 同理，本仓两套绑定写法（普通组件每次 `astro:page-load` 重绑 / `transition:persist`
+> 的浮动组件只绑一次）在 §6 之外还有一条判据：**模块顶层的 DOM 调用一律算「只跑一次」**。
 
 ## 六、仍然成立的老约束（从上一版带过来）
 
@@ -312,7 +386,7 @@ galleryRedirects()           → 'src/data/gallery-redirects.json'
 ## 八、验收
 
 `D:\homepage\.pet-e2e-dual\gallery.mjs`（端口 4342 / CDP 9342）——
-**134 条全过**。期望值**现读 `public/gallery/` 的文件系统**（合集数、每个合集几张图、
+**155 条全过**。期望值**现读 `public/gallery/` 的文件系统**（合集数、每个合集几张图、
 哪些是 3d），不是写死在脚本里的常量：加一个合集目录，脚本自动多验一块。
 
 几条判据值得单独记：
@@ -333,6 +407,18 @@ galleryRedirects()           → 'src/data/gallery-redirects.json'
   视图切换（它是「怎么看」不是「去哪」）；
 - **已删路由**只能**问文件系统**（`!existsSync(dist + p + 'index.html')`）：
   `serve.mjs` 对未知路径回落 `index.html` 回 200，HTTP 状态码永远看不出差别 —— 那种绿是假的。
+- **点封面落到哪个地址**：真点一下、等 `location.pathname` 真的变了再看。
+  `Page.navigate` 是整页加载，会把 View Transitions 那条路径整个绕过去 ——
+  上面那个「房间不加载」的 bug 就是这么漏掉的。两条：索引 → `/gallery/<id>/` 且**没有**
+  `.gal-page`；门排 → `/gallery/rooms/<id>/` 且 `#gal` 上有挂载标记。
+- **换页之后的展厅状态 == 整页加载之后的展厅状态**（`mode` 相等）。
+  这一条不假设 WebGL 有没有：没有时两边都该是「降级 + 说明」，有时都该是 `3d`，**不一致才是 bug**。
+- 「脚本接手了没」看的是 `#gal` 上的挂载标记，**不是 `data-mode`** ——
+  无 WebGL 时 `mode` 恒为 `grid`，拿它判会把降级误判成没挂。
+- 读整行文字时记住 `textContent` 是**拼接**的：左栏一行 = 编号 + 名字 + 形制
+  （`01夜行长廊卢浮宫大画廊`），拿它 `===` 名字会假失败（已踩）。
+- **3d 合集的 `/gallery/<id>/` 也要断言是照片流**：这条正是第 ① 句反馈本身，
+  少了它「地址决定视图」只被验了一半（另一半点封面那条只覆盖第一本合集）。
 
 两个判据前置的坑：
 

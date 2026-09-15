@@ -2,7 +2,10 @@
 import { useTranslations, type Locale } from '../../i18n/ui';
 
 /**
- * 合集详情页（mode: '3d'）的「房间 / 网格」视图切换。
+ * 3D 展厅页（/gallery/rooms/<合集 id>/）的「房间 / 网格」视图切换。
+ *
+ * 注意它切的是**同一页内**的看法（画布 ↔ 这本合集的网格），不是跨地址的——
+ * 「看图片平铺」是另一个地址 /gallery/<合集 id>/，走跨页导航那一条。
  *
  * 它被投进 GalleryShell 的 tools 插槽 —— 与跨页导航同处一排。
  * 早先 CollectionHall 自带一整行 `.gal-hall__tools`，于是 3D 合集页顶部叠了两排

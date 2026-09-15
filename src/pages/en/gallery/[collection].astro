@@ -2,37 +2,38 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import GalleryShell from '../../../components/gallery/GalleryShell.astro';
 import CollectionStream from '../../../components/gallery/CollectionStream.astro';
-import CollectionHall from '../../../components/gallery/CollectionHall.astro';
-import HallModeSwitch from '../../../components/gallery/HallModeSwitch.astro';
 import GalleryLightbox from '../../../components/gallery/GalleryLightbox.astro';
 import '../../../styles/gallery.css';
 import '../../../styles/gallery-spread.css';
 import '../../../styles/gallery-collections.css';
 import { profile } from '../../../data/profile';
-import {
-  collectionById,
-  collections,
-  legacyRoutes,
-  threeDCollections,
-} from '../../../data/gallery';
+import { collectionById, collections, legacyRoutes } from '../../../data/gallery';
 import { galleryNav, no2 } from '../../../lib/gallery/shell';
 import { toLocale, useTranslations } from '../../../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
-// Collection detail: /en/gallery/<collection id>/
+// Collection detail, photo stream: /en/gallery/<collection id>/
 //
-// Two display modes share this page:
-//   · mode: 'flat' — CollectionStream, a magazine-style photo stream (default)
-//   · mode: '3d'   — CollectionHall, a reconstructed hall (falls back to a grid
-//                    when WebGL is unavailable)
-// Only the centre column differs; the head and both rails come from GalleryShell,
-// so the language matches the gallery landing page.
+// The 2026-09-15 revision: **the URL decides the view.**
+//   this page      — the photo stream (CollectionStream), reached from the
+//                    Collections index by clicking a cover;
+//   /rooms/<id>/   — the 3D hall (CollectionHall), reached from the 3D halls
+//                    door row.
+// Before, both views shared one URL and `mode` in meta.json picked between them,
+// so clicking a cover from the index could drop you into a hall you had to drag
+// around. `mode` now answers one question only: does this collection have a
+// walkable hall? (if yes it appears on the door row and gets a /rooms/<id>/ URL).
+// Both URLs come from collectionHref() in shell.ts.
 //
 // Legacy paths are handled here: the gallery changed its IA twice in 2026-09 and
 // /gallery/theme-city/ style URLs have been live, so they must not 404.
 interface PathProps {
   id: string;
-  /** Legacy path: when set, 301 to the new URL instead of rendering */
+  /**
+   * Legacy path: when set, 301 instead of rendering. A path **relative to the
+   * gallery root** (`night-walk/`, `rooms/night-walk/`), not a collection id —
+   * the old `hall-<id>` URLs opened a 3D hall, so they go to the hall page.
+   */
   redirectTo: string | null;
 }
 
@@ -62,13 +63,14 @@ const t = useTranslations(locale);
 const p = profile[locale];
 const base = getRelativeLocaleUrl(locale, 'gallery');
 
-if (redirectTo) return Astro.redirect(`${base}${redirectTo}/`, 301);
+if (redirectTo) return Astro.redirect(`${base}${redirectTo}`, 301);
 
 const collection = collectionById(id);
 if (!collection) return Astro.redirect(base, 302);
 
 const index = collections.findIndex((item) => item.id === collection.id);
 
+/** Left rail: this collection's photos, lighting up the matching plate */
 const dirItems = collection.photos.map((photo, i) => ({
   id: photo.id,
   no: no2(i),
@@ -82,10 +84,8 @@ const facts = [
     v: `${collection.photos.length} ${t('gallery.itemCount')}`,
   },
   { k: t('gallery.meta.years'), v: collection.years },
-  {
-    k: t('gallery.meta.mode'),
-    v: collection.mode === '3d' ? t('gallery.mode.3d') : t('gallery.mode.flat'),
-  },
+  // This page is the stream; whether a hall exists is the door row's business
+  { k: t('gallery.meta.mode'), v: t('gallery.mode.flat') },
 ];
 
 const intro =
@@ -103,7 +103,6 @@ const hero = collection.cover.src;
   hero="backdrop"
   heroImage={hero}
   heroHeight="13rem"
-  smoothScroll={collection.mode !== '3d'}
 >
   <GalleryShell
     locale={locale}
@@ -119,23 +118,8 @@ const hero = collection.cover.src;
     noteGear={collection.gear}
     noteTags={collection.tags}
   >
-    {/* 视图切换与跨页导航同一排：见 HallModeSwitch 的注释 */}
-    {collection.mode === '3d' && <HallModeSwitch slot="tools" locale={locale} />}
-    {
-      collection.mode === '3d' ? (
-        <CollectionHall
-          collection={collection}
-          siblings={threeDCollections}
-          locale={locale}
-          exitUrl={base}
-        />
-      ) : (
-        <>
-          <CollectionStream photos={collection.photos} locale={locale} />
-          <GalleryLightbox locale={locale} selector=".gal-plate__tile" />
-        </>
-      )
-    }
+    <CollectionStream photos={collection.photos} locale={locale} />
+    <GalleryLightbox locale={locale} selector=".gal-plate__tile" />
   </GalleryShell>
 </BaseLayout>
 

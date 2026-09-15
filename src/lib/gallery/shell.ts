@@ -33,6 +33,11 @@ export interface DirItem {
    * 渲染成 <span> 而不是 <a>：假链接对键盘和读屏都是噪音。
    */
   plain?: boolean;
+  /**
+   * 就是当前这一页（3D 展厅页的左栏：「你正在这间」）。会标 aria-current="page"。
+   * 标了当前项也照样给 href —— 从别的房间过来还得靠这个链接。
+   */
+  current?: boolean;
 }
 
 export interface Fact {
@@ -77,3 +82,20 @@ export function galleryNav(locale: Locale, base: string, current?: GallerySectio
 
 /** 两位编号：目录栏、封面、详情页共用同一套，切页时不会跳号 */
 export const no2 = (index: number): string => String(index + 1).padStart(2, '0');
+
+/**
+ * 合集详情的两种地址（2026-09-15 起分开）：
+ *   flat —— /gallery/<id>/         图片平铺（杂志式照片流）
+ *   hall —— /gallery/rooms/<id>/   3D 展厅（复刻的展厅，可以走动）
+ *
+ * 为什么不合成一个地址、让 meta.json 的 mode 说了算：**入口决定你要看什么**。
+ * 从「合集」索引点封面，来意是看照片；从「3D 艺术展厅」点门，来意是走进展厅。
+ * 一个地址两头都想满足，两头的期待就都得落空 —— 而这正是改版前发生的事。
+ * 地址分开之后，「看哪种」不再依赖「你从哪来」这种页面记不住的状态，
+ * 还能分享、能回退、能被 e2e 直接断言。
+ *
+ * base 形如 '/gallery/' 或 '/en/gallery/'（带尾斜杠），由 getRelativeLocaleUrl 得来。
+ */
+export function collectionHref(base: string, id: string, view: 'flat' | 'hall' = 'flat'): string {
+  return view === 'hall' ? `${base}rooms/${id}/` : `${base}${id}/`;
+}

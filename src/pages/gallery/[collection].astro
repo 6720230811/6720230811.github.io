@@ -2,31 +2,28 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import GalleryShell from '../../components/gallery/GalleryShell.astro';
 import CollectionStream from '../../components/gallery/CollectionStream.astro';
-import CollectionHall from '../../components/gallery/CollectionHall.astro';
-import HallModeSwitch from '../../components/gallery/HallModeSwitch.astro';
 import GalleryLightbox from '../../components/gallery/GalleryLightbox.astro';
 import '../../styles/gallery.css';
 import '../../styles/gallery-spread.css';
 import '../../styles/gallery-collections.css';
 import { profile } from '../../data/profile';
-import {
-  collectionById,
-  collections,
-  legacyRoutes,
-  threeDCollections,
-} from '../../data/gallery';
+import { collectionById, collections, legacyRoutes } from '../../data/gallery';
 import { galleryNav, no2 } from '../../lib/gallery/shell';
 import { toLocale, useTranslations } from '../../i18n/ui';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
 /**
- * 合集详情：/gallery/<合集 id>/
+ * 合集详情（图片平铺）：/gallery/<合集 id>/
  *
- * 两种展示方式共用这一页：
- *   · mode: 'flat' —— CollectionStream，杂志式照片流（默认）
- *   · mode: '3d'   —— CollectionHall，复刻展厅（无 WebGL 时自己降级成网格）
- * 换的只是中栏；页头、左右两栏、配色、间距全都来自 GalleryShell，
- * 所以在这本合集里和在画廊首页是同一套语言。
+ * 2026-09-15 二次改版：**地址决定视图**。
+ *   这一页        —— 图片平铺（CollectionStream），从「合集」索引点封面进来；
+ *   /rooms/<id>/  —— 3D 展厅（CollectionHall），从「3D 艺术展厅」点门进去。
+ *
+ * 早先两种视图挤在同一个地址、由 meta.json 的 mode 决定，于是「从合集点封面
+ * 想看照片，却落进一间要拖拽的展厅」—— 入口的来意被数据覆盖掉了。
+ * 现在 mode 只回答一个问题：**这本合集有没有可走动的展厅**（有就出现在 3D
+ * 门排上、并且有 /rooms/<id>/ 这个地址）。两种视图的地址由 shell.ts 的
+ * collectionHref() 生成，索引页与门排各用各的。
  *
  * 旧地址要靠这里兜住：画廊在 2026-09 换过两轮信息架构，
  * /gallery/theme-city/、/gallery/hall-night-walk/ 这类地址已经推上线过，
@@ -34,7 +31,11 @@ import { getRelativeLocaleUrl } from 'astro:i18n';
  */
 interface PathProps {
   id: string;
-  /** 旧地址：非空就 301 到新地址，不渲染内容 */
+  /**
+   * 旧地址：非空就 301 过去，不渲染内容。
+   * 是**画廊根下的路径**（如 `night-walk/`、`rooms/night-walk/`），不是合集 id ——
+   * 当年 `hall-<id>` 那批地址打开的就是 3D 展厅，得送回展厅页，别送错。
+   */
   redirectTo: string | null;
 }
 
@@ -65,7 +66,7 @@ const t = useTranslations(locale);
 const p = profile[locale];
 const base = getRelativeLocaleUrl(locale, 'gallery');
 
-if (redirectTo) return Astro.redirect(`${base}${redirectTo}/`, 301);
+if (redirectTo) return Astro.redirect(`${base}${redirectTo}`, 301);
 
 const collection = collectionById(id);
 if (!collection) return Astro.redirect(base, 302);
@@ -86,10 +87,8 @@ const facts = [
     v: `${collection.photos.length} ${t('gallery.itemCount')}`,
   },
   { k: t('gallery.meta.years'), v: collection.years },
-  {
-    k: t('gallery.meta.mode'),
-    v: collection.mode === '3d' ? t('gallery.mode.3d') : t('gallery.mode.flat'),
-  },
+  // 这一页就是平铺；有没有展厅由「3D 艺术展厅」那一条去说，这里不重复
+  { k: t('gallery.meta.mode'), v: t('gallery.mode.flat') },
 ];
 
 const intro =
@@ -107,7 +106,6 @@ const hero = collection.cover.src;
   hero="backdrop"
   heroImage={hero}
   heroHeight="13rem"
-  smoothScroll={collection.mode !== '3d'}
 >
   <GalleryShell
     locale={locale}
@@ -123,23 +121,8 @@ const hero = collection.cover.src;
     noteGear={collection.gear}
     noteTags={collection.tags}
   >
-    {/* 视图切换与跨页导航同一排：见 HallModeSwitch 的注释 */}
-    {collection.mode === '3d' && <HallModeSwitch slot="tools" locale={locale} />}
-    {
-      collection.mode === '3d' ? (
-        <CollectionHall
-          collection={collection}
-          siblings={threeDCollections}
-          locale={locale}
-          exitUrl={base}
-        />
-      ) : (
-        <>
-          <CollectionStream photos={collection.photos} locale={locale} />
-          <GalleryLightbox locale={locale} selector=".gal-plate__tile" />
-        </>
-      )
-    }
+    <CollectionStream photos={collection.photos} locale={locale} />
+    <GalleryLightbox locale={locale} selector=".gal-plate__tile" />
   </GalleryShell>
 </BaseLayout>
 

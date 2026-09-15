@@ -57,6 +57,7 @@ const zh = {
   // 合集制（2026-09-15）：画廊首页 = 合集封面索引，一个合集一个目录
   'gallery.nav.index': '合集',
   'gallery.enter.collection': '进入合集',
+  'gallery.enter.hall': '进入展厅',
   'gallery.mode.3d': '3D 展厅',
   'gallery.mode.flat': '平铺',
   'gallery.meta.collections': '合集',
@@ -65,7 +66,7 @@ const zh = {
   'gallery.collectionUnit': '个',
   'gallery.rooms.intro': '带 3D 形制的合集在这里排成门面，点门进去走动、凑近看。',
   'gallery.rooms.note':
-    '只有 mode 为 3d 的合集会出现在这一页；平铺的合集留在「合集」索引里，两处用的是同一套跨页外壳。',
+    '门后是一间能走动的展厅：带 3D 形制的合集布置成连通的房间，走过拱门就换了一间。想看哪本合集的照片，去「合集」索引点它的封面。',
   'gallery.screening.note': '把画廊里的照片按顺序放一遍，也可以选本地的图片或视频投上去。',
   'gallery.detail.noteFallback': '这个合集还没有写前言（在它的 meta.json 里补 note 就会出现在这里）。',
 
@@ -318,6 +319,7 @@ const en: Record<keyof typeof zh, string> = {
   // Collections (2026-09-15): the gallery index is a cover sheet, one directory per collection
   'gallery.nav.index': 'Collections',
   'gallery.enter.collection': 'Enter the collection',
+  'gallery.enter.hall': 'Enter the hall',
   'gallery.mode.3d': '3D hall',
   'gallery.mode.flat': 'Flat',
   'gallery.meta.collections': 'Collections',
@@ -326,7 +328,7 @@ const en: Record<keyof typeof zh, string> = {
   'gallery.collectionUnit': 'collections',
   'gallery.rooms.intro': 'Collections with a 3D form line up here as doorways — step through and walk.',
   'gallery.rooms.note':
-    'Only collections whose mode is 3d appear here; flat ones stay under Collections. Both use the same spread shell.',
+    'Behind each door is a walkable hall: the collections with a 3D form become connected rooms, and an arch takes you to the next one. To browse a collection as photos, open its cover under Collections.',
   'gallery.screening.note': 'Runs the gallery pictures in order, or put your own local images or video on the screen.',
   'gallery.detail.noteFallback': 'No foreword for this collection yet (add a note to its meta.json).',
 

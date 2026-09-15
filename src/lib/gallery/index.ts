@@ -888,3 +888,37 @@ function degrade(page: HTMLElement | null, root: HTMLElement | null): void {
       ?.click();
   }
 }
+
+/**
+ * 把当前文档里的展厅挂起来，并且**每次换页都重挂一次**。
+ *
+ * 为什么不能在 <script> 里直接写 `mountGallery(document.getElementById('gal'))`：
+ * Astro 的 <script> 是模块，浏览器按 URL 缓存 —— 一个模块在一次会话里只求值一次。
+ * 首屏那次跑完之后，换页时新 DOM 里的 #gal 就再没人管了：`.gal-page` 停在
+ * 服务端渲染的 `data-mode="grid"` 上，看到的是那张兜底网格（「图片平铺」），
+ * 而不是展厅 —— 症状就是「从别处点进 3D 合集，房间不加载，刷新一下才有」。
+ * 刷新之所以管用，正是因为刷新会重新求值一次这个模块。
+ *
+ * 重挂的钩子是 astro:page-load：它在**每次换页、新 DOM 就位之后**触发。
+ *
+ * 首屏会「模块求值 + astro:page-load」先后各来一次（本仓的老坑，见 Navbar 的长注释），
+ * 所以必须去重：#gal 是普通组件、不是 `transition:persist`，每换一页都是新节点，
+ * 元素上的标记随旧节点一起消失 —— 「恰好挂一次」于是是天然的。
+ */
+export function mountGalleryHall(): void {
+  const boot = (): void => {
+    const root = document.getElementById('gal');
+    if (!root || root.dataset.galMounted === '1') return;
+    root.dataset.galMounted = '1';
+    mountGallery(root);
+  };
+
+  // 模块只求值一次，这里也就只会登记一次；万一被 Hot 重载当成两份，用 window 上的
+  // 把手兜一下（与 studio.ts 同一套做法）
+  const win = window as Window & { __galHallBound?: true };
+  if (!win.__galHallBound) {
+    win.__galHallBound = true;
+    document.addEventListener('astro:page-load', boot);
+  }
+  boot();
+}

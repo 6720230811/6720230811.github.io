@@ -61,9 +61,13 @@ export const CollectionMetaSchema = z.object({
   /** 展览前言：合集封面页的右栏、详情页的开篇都读它 */
   note: LocaleTextSchema.optional(),
   /**
-   * 展示方式：
-   * - flat —— 杂志式照片流（默认）
-   * - 3d   —— 复刻展厅，走 WebGL（见 lib/gallery/），无 WebGL 时自动降级成 flat
+   * 有没有可走动的展厅（2026-09-15 起只管这一件事）：
+   * - '3d'   —— 有：会出现在 3D 展厅门排上，并且在 /gallery/rooms/<id>/ 有展厅页
+   * - 'flat' —— 没有：只有图片平铺
+   *
+   * **它不再决定 /gallery/<id>/ 渲染成什么** —— 那个地址一律是图片平铺，
+   * 要看展厅去 /gallery/rooms/<id>/。「看哪种」由地址决定，不由数据决定；
+   * 理由见 lib/gallery/shell.ts 的 collectionHref()。
    */
   mode: z.enum(['flat', '3d']).default('flat'),
   /** 形制：九种复刻的艺术厅之一，只对 mode: '3d' 有意义 */

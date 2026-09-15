@@ -46,6 +46,14 @@ const IMAGE_RE = /\.(jpe?g|png|webp|avif|gif)$/i;
 /** 缩略图子目录名与合集目录同级的保留名，不会被当成一个合集 */
 const THUMBS = 'thumbs';
 
+/**
+ * 与合集目录**同级**、但已被画廊自己的页面占掉的段名。
+ * `rooms/` 是 3D 展厅门排，`screening-room/` 是私人放映室；
+ * 合集目录一旦同名，两条路由就撞在一起 —— Astro 会以很难懂的方式报错，
+ * 所以扫到就抛（与本站「宁可构建红掉」的一贯做法一致）。
+ */
+const RESERVED_SEGMENTS = ['rooms', 'screening-room'];
+
 export interface Photo {
   /** 站内唯一 id（`<合集>-<文件 stem>`）：灯箱、过渡动画、锚点都用它 */
   id: string;
@@ -121,6 +129,13 @@ function photoId(collectionId: string, file: string): string {
 
 /** 读一个合集目录 */
 function readCollection(id: string): Collection {
+  if (RESERVED_SEGMENTS.includes(id)) {
+    throw new Error(
+      `合集目录名「${id}」与画廊自己的路由同级（${RESERVED_SEGMENTS.join('、')}），` +
+        `会把那条路由顶掉。给这个合集换个目录名：把 ${GALLERY_DIR}/${id}/ 改成别的名字。`
+    );
+  }
+
   const dir = join(ROOT, id);
   const metaPath = join(dir, 'meta.json');
 
@@ -311,11 +326,13 @@ export const galleryTotals = (() => {
 })();
 
 /**
- * 旧地址 → 新地址。
+ * 旧地址 → 新地址。`to` 是**画廊根下的路径**（`night-walk/`、`rooms/night-walk/`），
+ * 不是合集 id —— 因为「同一个合集」现在有两个地址，跳对了才叫保义。
  *
  * 画廊在 2026-09 换过两轮信息架构，旧地址已经推上线过，不能让它们 404：
- *   · `theme-city` 这类按主题派生的房间 → 该主题下第一个合集
- *   · `hall-night-walk` 这类按手挑展厅派生的房间 → 同名合集
+ *   · `theme-city` 这类按主题派生的房间 → 该主题下第一个合集的平铺页
+ *   · `hall-night-walk` 这类按手挑展厅派生的房间 → **那间展厅**（/rooms/<id>/）
+ *     （当年这批地址打开的就是 3D 展厅；301 会被长期缓存，跳错一次很难收回）
  * 页面用 Astro.redirect 301 过去（见 pages/gallery/[collection].astro）。
  */
 /** 后台给改名过的合集登记旧地址的文件（不存在就当没有） */
@@ -359,19 +376,22 @@ export function legacyRoutes(): { from: string; to: string }[] {
   // 不该被下面按目录名推出来的规则顶掉
   for (const entry of registeredRedirects()) {
     seen.add(entry.from);
-    routes.push(entry);
+    routes.push({ from: entry.from, to: `${entry.to}/` });
   }
 
   for (const collection of collections) {
+    // hall-<id> 当年开的就是那间 3D 展厅，所以送展厅页而不是平铺页
+    const hallTo =
+      collection.mode === '3d' ? `rooms/${collection.id}/` : `${collection.id}/`;
     if (!seen.has(`hall-${collection.id}`)) {
       seen.add(`hall-${collection.id}`);
-      routes.push({ from: `hall-${collection.id}`, to: collection.id });
+      routes.push({ from: `hall-${collection.id}`, to: hallTo });
     }
     if (!themeDone.has(collection.theme)) {
       themeDone.add(collection.theme);
       if (!seen.has(`theme-${collection.theme}`)) {
         seen.add(`theme-${collection.theme}`);
-        routes.push({ from: `theme-${collection.theme}`, to: collection.id });
+        routes.push({ from: `theme-${collection.theme}`, to: `${collection.id}/` });
       }
     }
   }

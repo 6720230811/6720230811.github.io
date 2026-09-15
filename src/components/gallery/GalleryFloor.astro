@@ -155,6 +155,8 @@ const payload = rooms.map((room) => ({
 </div>
 
 <script>
-  import { mountGallery } from '../../lib/gallery';
-  mountGallery(document.getElementById('gal'));
+  import { mountGalleryHall } from '../../lib/gallery';
+  // 不自己找 #gal、也不自己听换页：都交给 mountGalleryHall —— 换页时模块不会重跑，
+  // 光在这里调一次，从别的页面点进来就会漏挂（见那边的注释）
+  mountGalleryHall();
 </script>

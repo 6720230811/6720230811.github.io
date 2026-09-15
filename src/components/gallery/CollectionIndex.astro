@@ -1,5 +1,6 @@
 ---
 import { collections, photoAR, type Collection } from '../../data/gallery';
+import { collectionHref } from '../../lib/gallery/shell';
 import { useTranslations, type Locale } from '../../i18n/ui';
 
 /**
@@ -15,7 +16,7 @@ import { useTranslations, type Locale } from '../../i18n/ui';
  *   这里自然多一块，编号也跟着长。
  *
  * 3D 展厅门排（/gallery/rooms/）用的是**同一个组件**，只是传进来的是
- * threeDCollections —— 两页因此天然同款，不会各写一遍再慢慢漂移。
+ * threeDCollections、且 view='hall' —— 两页因此天然同款，不会各写一遍再慢慢漂移。
  */
 interface Props {
   locale: Locale;
@@ -23,9 +24,14 @@ interface Props {
   base: string;
   /** 要展出哪些合集；省略 = 全部 */
   list?: readonly Collection[];
+  /**
+   * 点封面进哪种视图。这一页自己不知道用户的来路，所以由「这一页是干嘛的」定：
+   *   flat —— /gallery/<id>/（合集索引）；hall —— /gallery/rooms/<id>/（3D 展厅门排）
+   */
+  view?: 'flat' | 'hall';
 }
 
-const { locale, base, list = collections } = Astro.props;
+const { locale, base, list = collections, view = 'flat' } = Astro.props;
 const t = useTranslations(locale);
 
 /** 两位编号：目录栏、封面、详情页共用同一套，切页时不会跳号 */
@@ -56,7 +62,7 @@ const kickerOf = (collection: Collection) =>
       >
         <a
           class="gal-cover__frame"
-          href={`${base}${collection.id}/`}
+          href={collectionHref(base, collection.id, view)}
           style={`--ar: ${photoAR(collection.cover)}`}
           aria-label={collection.title[locale]}
         >
@@ -70,7 +76,7 @@ const kickerOf = (collection: Collection) =>
           />
           <span class="gal-cover__no">{no(index)}</span>
           <span class="gal-cover__cta">
-            {t('gallery.enter.collection')}
+            {view === 'hall' ? t('gallery.enter.hall') : t('gallery.enter.collection')}
             <span aria-hidden="true">→</span>
           </span>
         </a>

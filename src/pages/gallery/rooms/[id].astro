@@ -1,0 +1,115 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import GalleryShell from '../../../components/gallery/GalleryShell.astro';
+import CollectionHall from '../../../components/gallery/CollectionHall.astro';
+import HallModeSwitch from '../../../components/gallery/HallModeSwitch.astro';
+import '../../../styles/gallery.css';
+import '../../../styles/gallery-spread.css';
+import '../../../styles/gallery-collections.css';
+import { profile } from '../../../data/profile';
+import { collectionById, threeDCollections } from '../../../data/gallery';
+import { collectionHref, galleryNav, no2 } from '../../../lib/gallery/shell';
+import { toLocale, useTranslations } from '../../../i18n/ui';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+/**
+ * 3D 展厅里的一间房：/gallery/rooms/<合集 id>/
+ *
+ * 与 /gallery/<合集 id>/（图片平铺）是**两个地址、两种看法**，看的是同一本合集：
+ *   从「合集」索引点封面  → 平铺页（想看图）
+ *   从「3D 艺术展厅」点门 → 这一页（想走进展厅）
+ * 为什么分开，见 lib/gallery/shell.ts 的 collectionHref()。
+ *
+ * 只有 mode: '3d' 的合集有这一页 —— 没有 3D 形制就没有房间，不给地址，
+ * 门排上也不会出现它。反过来，平铺页是每本合集都有的。
+ *
+ * 左栏目录 = **这个连通展厅里的房间**（走过拱门就换一间），当前这间标出来。
+ * 这一页里没有「合集照片清单」这种目录 —— 这本合集的作品在 3D 里挂墙上、
+ * 切到网格也在同一页，左栏再列一遍是重复。（要看平铺另有那个地址。）
+ *
+ * smoothScroll 关掉：展厅自己接管拖拽转视角与 WASD，惯性滚动会跟它抢手势
+ * （与放映室同一条理由）。
+ */
+export function getStaticPaths() {
+  return threeDCollections.map((collection) => ({
+    params: { id: collection.id },
+  }));
+}
+
+const { id } = Astro.params;
+
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+const base = getRelativeLocaleUrl(locale, 'gallery');
+
+const collection = collectionById(id ?? '');
+if (!collection) return Astro.redirect(`${base}rooms/`, 302);
+
+const roomIndex = threeDCollections.findIndex((room) => room.id === collection.id);
+
+/** 左栏：展厅里的每一间房，点了就走过去（当前这间标成当前页） */
+const dirItems = threeDCollections.map((room, i) => ({
+  id: room.id,
+  no: no2(i),
+  name: room.title[locale],
+  sub: t(`gallery.style.${room.style}`),
+  href: collectionHref(base, room.id, 'hall'),
+  current: room.id === collection.id,
+}));
+
+const facts = [
+  {
+    k: t('gallery.meta.total'),
+    v: `${collection.photos.length} ${t('gallery.itemCount')}`,
+  },
+  { k: t('gallery.meta.years'), v: collection.years },
+  { k: t('gallery.meta.mode'), v: t('gallery.mode.3d') },
+];
+
+const intro =
+  collection.subtitle?.[locale] ??
+  `${collection.photos.length} ${t('gallery.itemCount')} · ${collection.years}`;
+
+const hero = collection.cover.src;
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={`${collection.title[locale]} · ${t('gallery.title')}`}
+  description={collection.note?.[locale] ?? intro}
+  hero="backdrop"
+  heroImage={hero}
+  heroHeight="13rem"
+  smoothScroll={false}
+>
+  <GalleryShell
+    locale={locale}
+    no={no2(roomIndex < 0 ? 0 : roomIndex)}
+    name={collection.title[locale]}
+    intro={intro}
+    entries={galleryNav(locale, base, 'rooms')}
+    dirTitle={t('gallery.dir.title')}
+    dirItems={dirItems}
+    noteTitle={t('gallery.note.title')}
+    noteBody={collection.note?.[locale] ?? t('gallery.detail.noteFallback')}
+    noteFacts={facts}
+    noteGear={collection.gear}
+    noteTags={collection.tags}
+  >
+    {/* 视图切换与跨页导航同一排：见 HallModeSwitch 的注释 */}
+    <HallModeSwitch slot="tools" locale={locale} />
+    <CollectionHall
+      collection={collection}
+      siblings={threeDCollections}
+      locale={locale}
+      exitUrl={`${base}rooms/`}
+    />
+  </GalleryShell>
+</BaseLayout>
+
+<script>
+  import { initGalleryStudio } from '../../../lib/gallery/studio';
+  initGalleryStudio();
+</script>
