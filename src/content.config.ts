@@ -18,6 +18,10 @@ const posts = defineCollection({
     description: z.string().default(''),
     date: z.coerce.date(),
     updated: z.coerce.date().optional(),
+    // 分类与标签存的都是**词表的 key**（src/data/taxonomy.ts），不是显示名。
+    // key 是 ASCII、且中英共用同一个（`tech` 而非 `技术`/`Tech`）——
+    // 于是显示名可以随便改而不动地址，两版也不会漂。
+    // 校验（含「是不是想写 xxx」的提示）在数据层：lib/posts.ts 的 postsOf
     category: z.string(),
     tags: z.array(z.string()).default([]),
     // 封面/插画：文章页右侧一栏展示。留空则退回正文第一张图，都没有就不显示这一栏

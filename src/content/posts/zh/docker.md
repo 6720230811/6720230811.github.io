@@ -2,8 +2,8 @@
 title: "Docker常用命令大全 - 当下是吾 - 博客园"
 description: "1、帮助类启动命令 启动docker： systemctl start docker 停止docker： systemctl stop docker 重启docker： systemctl restart docker 查看docker状态： systemctl status docker 开机启动"
 date: 2026-09-12
-category: "技术"
-tags: ["docker"]
+category: tech
+tags: [docker]
 source: "https://www.cnblogs.com/caihongmin/p/18939767"
 ---
 

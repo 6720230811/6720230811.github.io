@@ -1,5 +1,6 @@
 import { isValidSlug, today } from './serialize';
 import type { PostFrontmatter } from './serialize';
+import { CATEGORIES, TAGS } from '../../data/taxonomy';
 
 /**
  * 发布前的校验。
@@ -8,7 +9,13 @@ import type { PostFrontmatter } from './serialize';
  * 现在独立出来，输入过程中也跑（改过之后才跑，避免刚载入就一片红）。
  */
 
-export type FieldId = 'post-slug' | 'post-title' | 'post-category' | 'post-date' | 'post-updated';
+export type FieldId =
+  | 'post-slug'
+  | 'post-title'
+  | 'post-category'
+  | 'post-date'
+  | 'post-updated'
+  | 'tag-input';
 
 export interface Issue {
   field: FieldId;
@@ -50,8 +57,27 @@ export function validatePost(input: ValidateInput): Issue[] {
   }
 
   if (!data.title) issues.push({ field: 'post-title', message: 'title 不能为空。' });
+
+  // 分类与标签存的都是**词表的 key**（src/data/taxonomy.ts）—— 它们同时是 URL 段，
+  // 没登记的 key 会让构建失败（数据层会抛），拦在这里免得人等到 CI 红了才知道。
+  // 分类在下拉里本来就选不出错，但手改过 md 的文章仍可能带着旧值。
   if (!data.category) {
-    issues.push({ field: 'post-category', message: 'category 不能为空（schema 里是必填）。' });
+    issues.push({ field: 'post-category', message: '先选一个分类 —— 选项来自词表。' });
+  } else if (!(data.category in CATEGORIES)) {
+    issues.push({
+      field: 'post-category',
+      message: `分类「${data.category}」不在词表里，从下拉里挑一个已登记的。`,
+    });
+  }
+
+  const unknownTags = data.tags.filter((tag) => !(tag in TAGS));
+  if (unknownTags.length) {
+    issues.push({
+      field: 'tag-input',
+      message:
+        `标签「${unknownTags.join('、')}」还没登记，发出去会让构建失败。` +
+        `先往 src/data/taxonomy.ts 的 TAGS 里加一行，或者换成已登记的。`,
+    });
   }
 
   // 不校验 date 格式：<input type="date"> 里拿不到非法字符串，
@@ -79,6 +105,7 @@ const ALL_FIELDS: readonly FieldId[] = [
   'post-category',
   'post-date',
   'post-updated',
+  'tag-input',
 ];
 
 /**

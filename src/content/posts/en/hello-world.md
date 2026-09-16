@@ -2,8 +2,8 @@
 title: Hello, Blog
 description: This site went from a single résumé page to a blog plus an about page — here's why, and what the new structure looks like.
 date: 2026-08-28
-category: Notes
-tags: [notes, meta]
+category: notes
+tags: [site]
 cover: /illustrations/blog-hello-world.webp
 ---
 
@@ -41,10 +41,12 @@ The filename becomes the URL: `en/hello-world.md` → `/en/blog/hello-world/`. A
 title: Title
 description: One-line summary, shown on the list page and in search results
 date: 2026-08-28
-category: Category
-tags: [tag1, tag2]
+category: notes     # must be a key in src/data/taxonomy.ts
+tags: [site]        # tags are registered too; a typo fails the build
 ---
 ```
+
+Categories and tags are **keys in the word book** (`src/data/taxonomy.ts`): categories are a short controlled list, tags are free but must be registered. A typo fails the build and suggests the nearest registered key.
 
 > Prefer ASCII filenames. Non-ASCII characters in URLs turn into long percent-encoded strings that nobody can read or retype.
 

@@ -1,6 +1,7 @@
 ---
 import type { Post } from '../lib/posts';
 import { formatDate, postHref, readingMinutes } from '../lib/posts';
+import { categoryLabel, tagLabel } from '../lib/taxonomy';
 import { resolveCover } from '../lib/cover';
 import { useTranslations, type Locale } from '../i18n/ui';
 
@@ -93,14 +94,17 @@ const cover = resolveCover(post);
       胶囊只做展示，不能做成链接：整张卡片本身已经是 <a>，
       HTML 不允许 <a> 套 <a>，浏览器解析时会把外层卡片拆成多个 <a>。
       想按分类/标签筛选，可以从文章页底部或 /tags/、/categories/ 进入。
+
+      分类与标签存的是**词表的 key**（`tech` / `networking`），这里要按语言取显示名 ——
+      否则访客看到的是 `tech` 这种键名（改这一处时漏过一次，静态核对才逮出来）。
     */}
     <div class="post-card__foot">
-      <span class="post-chip post-chip--category">{category}</span>
+      <span class="post-chip post-chip--category">{categoryLabel(locale, category)}</span>
       {
         tags.length > 0 && (
           <span class="post-card__tags">
             {tags.map((tag) => (
-              <span class="post-chip">#{tag}</span>
+              <span class="post-chip">#{tagLabel(locale, tag)}</span>
             ))}
           </span>
         )

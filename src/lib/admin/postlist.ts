@@ -8,6 +8,7 @@ import { exportPosts, type BulkAction } from './bulk';
 import { resolveCoverFields } from '../cover';
 import { buildZip, downloadBlob } from './zip';
 import { requireToken } from './token';
+import { CATEGORIES, TAGS } from '../../data/taxonomy';
 
 /**
  * 左侧的文章列表。
@@ -214,24 +215,37 @@ export function initPostList(
       for (const tag of item.tags) tags.add(tag);
     }
 
-    const refill = (el: HTMLSelectElement, values: Set<string>, all: string) => {
+    const refill = (
+      el: HTMLSelectElement,
+      values: Set<string>,
+      all: string,
+      labelOf: (value: string) => string
+    ) => {
       const keep = el.value;
       el.textContent = '';
       const first = document.createElement('option');
       first.value = '';
       first.textContent = all;
       el.append(first);
-      for (const value of Array.from(values).sort((a, b) => a.localeCompare(b, 'zh'))) {
+      for (const value of Array.from(values).sort((a, b) =>
+        labelOf(a).localeCompare(labelOf(b), 'zh')
+      )) {
         const opt = document.createElement('option');
+        // 值仍是词表的 key（筛选比对用的是它），给人看的是显示名
         opt.value = value;
-        opt.textContent = value;
+        opt.textContent = labelOf(value);
         el.append(opt);
       }
       el.value = values.has(keep) ? keep : '';
     };
 
-    refill(categoryEl, categories, '全部分类');
-    refill(tagEl, tags, '全部标签');
+    // 认不出来的原样显示：手改过 md 的文章可能带着未登记的值，
+    // 那时该让人看见它、而不是显示成空白
+    const termLabel = (book: Record<string, { zh: string }>, value: string) =>
+      value in book ? book[value].zh : value;
+
+    refill(categoryEl, categories, '全部分类', (v) => termLabel(CATEGORIES, v));
+    refill(tagEl, tags, '全部标签', (v) => termLabel(TAGS, v));
   }
 
   const visible = (): PostMeta[] => {
@@ -331,7 +345,9 @@ export function initPostList(
       if (item.category) {
         const cat = document.createElement('span');
         cat.className = 'pcard__cat';
-        cat.textContent = item.category;
+        // 列表里显示中文名（存的是 key）；未登记的原样露出，别让人以为是空
+        cat.textContent =
+          item.category in CATEGORIES ? CATEGORIES[item.category].zh : item.category;
         foot.append(cat);
       }
       if (item.draft) {

@@ -2,7 +2,7 @@
 import PostList from './PostList.astro';
 import PostGroupList from './PostGroupList.astro';
 import { browseTabs, type BrowseTab } from '../lib/browse';
-import { categoryHref, groupByTerms, groupByYear, postsOf, tagHref } from '../lib/posts';
+import { categoryGroups, groupByYear, postsOf, tagGroups } from '../lib/posts';
 import { useTranslations, type Locale } from '../i18n/ui';
 import { profile } from '../data/profile';
 
@@ -25,17 +25,11 @@ const yearGroups = groupByYear(posts).map((group) => ({
   name: String(group.year),
   posts: group.posts,
 }));
-// 分组标题保留旧版词云的落地页：分类 / 标签能点进去看单独一页
-const categoryGroups = groupByTerms(
-  posts,
-  (post) => [post.data.category],
-  (name) => categoryHref(locale, name)
-);
-const tagGroups = groupByTerms(
-  posts,
-  (post) => post.data.tags,
-  (name) => tagHref(locale, name)
-);
+// 分组标题保留旧版词云的落地页：分类 / 标签能点进去看单独一页。
+// 分类按**词表的 order** 排、含 0 篇的（骨架要先于文章看得见）；
+// 标签按篇数排、只列文章里真正用到的。
+const categories = categoryGroups(locale, posts);
+const tagTerms = tagGroups(locale, posts);
 ---
 
 <div class="post-panels" data-title-id={titleId} data-icon-id={iconId}>
@@ -88,7 +82,7 @@ const tagGroups = groupByTerms(
     data-src={active === 'categories' ? undefined : tabs.find((tab) => tab.id === 'categories')?.href}
     hidden={active !== 'categories'}
   >
-    {active === 'categories' && <PostGroupList groups={categoryGroups} locale={locale} />}
+    {active === 'categories' && <PostGroupList groups={categories} locale={locale} />}
   </div>
 
   <div
@@ -97,7 +91,7 @@ const tagGroups = groupByTerms(
     data-src={active === 'tags' ? undefined : tabs.find((tab) => tab.id === 'tags')?.href}
     hidden={active !== 'tags'}
   >
-    {active === 'tags' && <PostGroupList groups={tagGroups} locale={locale} prefix="#" />}
+    {active === 'tags' && <PostGroupList groups={tagTerms} locale={locale} prefix="#" />}
   </div>
 </div>
 

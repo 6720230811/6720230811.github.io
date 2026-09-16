@@ -2,6 +2,7 @@
 import '../styles/pet.css';
 import { characters, pet } from '../data/pet';
 import { href, postHref, postsOf } from '../lib/posts';
+import { tagLabel } from '../lib/taxonomy';
 import { useTranslations, type Locale } from '../i18n/ui';
 import type { SiteDoc } from '../lib/pet/chat';
 
@@ -98,7 +99,9 @@ const docs: SiteDoc[] = [
   ...posts.slice(0, 40).map((post) => ({
     title: post.data.title,
     url: postHref(locale, post.slug),
-    tags: post.data.tags,
+    // 检索用**显示名**而不是词表的 key：访客问的是「组网」，
+    // 拿 `networking` 去匹配永远对不上（这里不是展示，但仍然是对人说话）
+    tags: post.data.tags.map((tag) => tagLabel(locale, tag)),
   })),
   { title: t('nav.home'), url: href(locale, '/'), tags: ['首页', 'home'] },
   { title: t('nav.blog'), url: href(locale, 'blog'), tags: ['博客', 'blog', '文章'] },

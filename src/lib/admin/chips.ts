@@ -2,8 +2,11 @@
  * 标签胶囊输入。
  *
  * 逗号分隔的纯文本框有两个毛病：看不出一个标签从哪到哪，删掉中间那个很容易删错。
- * 胶囊把每个标签变成一个可点的整体，回车 / 逗号 / 空格都成标签，
- * 聚焦时下拉历史标签（写过的标签存在 localStorage 里），点一下就加。
+ * 胶囊把每个标签变成一个可点的整体，回车 / 逗号 / 空格都成标签，点一下就加。
+ *
+ * 候选来自两处，**词表在前**（`opts.vocab`），localStorage 里的历史在后 ——
+ * 历史记的是「你打过什么」，词表记的是「什么是合法的」。
+ * 输入还会过一层归一化（`opts.normalize`）：写「前端」也能存成登记的 `frontend`。
  */
 
 const HISTORY_KEY = 'admin_tag_history';
@@ -53,10 +56,20 @@ export function initChips(opts: {
   suggest?: HTMLElement | null;
   /** 历史记录的 localStorage key；传 null 表示不记历史 */
   historyKey?: string | null;
+  /**
+   * 合法词表（如标签的词表 key）。候选**优先从这里来**：
+   * 历史记的是「你打过什么」，词表记的是「什么是对的」——
+   * 换台机器历史就没了，而历史里可能存着拼错的词，照着点会把错词再抄一遍。
+   */
+  vocab?: readonly string[];
+  /** 输入归一化：把旧名 / 异名换成登记的 key（「前端」→ frontend）。返回原值表示不认识 */
+  normalize?: (raw: string) => string;
   onChange: () => void;
 }): Chips {
   const { box, input, suggest, onChange } = opts;
   const historyKey = opts.historyKey === undefined ? HISTORY_KEY : opts.historyKey;
+  const vocab = opts.vocab ?? [];
+  const normalize = opts.normalize ?? ((raw: string) => raw);
   let tags: string[] = [];
 
   const read = () => (historyKey ? readHistory(historyKey) : []);
@@ -87,7 +100,9 @@ export function initChips(opts: {
   }
 
   function commit(raw: string): boolean {
-    const value = raw.trim().replace(/[,，;；]+$/, '');
+    // 先归一化再落袋：写「前端」也能存成登记的 `frontend`，
+    // 否则手写的旧名会一路进到 frontmatter，构建时被拦下来
+    const value = normalize(raw.trim().replace(/[,，;；]+$/, ''));
     if (!value) return false;
     // 同名不重复加（忽略大小写），顺手把光标留在输入框里继续输
     if (tags.some((t) => t.toLowerCase() === value.toLowerCase())) return false;
@@ -112,10 +127,19 @@ export function initChips(opts: {
   function candidates(): string[] {
     const key = input.value.trim().toLowerCase();
     const used = new Set(tags.map((t) => t.toLowerCase()));
-    return read()
-      .filter((t) => !used.has(t.toLowerCase()))
-      .filter((t) => !key || t.toLowerCase().includes(key))
-      .slice(0, 10);
+    // 词表在前、历史在后：历史里可能有拼错的，垫在后面不占前排
+    const pool = [...vocab, ...read()];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of pool) {
+      const lower = item.toLowerCase();
+      if (used.has(lower) || seen.has(lower)) continue;
+      if (key && !lower.includes(key)) continue;
+      seen.add(lower);
+      out.push(item);
+      if (out.length >= 10) break;
+    }
+    return out;
   }
 
   function showSuggest(): void {

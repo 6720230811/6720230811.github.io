@@ -2,8 +2,8 @@
 title: "10,000 个 Agent、88 小时：OpenAI 用 AI 攻下了 Navier-Stokes 千禧难题，随后炸出一场优先权之争 | UU AI Hub"
 description: "9 月 8 日，OpenAI 发布对 Navier-Stokes 存在性与光滑性问题的「解」——由内部的下一代模型带队，约 10,000 个并发 Agent 攻关 88 小时后得到结论，再用 17 小时完成 Lean 4 形式化验证。"
 date: 2026-09-11
-category: "新闻"
-tags: []
+category: ai
+tags: [agent, openai]
 source: "https://www.uuaihub.com/blog/openai-navier-stokes-millennium-2026"
 ---
 

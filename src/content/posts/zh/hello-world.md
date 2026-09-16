@@ -2,8 +2,8 @@
 title: 开博第一篇
 description: 这个站点从单页简历改成了博客 + 关于我的结构，记录一下为什么改、改成了什么样。
 date: 2026-08-28
-category: 随笔
-tags: [随笔, 建站]
+category: notes
+tags: [site]
 cover: /illustrations/blog-hello-world.webp
 ---
 
@@ -41,10 +41,12 @@ src/content/posts/
 title: 标题
 description: 一句话摘要，会显示在列表页和搜索结果里
 date: 2026-08-28
-category: 分类
-tags: [标签1, 标签2]
+category: notes     # 分类必须登记在 src/data/taxonomy.ts 的词表里
+tags: [site]        # 标签也要登记；写错构建会红，并提示最接近的词
 ---
 ```
+
+分类与标签写的是**词表里的 key**（`src/data/taxonomy.ts`）：分类受控、少而稳（论文笔记 / 智能体与 AI / 技术与工具 / 随笔），标签随手加但要登记一行。写错了构建会红，并告诉你是不是想写某个已登记的词。
 
 > 文件名建议用英文。URL 里的中文会被转成乱码一样的转义串，不好看也不好记。
 

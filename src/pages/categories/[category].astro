@@ -2,34 +2,74 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Section from '../../components/Section.astro';
 import PostList from '../../components/PostList.astro';
+import PostRedirect from '../../components/PostRedirect.astro';
 import { profile } from '../../data/profile';
-import { postsOf } from '../../lib/posts';
-import { toLocale, useTranslations } from '../../i18n/ui';
+import { href, postsOf } from '../../lib/posts';
+import { categoryLabel, legacyTermRoutes, orderedCategories } from '../../lib/taxonomy';
+import { toLocale, useTranslations, type Locale } from '../../i18n/ui';
 
-export async function getStaticPaths() {
-  const locale = toLocale('zh');
-  const posts = await postsOf(locale);
-  const names = [...new Set(posts.map((post) => post.data.category))].sort((a, b) =>
-    a.localeCompare(b)
-  );
-
-  return names.map((category) => ({
-    params: { category },
-    props: { category, locale },
-  }));
+interface Props {
+  locale: Locale;
+  /** 词表里的分类 key（真页面才有） */
+  key?: string;
+  /** 有值 = 这一页是旧地址的跳转页，值是新地址（词条页根之下的路径，如 categories/tech） */
+  redirect?: string;
 }
 
-const { category, locale } = Astro.props;
+/**
+ * 两类页面共用这一条路由：
+ * · 词表里**每一个**分类一页（含 0 篇的）—— 分类先于文章存在，地址该在
+ * · 迁移前的旧地址（`/categories/技术/`）各落地一个跳转页
+ */
+export async function getStaticPaths() {
+  const locale = toLocale('zh');
+
+  const real = Object.keys(orderedCategories()).map((key) => ({
+    params: { category: key },
+    props: { locale, key },
+  }));
+
+  const legacy = legacyTermRoutes(locale, 'categories').map(({ from, to }) => ({
+    params: { category: from },
+    props: { locale, redirect: to },
+  }));
+
+  return [...real, ...legacy];
+}
+
+const { locale, key = '', redirect } = Astro.props;
 const t = useTranslations(locale);
 const p = profile[locale];
-const posts = (await postsOf(locale)).filter((post) => post.data.category === category);
 
-const title = `${t('category.label')}：${category} · ${p.name}`;
+const label = redirect ? '' : categoryLabel(locale, key);
+const posts = redirect ? [] : (await postsOf(locale)).filter((post) => post.data.category === key);
+
+const title = `${t('category.label')}：${label} · ${p.name}`;
 ---
 
-<BaseLayout profile={p} locale={locale} title={title} description={title} rail>
-  <Section title={`${t('category.label')}：${category}`} icon="📚">
-    <p class="list-summary">{posts.length} {t('archive.count')}</p>
-    <PostList posts={posts} locale={locale} />
-  </Section>
-</BaseLayout>
+{
+  redirect ? (
+    <PostRedirect
+      title={`${t('category.label')} · ${p.name}`}
+      href={href(locale, redirect)}
+      locale={locale}
+    />
+  ) : (
+    <BaseLayout profile={p} locale={locale} title={title} description={title} rail>
+      <Section title={`${t('category.label')}：${label}`} icon="📚">
+        {/* 空分类不报「0 篇」：下面那句话已经说清了，两句都在说「没有」是废话。
+            分类可以是空的：它是信息架构，先于文章存在，给一句话别让人以为页面坏了。 */}
+        {posts.length === 0 ? (
+          <p class="empty-hint">{t('category.empty')}</p>
+        ) : (
+          <>
+            <p class="list-summary">
+              {posts.length} {t('archive.count')}
+            </p>
+            <PostList posts={posts} locale={locale} />
+          </>
+        )}
+      </Section>
+    </BaseLayout>
+  )
+}

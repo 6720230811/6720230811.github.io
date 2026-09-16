@@ -2,8 +2,8 @@
 title: "AI Agent(智能体) 教程 | 菜鸟教程"
 description: "AI Agent(智能体) 教程 AI Agent（Artificial Intelligence Agent） 称为智能体，本质是自动执行任务的程序，核心在于让模型不只回答问题，而是按步骤完成动作。"
 date: 2026-09-10
-category: "agent"
-tags: ["AI Agent(智能体) 教程"]
+category: ai
+tags: [agent]
 source: "https://www.runoob.com/ai-agent/ai-agent-tutorial.html"
 ---
 

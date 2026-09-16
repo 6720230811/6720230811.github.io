@@ -3,6 +3,7 @@ import type { MarkdownHeading } from 'astro';
 import BaseLayout from './BaseLayout.astro';
 import type { Post } from '../lib/posts';
 import { categoryHref, formatDate, postHref, readingMinutes, tagHref } from '../lib/posts';
+import { categoryLabel, tagLabel } from '../lib/taxonomy';
 import { useTranslations, type Locale } from '../i18n/ui';
 import type { Profile } from '../data/profile';
 import { liftedImageCss, resolveCover } from '../lib/cover';
@@ -55,7 +56,8 @@ const hideLiftedCss = liftedImageCss(cover);
             </time>
           )
         }
-        <a href={categoryHref(locale, category)}>{category}</a>
+        {/* 分类与标签存的都是**词表的 key**（ASCII），给人看的是按语言取的显示名 */}
+        <a href={categoryHref(locale, category)}>{categoryLabel(locale, category)}</a>
         <span>{readingMinutes(entry)} {t('post.minRead')}</span>
         {
           /* 转载/摘录：把原文摆出来，读者一眼知道这是摘录而不是原创 */
@@ -71,7 +73,7 @@ const hideLiftedCss = liftedImageCss(cover);
           <div class="tag-list">
             {tags.map((tag) => (
               <a class="tag" href={tagHref(locale, tag)}>
-                #{tag}
+                #{tagLabel(locale, tag)}
               </a>
             ))}
           </div>

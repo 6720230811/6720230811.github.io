@@ -2,8 +2,8 @@
 title: Three Things That Bit Me Building an Astro Blog
 description: Content collection ids, dynamic routes under i18n, and light/dark code block themes — the three things that actually cost me time.
 date: 2026-09-01
-category: Tech
-tags: [Astro, frontend, meta]
+category: tech
+tags: [astro, frontend, site]
 cover: /illustrations/blog-astro-notes.webp
 ---
 

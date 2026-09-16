@@ -3,6 +3,7 @@ import type { Locale } from '../i18n/ui';
 import { useTranslations } from '../i18n/ui';
 import type { Profile } from '../data/profile';
 import { postsOf, postHref, readingMinutes } from '../lib/posts';
+import { categoryLabel } from '../lib/taxonomy';
 import { resolveAvatar } from '../lib/avatar';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 
@@ -62,7 +63,9 @@ for (const post of posts) {
     title: post.data.title,
     href: postHref(locale, post.slug),
     minutes: readingMinutes(post),
-    category: post.data.category,
+    // 存显示名：这一栏的 category 只用来出字（tooltip 与日格说明），
+    // 从不参与比对，所以在这里就地取显示名比每处调用再转一次干净
+    category: categoryLabel(locale, post.data.category),
   };
   const list = byDay.get(key);
   if (list) list.push(item);

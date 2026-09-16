@@ -162,6 +162,7 @@ const zh = {
   'tags.title': '标签',
   'tag.label': '标签',
   'category.label': '分类',
+  'category.empty': '这个分类下还没有文章。',
 
   // 友链
   'friends.title': '友链',
@@ -424,6 +425,7 @@ const en: Record<keyof typeof zh, string> = {
   'tags.title': 'Tags',
   'tag.label': 'Tag',
   'category.label': 'Category',
+  'category.empty': 'No posts in this category yet.',
 
   // 友链
   'friends.title': 'Friends',

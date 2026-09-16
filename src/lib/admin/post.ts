@@ -25,6 +25,7 @@ import { markDirty, markClean, isDirty } from './unsaved';
 import { validatePost, showIssues } from './validate';
 import { requireToken, flagTokenProblem } from './token';
 import { initChips, rememberTags, type Chips } from './chips';
+import { CATEGORIES, TAGS, TAG_KEYS } from '../../data/taxonomy';
 import { quickSlug, suggestSlug } from './slugify';
 import { initCoverDrop } from './coverdrop';
 import { createAutosave } from './autosave';
@@ -61,7 +62,7 @@ const deleteCover = $<HTMLInputElement>('delete-cover');
 const deleteCoverRow = $('delete-cover-row');
 const deleteCoverName = $('delete-cover-name');
 const duplicateBtn = $<HTMLButtonElement>('post-duplicate');
-const categoryInput = $<HTMLInputElement>('post-category');
+const categoryInput = $<HTMLSelectElement>('post-category');
 const tagBox = $('tag-chips');
 const tagInput = $<HTMLInputElement>('tag-input');
 const tagSuggest = $('tag-suggest');
@@ -118,7 +119,8 @@ function collectPost(): PostFrontmatter {
     date: dateInput.value || today(),
     // 留空就不写进 frontmatter：没有 updated 时列表里显示的是发布日期
     updated: updatedInput.value.trim() || undefined,
-    category: categoryInput.value.trim(),
+    // 分类存的是**词表的 key**（下拉的值就是它），所以不用再 trim
+    category: categoryInput.value,
     tags: chips?.get() ?? [],
     // 留空就不写进 frontmatter：文章页会自动退回正文第一张图
     cover: coverInput.value.trim() || undefined,
@@ -164,6 +166,54 @@ function paintPublishLabel(): void {
   if (btn) btn.textContent = draftInput.checked ? '存入仓库（草稿）' : '发布到 GitHub';
 }
 
+/**
+ * 标签的归一化表：登记过的 key 与它的旧名都指向 key。
+ * 「前端」和 `frontend` 是同一个词 —— 迁移前它们各存一份，同一个意思长出两个页面。
+ */
+const TAG_LOOKUP = new Map<string, string>();
+for (const [key, term] of Object.entries(TAGS)) {
+  TAG_LOOKUP.set(key.toLowerCase(), key);
+  for (const alias of term.alias ?? []) TAG_LOOKUP.set(alias.toLowerCase(), key);
+}
+
+/**
+ * 把输入认到登记的标签上（写「前端」→ 存 `frontend`）；
+ * 不认识的词原样返回，交给发布前的校验去拦 —— 这里不悄悄丢掉用户打的字。
+ */
+function normalizeTag(raw: string): string {
+  const value = raw.trim();
+  return TAG_LOOKUP.get(value.toLowerCase()) ?? value;
+}
+
+/**
+ * 分类下拉的选项来自词表（src/data/taxonomy.ts）—— 分类是**受控**的：
+ * 它的 key 同时是 URL 段，而且中英两版共用同一个，随手写个「前端开发」
+ * 会各自长出一个页面（迁移前就是这样：`技术` / `Tech` 两套地址）。
+ *
+ * 每次都重建选项，是因为「未登记的值」跟着**这一篇**走：万一有人手改了 md 里的
+ * category，这里得把它显出来并让人改选，而不是让 select 静默落到空值 ——
+ * 那看起来像「分类丢了」，实际是自己被清掉了。
+ */
+function fillCategoryOptions(current: string): void {
+  categoryInput.textContent = '';
+
+  // 用 DOM 造选项而不是拼 innerHTML：current 可能来自仓库里的 md，不该当 HTML 解析
+  const add = (value: string, label: string) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    categoryInput.append(opt);
+  };
+
+  add('', '— 选一个 —');
+  for (const [key, term] of Object.entries(CATEGORIES).sort((a, b) => a[1].order - b[1].order)) {
+    add(key, `${term.zh}（${key}）`);
+  }
+  if (current && !(current in CATEGORIES)) add(current, `${current}（未登记）`);
+
+  categoryInput.value = current;
+}
+
 function fillPost(data: PostFrontmatter, body: string): void {
   touched = false;
   markClean();
@@ -172,7 +222,8 @@ function fillPost(data: PostFrontmatter, body: string): void {
   descInput.value = data.description;
   dateInput.value = data.date;
   updatedInput.value = data.updated ?? '';
-  categoryInput.value = data.category;
+  // 先铺选项再设值：反过来的话 select.value 会因「没有这个选项」被静默清空
+  fillCategoryOptions(data.category);
   chips?.set(data.tags);
   aliasChips?.set(data.aliases ?? []);
   coverInput.value = data.cover ?? '';
@@ -533,6 +584,11 @@ export function initPost(): void {
     box: tagBox,
     input: tagInput,
     suggest: tagSuggest,
+    // 候选从**词表**来，不是只从 localStorage 的历史来：
+    // 历史记的是「你打过什么」（换台机器就没了，还可能存着拼错的词），
+    // 词表记的是「什么是合法的」。历史依然排在候选后面，当不了前排。
+    vocab: TAG_KEYS,
+    normalize: normalizeTag,
     onChange: () => {
       touched = true;
       markDirty();

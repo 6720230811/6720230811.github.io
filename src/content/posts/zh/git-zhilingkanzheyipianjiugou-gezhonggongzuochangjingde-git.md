@@ -2,8 +2,8 @@
 title: "Git 指令看这一篇就够 —— 各种工作场景的 git 指令大全 - jamiechoo - 博客园"
 description: "本文总结了日常工作中常用的 git 指令，涵盖了绝大部分的使用场景，让你能够轻松应对各种 git 协作流程。 理解 git 工作区域 根据 git 的几个文件存储区域，git 的工作区域可以划分为 4 个： 工作区：你在本地编辑器里改动的代码，所见即所得，里面的内容都是最新的 暂存区：通过 git"
 date: 2026-09-11
-category: "技术"
-tags: ["git"]
+category: tech
+tags: [git]
 source: "https://www.cnblogs.com/jamiechoo/articles/18408791"
 ---
 

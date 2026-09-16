@@ -1,8 +1,9 @@
 # 分类与标签：一份受控词表（分类受控 + 标签自由归一化）
 
 日期：2026-09-16
-状态：**设计已定（方案 C）**。P1 的第一刀（画廊题材 `theme`）**已实现**，进度与验证见 §十；
-文章的分类 / 标签仍是待做。本文件写「要做成什么样」，不含实现细节的最终代码。
+状态：**设计已定（方案 C）**。三件事的进度不同：P1 的第一刀（画廊题材 `theme`）**已实现**
+（见 §十一）；blog 的**分类骨架（四类）已定**（见 §十）；文章 frontmatter 的迁移、后台 P2/P3
+仍是待做。本文件写「要做成什么样」，不含实现细节的最终代码。
 
 相关代码：`src/content.config.ts`、`src/lib/posts.ts`、`src/pages/{categories,tags}/**`、
 `src/pages/en/{categories,tags}/**`、`src/data/gallery.{ts,schema.ts}`、
@@ -62,8 +63,20 @@
 分类改一次要重想整个站的结构，值得受控，也值得给它描述、图标、排序；
 标签是随想随加的，受控只会让写文章时被词表卡住。
 
-**双语共用一套词表**（key + zh/en 两个显示名）。理由：上表 5 对已漂 4 对；
+**同一个 kind 内，双语共用一套 key**（key + zh/en 两个显示名）。理由：上表 5 对已漂 4 对；
 共用之后「中英对不上」在结构上不可能发生 —— 同一篇文章的两个语言版本引用同一个 key。
+
+**但三种 kind 是三份彼此独立的数据，不是一份**（2026-09-16 修正）。原方案写的是
+「画廊的 `theme` 就是分类，改用同一个 key」—— 看过真实数据后，这句站不住：
+
+| kind | 回答的问题 | 例 |
+|---|---|---|
+| 分类 `CATEGORIES` | **我写的是什么领域** | `paper` 论文笔记、`tech` 技术与工具 |
+| 标签 `TAGS` | 这篇具体讲什么 | `docker`、`astro`、`networking` |
+| 画廊题材 `THEMES` | **作品拍的是什么** | `city` 城市、`sea` 海 |
+
+三者维度不同，硬并成一份会互相污染：`city` 不是一种写作领域，`paper` 也不是一种拍摄题材。
+共用的是**同一套机制**（key + zh/en + 校验 + 旧地址），不是同一份词条。
 
 ## 三、数据模型
 
@@ -90,16 +103,29 @@ export const THEME_KEYS = Object.keys(THEMES);
 export const THEME_COLOR: Record<string, string> = /* … */;
 ```
 
-计划中的分类与标签块（迁文章时加进同一个文件）：
+计划中的分类与标签块（迁文章时加进同一个文件）。**分类骨架的理由与迁移映射见 §十**：
 
 ```ts
 export const CATEGORIES: CategoryTerm[] = [
-  { key: 'tech', zh: '技术', en: 'Tech', order: 10, icon: '🛠',
-    desc: { zh: '工程与工具', en: 'Engineering and tooling' } },
+  { key: 'paper', zh: '论文笔记',    en: 'Paper Notes', order: 10, icon: '📄',
+    desc: { zh: '论文阅读、方法梳理、复现记录', en: 'Paper reading, method notes, reproductions' } },
+  { key: 'ai',    zh: '智能体与 AI', en: 'AI & Agents', order: 20, icon: '🤖',
+    desc: { zh: 'Agent 原理与工程、模型能力、行业事件', en: 'Agents, model capability, industry events' } },
+  { key: 'tech',  zh: '技术与工具',  en: 'Tech & Tools', order: 30, icon: '🛠',
+    desc: { zh: '命令行、容器、组网、框架踩坑', en: 'CLI, containers, networking, framework pitfalls' } },
+  { key: 'notes', zh: '随笔',       en: 'Notes', order: 40, icon: '✎',
+    desc: { zh: '站务、生活、杂记', en: 'Site log, life, miscellany' } },
 ];
 export const TAGS: Record<string, TagTerm> = {
-  astro:    { zh: 'Astro', en: 'Astro', alias: ['Astro.js', 'astrojs'], scope: ['post', 'gallery'] },
-  frontend: { zh: '前端', en: 'frontend', scope: ['post'] },
+  astro:      { zh: 'Astro',      en: 'Astro',      alias: ['Astro.js', 'astrojs'], scope: ['post', 'gallery'] },
+  frontend:   { zh: '前端',       en: 'Frontend',   scope: ['post'] },
+  site:       { zh: '建站',       en: 'Site',       scope: ['post'] },
+  networking: { zh: '组网',       en: 'Networking', alias: ['vpn'],  scope: ['post'] },
+  git:        { zh: 'Git',        en: 'Git',        scope: ['post'] },
+  docker:     { zh: 'Docker',     en: 'Docker',     scope: ['post'] },
+  tailscale:  { zh: 'Tailscale',  en: 'Tailscale',  scope: ['post'] },
+  agent:      { zh: 'Agent',      en: 'Agent',      scope: ['post'] },
+  openai:     { zh: 'OpenAI',     en: 'OpenAI',     scope: ['post'] },
 };
 ```
 
@@ -166,7 +192,7 @@ function legacyTermPaths(locale: Locale, kind: Kind): { from: string; key: strin
 | `alias` 指向不存在的词条 / 两个词条重复 | **抛错** | 归一化会把文章悄悄归错类 |
 | `scope` 越界（文章的 tags 里出现 `scope:["gallery"]` 的词） | **抛错** | 否则「画廊专用词」会污染文章标签云 |
 | 词条登记了但**零引用** | **警告**，不抛错 | 预登记是正常的；删一篇文章不该让构建挂掉。后台给「未使用」清单 |
-| 分类总数 > 15，或出现单篇分类 | **警告** | 长尾分类是「分类退化成标签」的早期症状 |
+| 分类总数 > 5，或出现单篇分类 | **警告** | 上限 2026-09-16 定为 **4 个 + 1 个增长位**（§十）；超了就该往标签走 —— 长尾分类是「分类退化成标签」的早期症状 |
 | 画廊 `theme` 不在 `THEME_COLOR` 的键集里 | **警告** | 3D 展墙会静默退回默认配色，肉眼很难发现 |
 
 ## 五、URL 与迁移
@@ -213,7 +239,7 @@ function legacyTermPaths(locale: Locale, kind: Kind): { from: string; key: strin
 
 | 期 | 内容 | 依赖 | 风险 |
 |---|---|---|---|
-| **P1 数据契约** | `data/taxonomy.ts` + `lib/taxonomy.ts` + 构建期校验 + 引用改 key + 旧地址跳转页 + 迁移现有 14 个词条（**画廊 `theme` 那一刀已做**，见 §十） | 无 | 中（动 URL） |
+| **P1 数据契约** | `data/taxonomy.ts` + `lib/taxonomy.ts` + 构建期校验 + 引用改 key + 旧地址跳转页 + 迁移现有词条（分类骨架见 §十；**画廊 `theme` 那一刀已做**，见 §十一） | 无 | 中（动 URL） |
 | **P2 后台输入** | 分类 select、标签候选从词表、未登记词就地登记 | P1 | 低 |
 | **P3 词表管理界面** | 词条表、改名、排序、合并、删除、零引用清单 | P1 | 低 |
 
@@ -231,13 +257,15 @@ function legacyTermPaths(locale: Locale, kind: Kind): { from: string; key: strin
 3. **旧地址**：`dist/categories/技术/index.html` 存在，且其中 `url=` / `href=` 指向 `/categories/tech/`。
 4. **显示名**：产物里 `/categories/tech/` 的标题是「技术」而不是 `tech`；`/en/categories/tech/` 是 `Tech`。
 5. **双语对称**：同一 slug 的 zh / en 两篇，`category` 与 `tags` 的 **key 集合必须相等** ——
-   这是「共用词表」这条设计唯一值得写的断言（现在 5 对里 4 对不上）。
-6. **`THEME_COLOR` 对齐**：词表里 `scope:["gallery"]` 的主题 key ⊇ 3D 正在用的 theme 值。
+   这是「同一 kind 内双语共用一个 key」这条设计唯一值得写的断言（现在 5 对里 4 对不上）。
+6. **分类骨架落地**：产物里 `/categories/` 索引恰好 4 项，且顺序是 paper → ai → tech → notes
+   （即 `order` 生效）；`paper` 暂时 0 篇是**预期**，不是 bug。
+7. **`THEME_COLOR` 对齐**：词表里 `scope:["gallery"]` 的主题 key ⊇ 3D 正在用的 theme 值。
 
 e2e（`web-e2e-harness` 那套，独立端口）：
 
-7. 文章页的分类/标签芯片链接指向 `/categories/<key>/`、`/tags/<key>/`（不是百分号编码的旧地址）。
-8. 后台：分类是 `<select>` 且选项数 = 词表分类数；打一个未登记的词 → 出现「新建并登记」；
+8. 文章页的分类/标签芯片链接指向 `/categories/<key>/`、`/tags/<key>/`（不是百分号编码的旧地址）。
+9. 后台：分类是 `<select>` 且选项数 = 词表分类数；打一个未登记的词 → 出现「新建并登记」；
    点它后**词表文件真的多一条**（读仓库返回值断言，不能只看 toast）。
 
 ## 九、不做的事（非目标）
@@ -248,7 +276,82 @@ e2e（`web-e2e-harness` 那套，独立端口）：
 - 不把 `gallery.style.*`（形制）并进词表：它已有 i18n 显示名，且是 3D 几何体的固定枚举，
   属于「有显示名的枚举」，跟词表是两回事。
 
-## 十、实现进度
+## 十、blog 分类骨架（2026-09-16 定）
+
+### 10.1 四个分类
+
+| key | zh | en | 收什么 | **不收什么** | 现有落点 |
+|---|---|---|---|---|---|
+| `paper` | 论文笔记 | Paper Notes | 论文阅读、方法梳理、复现记录 | 关于论文的新闻报道 | —（新增位，暂空） |
+| `ai` | 智能体与 AI | AI & Agents | Agent 原理与工程、模型能力、行业事件与评论 | 自己写的论文笔记 | Agent 入门、Navier-Stokes |
+| `tech` | 技术与工具 | Tech & Tools | CLI／容器／组网、框架踩坑、工程实践 | — | Astro 踩坑 ×2、Git、Docker、Tailscale |
+| `notes` | 随笔 | Notes | 站务、生活、杂记 | 任何技术内容 | 开博第一篇 ×2 |
+
+**为什么是这四个** —— 是从 9 篇的真实成分里长出来的，不是拍脑袋：
+
+- 现有 9 条里 **5 篇是转载**（`source` 字段都有值）且集中在「命令 / 教程手册」，
+  这块必须有一个类接着，也就是 `tech`。
+- 作者明确会继续加**论文中看到的内容**，所以 `paper` 是预置位 —— 现在空着是对的。
+- 「建站与前端」被否掉：不会持续写前端，为 2 篇（还是同一内容的双语版）单开一类不值。
+
+**落点判定不靠领域、靠动作** —— 这是四个类不打架的关键：
+
+| 我正在做什么 | 落点 |
+|---|---|
+| 在读一篇论文 —— 不管它是什么领域 | `paper` |
+| 动手做 AI 的事，或评价一个 AI 事件 | `ai` |
+| 查工具、记命令、踩框架的坑 | `tech` |
+| 不是技术内容 | `notes` |
+
+于是 `ai` 与 `paper` 的边界是**来源**而不是**领域**：AI 论文的阅读笔记进 `paper`
+（它的形态是「读论文」），自己动手做的 Agent 工程与模型调用进 `ai`。
+不这样切的话，`ai` 与 `paper` 会因为「论文大多是 AI 方向」而互相抢食，最后总有一个永远是空的。
+
+**命名上三处是刻意的**：key 全 ASCII 好做 URL 段（`/categories/tech/`）；
+`tech` 叫「技术与工具」而不是「工具与命令」—— 因为 Astro 踩坑要进来，「命令」装不下它；
+用 `ai` 而不是 `agent` —— `agent` 是这两年的潮，`ai` 十年后还在。
+
+### 10.2 现有 9 条的迁移映射
+
+| 文章 | 旧 category | 新 category | 标签变化 |
+|---|---|---|---|
+| zh/en 开博第一篇 / Hello, Blog | `随笔` / `Notes` | `notes` | `随笔`/`notes` **删**（与分类重复）；`建站`/`meta` → `site` |
+| zh/en 用 Astro 搭博客踩到的几个坑 | `技术` / `Tech` | `tech` | `Astro` → `astro`；`前端`/`frontend` → `frontend`；`建站`/`meta` → `site` |
+| Git 指令看这一篇就够 | `技术` | `tech` | `git` → `git` |
+| Docker 常用命令大全 | `技术` | `tech` | `docker` → `docker` |
+| Tailscale 完全指南 | `tailscale` | `tech` | `vpn`、`组网` → `networking`（`vpn` 作 alias） |
+| AI Agent 教程｜菜鸟教程 | `agent` | `ai` | `AI Agent(智能体) 教程` → `agent` |
+| 10,000 个 Agent、88 小时… | `新闻` | `ai` | （无）→ `agent`、`openai` |
+
+三个旧分类 `agent` / `tailscale` / `新闻` **全部下沉为标签** —— 前两个本来就是软件名，
+第三个是体裁（「这是新闻」），两者都不该占着分类层。
+
+旧标签 13 个 → 归一后 **9 个 key**；重复表达同一件事的（`随笔` vs 分类 `notes`、
+`前端` vs `frontend`、`vpn` vs `组网`）合并，`建站`/`meta` 统一成 `site`。
+
+### 10.3 论文类文章的出处字段（可选，本轮一起定）
+
+`src/content.config.ts` 的 posts schema 加一个全可选字段：
+
+```ts
+paper: z.object({
+  arxiv: z.string().optional(),          // arXiv 号，如 2609.01234
+  venue: z.string().optional(),          // 会议 / 期刊，如 NeurIPS
+  year:  z.coerce.number().optional(),
+}).optional(),
+```
+
+现在加是**零成本**（`paper` 类本来就没有文章），将来想按年份排序、或做「读过的论文」
+列表页时，不用回头改已有文章的 frontmatter。约定：只在 `category: paper` 时使用。
+
+### 10.4 约束
+
+- 分类数量上限 **5**（现 4 个 + 1 个增长位）。超了就往标签走 —— 这正是 `agent` / `tailscale` 的来历。
+- **「转载」不设分类**：`source` 有值就是转载，列表页给个徽章即可，数据已经在了。
+  体裁（原创 / 手册 / 资讯）将来真要独立，也是新开一个受控字段，不是塞进这里。
+- 中英同一篇的两个语言版本必须落在**同一个 key**（§八 第 5 条断言）。
+
+## 十一、实现进度
 
 ### 已做：第一刀 = 画廊题材 `theme`（2026-09-16）
 
@@ -286,11 +389,76 @@ e2e（`web-e2e-harness` 那套，独立端口）：
 **没验的**：后台那个题材下拉没有浏览器端验证 —— 仓里没有 admin 的 e2e 脚手架。
 产物静态核对了：`<select id="gal-theme">` 在，admin bundle 里带上了词表 chunk。
 
+### 已做：第二刀 = 文章分类 / 标签（2026-09-16）
+
+第一刀（画廊 `theme`）没动 URL，这一刀**动了 URL** —— 所以多出「旧地址怎么办」这一半。
+分类与标签从「值本身就是显示名、也是 URL」改成**引用词表的 ASCII key**：
+`category: 技术` → `category: tech`，地址随之从 `/categories/技术/` 变成 `/categories/tech/`。
+好处是显示名可以随便改（改「技术与工具」不动地址），且中英共用同一个 key（不再有 `技术` / `Tech` 两套地址）。
+
+| 文件 | 改了什么 |
+|---|---|
+| `src/data/taxonomy.ts` | 补 `CATEGORIES`（4：paper / ai / tech / notes，带 `order` 与一句话 `desc`）+ `TAGS`（8：astro / frontend / site / git / docker / networking / agent / openai，`alias` 存旧中文/大写/带括号写法）+ `LEGACY_TERM_ROUTES`（13 条旧地址→新地址，**手维护**，推不出来） |
+| `src/lib/taxonomy.ts` | 词表结构的 zod 校验 + 别名撞车守卫 + `order` 不许重复 + `categoryLabel()` / `tagLabel()`（未登记就抛）+ `orderedCategories()`（按 order 排，含 0 篇的）+ `assertCategory()` / `assertTags()`（能认出旧别名，报错给出「是不是想写 X」）+ `legacyTermRoutes()` |
+| `src/lib/posts.ts` | `postsOf()` 里挂上 `assertCategory` / `assertTags` —— 所有文章视图都过这里，key 写错就是构建红；删掉 `collectTags` / `collectCategories` / `groupByTerms`，换成 `categoryGroups()` / `tagGroups()` / `tagKeysIn()` |
+| `src/pages/categories/[category].astro` + `en/…` | 一条路由出两类页：词表里**每个**分类一页（含 0 篇的 paper）+ 旧地址的跳转页 |
+| `src/pages/tags/[tag].astro` + `en/…` | 同上；但标签页**只给文章里真正用到的 key** 出页（标签是检索索引，不是信息架构） |
+| `src/layouts/PostLayout.astro`、`src/components/PostPanels.astro` | 链接指 key、文本取显示名 |
+| `src/components/admin/AdminInspector.astro` + `src/lib/admin/post.ts` + `chips.ts` + `validate.ts` | 后台分类从自由文本框改成词表下拉；标签输入框拿到 `vocab` 词表 + `normalize` 归一（写「前端」自动落 `frontend`）；校验层拦未登记的 key |
+| `src/i18n/ui.ts`、`src/content.config.ts` | 空分类那句话（中英各一）；`category` / `tags` 两字段的注释写明存的是 key |
+| 9 篇 frontmatter + 2 篇正文示例 | 按 §10.2 的映射迁移；`hello-world` 正文里那段 frontmatter 示例还在教旧写法，一并改掉 |
+
+**这一刀在显示名上抓出 4 处漏改**（`PostCard` / `Rail` 的 tooltip / `Pet` 的检索 / 后台列表），
+症状都是产品里直接印裸 key（`tech`、`#networking`）。这四处**构建不会红、断言也不会响**
+—— 它们都算得出「变量写对了」，只是写错了变量。是靠**扫产物 HTML**发现的，
+所以 e2e 里专门有一条全站扫描守着它。
+
+空分类还顺手去了一句废话：原来「0 篇文章」与「这个分类下还没有文章。」两句话都在说「没有」，
+现在只有后者（非空时才报篇数）。
+
+#### 旧地址：为什么只保留 13 条
+
+迁移前的旧地址共 20 个，但有 **7 个与现有 key 只差大小写**（`/en/categories/Tech/`、`/tags/Astro/` …）。
+在 Windows / macOS 这种大小写不敏感的文件系统上，`tags/Astro/` 与 `tags/astro/` 是**同一个目录**
+—— 跳转页会顶掉真页面，而它跳的目标就是它自己，变成自指死循环（比 404 更糟，浏览器会空转）。
+所以这 7 条**刻意放弃**，由加载期守卫 + e2e 两侧守着「别哪天又被加回来」。
+
+守卫在这一轮是真的拦下了东西：第一版 20 条写下去，探针立刻红在 `docker` 上
+（`docker` 既是旧地址、又是现有 tag key，同样撞车）。表从 20 条收敛到 13 条就是这么来的。
+
+#### 验证（当天，逐条都是跑出来的）
+
+| 验的是什么 | 怎么验的 | 结果 |
+|---|---|---|
+| 词表本身（显示名 / 别名 / order / 旧地址表 / 真实文章落点） | esbuild 打包 `probe-taxonomy.mjs` 跑断言 | **60 / 60 通过** |
+| 构建与产物 | `mv dist` 走 → `astro build` → 单独跑 `pagefind` | exit 0 / **83 个 HTML**（70 真页 + 13 跳转页）/ 构建日志无词表警告 |
+| 13 条旧地址逐条跳对 | 从产物里读 `meta refresh` 目标，与词表里现读的期望比对 | 13 / 13 一致（含跨类目 `/tags/随笔/` → `/categories/notes/`） |
+| 全站没有裸 key | 扫 82 个非 admin HTML，抓「胶囊 / 标签链接」里的文本 | 0 命中 |
+| 真实点击 + 跨语言 + 落地 | `terms.mjs` e2e（本地 serve + 无头 Chrome + CDP 真点击） | **38 / 38 通过** |
+| 类型 | `astro check` | 仍是 3 个 error，**全部是既有问题**（§上一刀列过），本轮一个没新增 |
+
+e2e 里几条**落在机制上**的判据（避开「断言只给得出『没打开』」这类假绿）：
+
+- 「换页发生了」用轮询 `location.pathname` 判，**不用** `Page.navigate` —— 后者会整页刷新，绕过 View Transitions，测不出真实的点击路径
+- 「与 key 只差大小写的旧地址不存在」读**父目录的名字列表**精确比对，**不用** `fs.existsSync` —— 它在 NTFS 上大小写不敏感，会给出假阳性
+- 分类索引的顺序断言写的是「词表的 order」而不是篇数 —— 顺序错了和篇数错了是两回事
+
+**没验的**：后台那两处（分类下拉、标签归一）仍然只有产物静态核对，仓里没有 admin 的 e2e 脚手架。
+
 ### 待做
 
-文章的 `CATEGORIES` / `TAGS` 块 + 引用改 key + 旧地址 301 + 后台 P2 / P3。
+- 后台 P2 / P3（编辑器里的词表联动、批量改词条的迁移工具）
+- §10.3 那个可选的 `paper` 出处字段（`arxiv` / `venue` / `year`）—— 现在加是零成本
+- **改 key 就要补旧地址**：`LEGACY_TERM_ROUTES` 是手维护的，它推不出来（只有迁移前的产物知道 `技术` 曾经是地址）
 
-**复跑方式**：探针脚本在隔壁 `D:/homepage/.pet-e2e-dual/probe-taxonomy.mjs`（23 条断言，
-其中一节直接驱动真实数据层），运行命令写在文件头注释里 —— 秒级，不需要整站构建。
-改动词表或 `gallery` 数据层之后跑一遍。
+**复跑方式**（两个脚本都在隔壁 `D:/homepage/.pet-e2e-dual/`）：
+
+- **词表探针** `probe-taxonomy.mjs`（60 条断言，其中一节直接驱动真实数据层）。
+  仓里没有测试框架，要先 esbuild 打包再跑，命令写在文件头注释里 —— 秒级，不需要整站构建。
+  ⚠️ esbuild 是原生 Win32 程序，**不认 Git Bash 的 `/d/...` 路径**，参数一律写 `D:/...`；
+  而 `--define:import.meta.env.BASE_URL` 那一段不能省，否则 `mediaUrl` 会在 Node 里炸掉。
+- **词条 e2e** `terms.mjs`（38 条，含无头浏览器真点击）。改成 `node terms.mjs` 即可；
+  它会自己起 `serve.mjs` 端 `dist/`，所以**要先构建**。
+
+改动词表、`gallery` 数据层、文章 frontmatter 之后，两个都跑一遍。
 

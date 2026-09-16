@@ -78,12 +78,18 @@ import { repo } from '../../data/admin';
     </div>
 
     <label class="field">
-      <span class="field__label">分类 Category</span>
-      <input id="post-category" class="input" type="text" spellcheck="false" placeholder="前端开发" />
+      <span class="field__label">
+        分类 Category
+        <span class="field__hint">受控，选项来自词表</span>
+      </span>
+      <select id="post-category" class="input"></select>
     </label>
 
     <div class="field">
-      <span class="field__label">标签 Tags</span>
+      <span class="field__label">
+        标签 Tags
+        <span class="field__hint">候选来自词表；写旧名会自动归一</span>
+      </span>
       <div class="chip-field">
         <div id="tag-chips" class="chip-field__chips" hidden></div>
         <input

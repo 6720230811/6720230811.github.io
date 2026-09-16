@@ -2,8 +2,8 @@
 title: "Tailscale 完全指南：零基础搭建属于你自己的私有网络（保姆级教程 2026） | UU AI Hub"
 description: "从安装到进阶，手把手教你用 Tailscale 搭建 WireGuard 私有网络——远程办公、NAS 访问、内网穿透一站式解决，免费支持 100 台设备"
 date: 2026-09-11
-category: "tailscale"
-tags: ["vpn", "组网"]
+category: tech
+tags: [networking]
 source: "https://www.uuaihub.com/blog/tailscale-complete-guide"
 ---
 
