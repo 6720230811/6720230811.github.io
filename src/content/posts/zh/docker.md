@@ -2,8 +2,8 @@
 title: "Docker常用命令大全 - 当下是吾 - 博客园"
 description: "1、帮助类启动命令 启动docker： systemctl start docker 停止docker： systemctl stop docker 重启docker： systemctl restart docker 查看docker状态： systemctl status docker 开机启动"
 date: 2026-09-12
-category: tech
-tags: [docker]
+category: "tech"
+tags: ["docker"]
 source: "https://www.cnblogs.com/caihongmin/p/18939767"
 ---
 
@@ -45,12 +45,7 @@ OPTIONS说明：
 ```
 各个选项说明:
 
-REPOSITORY：表示镜像的仓库源
-TAG：镜像的标签版本号
-IMAGE ID：镜像ID
-CREATED：镜像创建时间
-SIZE：镜像大小
-同一仓库源可以有多个 TAG版本，代表这个仓库源的不同个版本，我们使用 REPOSITORY:TAG 来定义不同的镜像。
+REPOSITORY：表示镜像的仓库源 TAG：镜像的标签版本号 IMAGE ID：镜像ID CREATED：镜像创建时间 SIZE：镜像大小同一仓库源可以有多个 TAG版本，代表这个仓库源的不同个版本，我们使用 REPOSITORY:TAG 来定义不同的镜像。
 如果你不指定一个镜像的版本标签，例如你只使用 ubuntu，docker 将默认使用 ubuntu:latest 镜像
 
 OPTIONS说明：
@@ -64,33 +59,7 @@ docker search [OPTIONS] 镜像名字
 ```
 
 ```
-[root@docker ~]# docker search mysql
-NAME                             DESCRIPTION                                     STARS     OFFICIAL   AUTOMATED
-mysql                            MySQL is a widely used, open-source relation…   12378     [OK]
-mariadb                          MariaDB Server is a high performing open sou…   4762      [OK]
-mysql/mysql-server               Optimized MySQL Server Docker images. Create…   917                  [OK]
-percona                          Percona Server is a fork of the MySQL relati…   572       [OK]
-phpmyadmin                       phpMyAdmin - A web interface for MySQL and M…   494       [OK]
-mysql/mysql-cluster              Experimental MySQL Cluster Docker images. Cr…   93
-centos/mysql-57-centos7          MySQL 5.7 SQL database server                   92
-bitnami/mysql                    Bitnami MySQL Docker Image                      68                   [OK]
-ubuntu/mysql                     MySQL open source fast, stable, multi-thread…   29
-circleci/mysql                   MySQL is a widely used, open-source relation…   25
-mysql/mysql-router               MySQL Router provides transparent routing be…   23
-centos/mysql-56-centos7          MySQL 5.6 SQL database server                   22
-google/mysql                     MySQL server for Google Compute Engine          21                   [OK]
-vmware/harbor-db                 Mysql container for Harbor                      10
-mysqlboy/docker-mydumper         docker-mydumper containerizes MySQL logical …   3
-mysqlboy/mydumper                mydumper for mysql logcial backups              3
-bitnami/mysqld-exporter                                                          2
-ibmcom/mysql-s390x               Docker image for mysql-s390x                    2
-mysql/mysql-operator             MySQL Operator for Kubernetes                   0
-ibmcom/tidb-ppc64le              TiDB is a distributed NewSQL database compat…   0
-mysqlboy/elasticsearch                                                           0
-mysqleatmydata/mysql-eatmydata                                                   0
-cimg/mysql                                                                       0
-mysql/ndb-operator               MySQL NDB Operator for Kubernetes               0
-mirantis/mysql
+[root@docker ~]# docker search mysql NAME                             DESCRIPTION                                     STARS     OFFICIAL   AUTOMATED mysql                            MySQL is a widely used, open-source relation…   12378     [OK] mariadb                          MariaDB Server is a high performing open sou…   4762      [OK] mysql/mysql-server               Optimized MySQL Server Docker images. Create…   917                  [OK] percona                          Percona Server is a fork of the MySQL relati…   572       [OK] phpmyadmin                       phpMyAdmin - A web interface for MySQL and M…   494       [OK] mysql/mysql-cluster              Experimental MySQL Cluster Docker images. Cr…   93 centos/mysql-57-centos7          MySQL 5.7 SQL database server                   92 bitnami/mysql                    Bitnami MySQL Docker Image                      68                   [OK] ubuntu/mysql                     MySQL open source fast, stable, multi-thread…   29 circleci/mysql                   MySQL is a widely used, open-source relation…   25 mysql/mysql-router               MySQL Router provides transparent routing be…   23 centos/mysql-56-centos7          MySQL 5.6 SQL database server                   22 google/mysql                     MySQL server for Google Compute Engine          21                   [OK] vmware/harbor-db                 Mysql container for Harbor                      10 mysqlboy/docker-mydumper         docker-mydumper containerizes MySQL logical …   3 mysqlboy/mydumper                mydumper for mysql logcial backups              3 bitnami/mysqld-exporter                                                          2 ibmcom/mysql-s390x               Docker image for mysql-s390x                    2 mysql/mysql-operator             MySQL Operator for Kubernetes                   0 ibmcom/tidb-ppc64le              TiDB is a distributed NewSQL database compat…   0 mysqlboy/elasticsearch                                                           0 mysqleatmydata/mysql-eatmydata                                                   0 cimg/mysql                                                                       0 mysql/ndb-operator               MySQL NDB Operator for Kubernetes               0 mirantis/mysql
 ```
 
 #### OPTIONS说明：
@@ -118,13 +87,7 @@ docker system df 查看镜像/容器/数据卷所占的空间
 ```
 
 ```
-[root@docker ~]# docker system df
-TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
-Images          1         1         13.26kB   0B (0%)
-Containers      1         0         0B        0B
-Local Volumes   0         0         0B        0B
-Build Cache     0         0         0B        0B
-[root@docker ~]#
+[root@docker ~]# docker system df TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE Images          1         1         13.26kB   0B (0%) Containers      1         0         0B        0B Local Volumes   0         0         0B        0B Build Cache     0         0         0B        0B [root@docker ~]#
 ```
 
 ### 5、删除镜像
@@ -301,20 +264,7 @@ docker logs 容器ID
 PS：容器ID可省略为前三位
 
 ```
-[root@docker ~]# docker ps
-CONTAINER ID   IMAGE     COMMAND                  CREATED         STATUS         PORTS      NAMES
-94b526c73db2   redis     "docker-entrypoint.s…"   4 seconds ago   Up 3 seconds   6379/tcp   admiring_poincare
-[root@docker ~]# docker logs 94b
-1:C 10 Apr 2022 09:50:03.396 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
-1:C 10 Apr 2022 09:50:03.396 # Redis version=6.2.6, bits=64, commit=00000000, modified=0, pid=1, just started
-1:C 10 Apr 2022 09:50:03.396 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
-1:M 10 Apr 2022 09:50:03.397 * monotonic clock: POSIX clock_gettime
-1:M 10 Apr 2022 09:50:03.398 * Running mode=standalone, port=6379.
-1:M 10 Apr 2022 09:50:03.399 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128.
-1:M 10 Apr 2022 09:50:03.399 # Server initialized
-1:M 10 Apr 2022 09:50:03.399 # WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
-1:M 10 Apr 2022 09:50:03.399 * Ready to accept connections
-[root@docker ~]#
+[root@docker ~]# docker ps CONTAINER ID   IMAGE     COMMAND                  CREATED         STATUS         PORTS      NAMES 94b526c73db2   redis     "docker-entrypoint.s…"   4 seconds ago   Up 3 seconds   6379/tcp   admiring_poincare [root@docker ~]# docker logs 94b 1:C 10 Apr 2022 09:50:03.396 # oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo 1:C 10 Apr 2022 09:50:03.396 # Redis version=6.2.6, bits=64, commit=00000000, modified=0, pid=1, just started 1:C 10 Apr 2022 09:50:03.396 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf 1:M 10 Apr 2022 09:50:03.397 * monotonic clock: POSIX clock_gettime 1:M 10 Apr 2022 09:50:03.398 * Running mode=standalone, port=6379. 1:M 10 Apr 2022 09:50:03.399 # WARNING: The TCP backlog setting of 511 cannot be enforced because /proc/sys/net/core/somaxconn is set to the lower value of 128. 1:M 10 Apr 2022 09:50:03.399 # Server initialized 1:M 10 Apr 2022 09:50:03.399 # WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect. 1:M 10 Apr 2022 09:50:03.399 * Ready to accept connections [root@docker ~]#
 ```
 
 ### 3、查看容器内运行的进程
@@ -324,9 +274,7 @@ docker top 容器ID
 ```
 
 ```
-[root@docker ~]# docker top 94b
-UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
-polkitd             35360               35341               0                   17:50               ?                   00:00:00            redis-server *:6379
+[root@docker ~]# docker top 94b UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD polkitd             35360               35341               0                   17:50               ?                   00:00:00            redis-server *:6379
 ```
 
 ### 4、查看容器内部细节
@@ -344,17 +292,7 @@ docker exec -it 容器ID bashShell
 ```
 
 ```
-[root@docker ~]# docker exec -it 94b /bin/bash
-root@94b526c73db2:/data# redis-c
-redis-check-aof  redis-check-rdb  redis-cli
-root@94b526c73db2:/data# redis-cli
-127.0.0.1:6379> ping
-PONG
-127.0.0.1:6379> set k1 v1
-OK
-127.0.0.1:6379> get k1
-"v1"
-127.0.0.1:6379> exit
+[root@docker ~]# docker exec -it 94b /bin/bash root@94b526c73db2:/data# redis-c redis-check-aof  redis-check-rdb  redis-cli root@94b526c73db2:/data# redis-cli 127.0.0.1:6379> ping PONG 127.0.0.1:6379> set k1 v1 OK 127.0.0.1:6379> get k1 "v1" 127.0.0.1:6379> exit
 ```
 
 exec帮助命令
@@ -412,29 +350,7 @@ docker export 容器ID > 文件名.tar
 ```
 
 ```
-[root@docker /]# docker export 3065f084c80d > centos.tar.gz
-[root@docker /]# ll
-总用量 233004
--rw-r--r--.   1 root root         0 4月  10 18:16 a.txt
-lrwxrwxrwx.   1 root root         7 4月   9 15:59 bin -> usr/bin
-dr-xr-xr-x.   5 root root      4096 4月   9 16:06 boot
--rw-r--r--.   1 root root 238572032 4月  10 19:04 centos.tar.gz
-drwxr-xr-x.  20 root root      3220 4月   9 16:29 dev
-drwxr-xr-x.  86 root root      8192 4月  10 11:03 etc
-drwxr-xr-x.   3 root root        22 4月   9 16:05 home
-lrwxrwxrwx.   1 root root         7 4月   9 15:59 lib -> usr/lib
-lrwxrwxrwx.   1 root root         9 4月   9 15:59 lib64 -> usr/lib64
-drwxr-xr-x.   2 root root         6 4月  11 2018 media
-drwxr-xr-x.   2 root root         6 4月  11 2018 mnt
-drwxr-xr-x.   4 root root        34 4月   9 20:38 opt
-dr-xr-xr-x. 124 root root         0 4月   9 16:29 proc
-dr-xr-x---.   5 root root       176 4月   9 20:36 root
-drwxr-xr-x.  31 root root       940 4月   9 21:01 run
-lrwxrwxrwx.   1 root root         8 4月   9 15:59 sbin -> usr/sbin
-drwxr-xr-x.   2 root root         6 4月  11 2018 srv
-dr-xr-xr-x.  13 root root         0 4月   9 16:29 sys
-drwxrwxrwt.  13 root root      4096 4月  10 18:16 tmp
-drwxr-xr-x.  13 root root       155 4月   9 15:59 usr
+[root@docker /]# docker export 3065f084c80d > centos.tar.gz [root@docker /]# ll 总用量 233004 -rw-r--r--.   1 root root         0 4月  10 18:16 a.txt lrwxrwxrwx.   1 root root         7 4月   9 15:59 bin -> usr/bin dr-xr-xr-x.   5 root root      4096 4月   9 16:06 boot -rw-r--r--.   1 root root 238572032 4月  10 19:04 centos.tar.gz drwxr-xr-x.  20 root root      3220 4月   9 16:29 dev drwxr-xr-x.  86 root root      8192 4月  10 11:03 etc drwxr-xr-x.   3 root root        22 4月   9 16:05 home lrwxrwxrwx.   1 root root         7 4月   9 15:59 lib -> usr/lib lrwxrwxrwx.   1 root root         9 4月   9 15:59 lib64 -> usr/lib64 drwxr-xr-x.   2 root root         6 4月  11 2018 media drwxr-xr-x.   2 root root         6 4月  11 2018 mnt drwxr-xr-x.   4 root root        34 4月   9 20:38 opt dr-xr-xr-x. 124 root root         0 4月   9 16:29 proc dr-xr-x---.   5 root root       176 4月   9 20:36 root drwxr-xr-x.  31 root root       940 4月   9 21:01 run lrwxrwxrwx.   1 root root         8 4月   9 15:59 sbin -> usr/sbin drwxr-xr-x.   2 root root         6 4月  11 2018 srv dr-xr-xr-x.  13 root root         0 4月   9 16:29 sys drwxrwxrwt.  13 root root      4096 4月  10 18:16 tmp drwxr-xr-x.  13 root root       155 4月   9 15:59 usr
 ```
 
 ### 2、导入容器
@@ -445,15 +361,7 @@ cat 文件名.tar | docker import - 镜像用户/镜像名:镜像版本号
 ```
 
 ```
-[root@docker /]# cat centos.tar.gz | docker import - xiaobear/centos:8.8
-sha256:12e7a58fc36a755fa63a82f78364291de7271c3ade90f2f5581cc50bc2416cb2
-[root@docker /]# docker images
-REPOSITORY        TAG       IMAGE ID       CREATED              SIZE
-xiaobear/centos   8.8       12e7a58fc36a   About a minute ago   231MB
-redis             latest    7614ae9453d1   3 months ago         113MB
-hello-world       latest    feb5d9fea6a5   6 months ago         13.3kB
-centos            latest    5d0da3dc9764   6 months ago         231MB
-[root@docker /]#
+[root@docker /]# cat centos.tar.gz | docker import - xiaobear/centos:8.8 sha256:12e7a58fc36a755fa63a82f78364291de7271c3ade90f2f5581cc50bc2416cb2 [root@docker /]# docker images REPOSITORY        TAG       IMAGE ID       CREATED              SIZE xiaobear/centos   8.8       12e7a58fc36a   About a minute ago   231MB redis             latest    7614ae9453d1   3 months ago         113MB hello-world       latest    feb5d9fea6a5   6 months ago         13.3kB centos            latest    5d0da3dc9764   6 months ago         231MB [root@docker /]#
 ```
 
 ## 7、常用命令汇总
