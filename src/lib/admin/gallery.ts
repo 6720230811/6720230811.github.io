@@ -11,6 +11,7 @@ import {
   type Repo,
 } from './github';
 import { HALL_STYLE_IDS } from '../gallery/styles';
+import { THEMES, THEME_KEYS } from '../../data/taxonomy';
 import { compressToWebp, humanSize } from './upload';
 import { requireToken } from './token';
 import { waitForBuild } from './actions';
@@ -315,7 +316,7 @@ function renderEditor(): void {
   field('gal-note-en').value = meta?.note?.en ?? '';
   $<HTMLSelectElement>('gal-mode').value = meta?.mode ?? 'flat';
   $<HTMLSelectElement>('gal-style').value = meta?.style ?? 'whitecube';
-  field('gal-theme').value = meta?.theme ?? 'misc';
+  $<HTMLSelectElement>('gal-theme').value = meta?.theme ?? 'misc';
   field('gal-year').value = String(meta?.year ?? new Date().getFullYear());
   field('gal-tags').value = (meta?.tags ?? []).join(', ');
   field('gal-gear').value = (meta?.gear ?? []).join(', ');
@@ -517,7 +518,7 @@ function collectMeta(): MetaDoc {
     title,
     mode: $<HTMLSelectElement>('gal-mode').value === '3d' ? '3d' : 'flat',
     style: $<HTMLSelectElement>('gal-style').value,
-    theme: field('gal-theme').value.trim() || 'misc',
+    theme: $<HTMLSelectElement>('gal-theme').value || 'misc',
     year: Number.parseInt(field('gal-year').value, 10) || new Date().getFullYear(),
     order: (current?.photos ?? []).map((photo) => photo.file),
     tags: splitList(field('gal-tags').value),
@@ -1044,6 +1045,13 @@ export function initGallery(): void {
 
   $<HTMLSelectElement>('gal-style').innerHTML = HALL_STYLE_IDS.map(
     (id) => `<option value="${id}">${id}</option>`
+  ).join('');
+
+  // 题材从词表来（src/data/taxonomy.ts）：以前是自由文本，写错的键会让 3D 展墙
+  // 静默掉色，而现在词表是唯一来源、写错的键在构建期就会红 —— 所以不能给自由输入。
+  // 键名留在选项文字里（「城市（city）」）：手改 meta.json 时要能对上。
+  $<HTMLSelectElement>('gal-theme').innerHTML = THEME_KEYS.map(
+    (key) => `<option value="${key}">${THEMES[key].zh}（${key}）</option>`
   ).join('');
   render();
 }

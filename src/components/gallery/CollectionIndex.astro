@@ -1,6 +1,7 @@
 ---
 import { collections, photoAR, type Collection } from '../../data/gallery';
 import { collectionHref } from '../../lib/gallery/shell';
+import { themeLabel } from '../../lib/taxonomy';
 import { useTranslations, type Locale } from '../../i18n/ui';
 
 /**
@@ -43,13 +44,17 @@ const coverH = (w?: number, h?: number) => (w && h ? h : 800);
 
 /**
  * 封面左上那行小字：先看合集自己写的副标题；没写就退到「形制」（3D 展厅）
- * 或主题键。这样 3D 那一页不用另写一套标题就能说清「这是哪种厅」。
+ * 或题材的**显示名**（从词表取，按语言）。这样 3D 那一页不用另写一套标题
+ * 就能说清「这是哪种厅」。
+ *
+ * 这里以前直接打印 collection.theme，也就是把 `city` 这种键名给访客看 ——
+ * schema 注释说的那组 i18n 键并不存在。
  */
 const kickerOf = (collection: Collection) =>
   collection.subtitle?.[locale] ??
   (collection.mode === '3d'
     ? t(`gallery.style.${collection.style}`)
-    : collection.theme);
+    : themeLabel(locale, collection.theme));
 ---
 
 <div class="gal-covers" data-gal-dim>

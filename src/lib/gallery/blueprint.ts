@@ -435,11 +435,11 @@ const ZONE_MAP = new Map(ZONES.map((zone) => [zone.id, zone]));
  * 展览数据里的 theme → 可移动展墙的主题色。
  *  规格：一面展墙可以换成主题色，但同一时期只能出现一种 ——
  *  所以取本期作品里最多的那个 theme，全馆只用这一个颜色。
+ *
+ * 2026-09-16 起**从词表派生**，不再手写：以前这里硬编码 { city, sea }，
+ * meta.json 里写别的题材键就静默掉色（肉眼看不出来）。词表见 src/data/taxonomy.ts。
  */
-export const THEME_COLOR: Record<string, string> = {
-  city: '#364852', // 烟熏蓝灰
-  sea: '#30494B', // 暮色蓝绿
-};
+export { THEME_COLOR } from '../../data/taxonomy';
 
 export function zone(id: ZoneId): Zone {
   const found = ZONE_MAP.get(id);

@@ -72,7 +72,13 @@ export const CollectionMetaSchema = z.object({
   mode: z.enum(['flat', '3d']).default('flat'),
   /** 形制：九种复刻的艺术厅之一，只对 mode: '3d' 有意义 */
   style: z.enum(HALL_STYLE_IDS).default('whitecube'),
-  /** 归类键（ASCII），显示名在 i18n 的 gallery.theme.<key> 里 */
+  /**
+   * 题材键（ASCII，必须登记在 src/data/taxonomy.ts 的词表里）。
+   * 显示名按语言从**词表**取 —— 不是 i18n：以前这里写着「显示名在 i18n 的
+   * gallery.theme.<key> 里」，而那一组键从来不存在，前台只好把裸键名给访客看。
+   * 3D 展厅的展墙主题色也按它查（没配色的题材用默认配色）。
+   * 构建期校验见 lib/taxonomy.ts 的 assertTheme。
+   */
   theme: z.string().regex(SLUG).default('misc'),
   /** 合集年份：照片没单独写 year 时继承它 */
   year: z.number().int(),

@@ -4,6 +4,7 @@ import { CollectionMetaSchema } from './gallery.schema';
 // 报错的格式化复用 profile.schema 里那一份：两处各写一遍迟早会漂移
 import { formatIssues } from './profile.schema';
 import { sizeOf } from '../lib/gallery/imageSize';
+import { assertTheme, warnThemeColor } from '../lib/taxonomy';
 import type { CollectionMeta, LocaleText } from './gallery.schema';
 import type { HallStyleId } from '../lib/gallery/styles';
 
@@ -161,6 +162,11 @@ function readCollection(id: string): Collection {
     );
   }
   const meta: CollectionMeta = parsed.data;
+
+  // 题材必须登记在词表里；没登记就抛（拼错一个字母会长出一间配色不对的展厅）
+  assertTheme(meta.theme, `${GALLERY_DIR}/${id}/meta.json`);
+  // 3D 展厅的展墙色按题材查，没配色退回默认配色 —— 以前这一步是完全静默的
+  if (meta.mode === '3d') warnThemeColor(meta.theme, `${GALLERY_DIR}/${id}/meta.json`);
 
   const files = readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && IMAGE_RE.test(entry.name))
