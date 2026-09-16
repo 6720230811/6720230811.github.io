@@ -1,0 +1,90 @@
+---
+import { gleaningsTotals, now, pick } from '../../lib/gleanings';
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+/**
+ * 拾遗的**刊头** —— 排在横幅里（BaseLayout 的 `hero="panel"` + `<slot name="hero" />`）。
+ *
+ * 为什么页首不是「图 + 下面一块文字」，而是直接写在图上：横幅本来是全站一条
+ * 装饰性的蓝底画，而这一页的页首（一句定位 + 一栏统计 + 「现在」）加起来
+ * 还不到 300px —— 分成上下两块，上面就是一截没人看的图，下面就是三行光秃秃的字。
+ * 压在图上之后它才是一条**刊头**，也才撑得起「索引柜」这个版面语言。
+ *
+ * 两档：
+ * - `overview`：总览页。一句定位 + 一栏统计 + 「现在」三条。这里不再把「现在」
+ *   单独作为一个模块/一项 —— 它是**开场白**，与定位语、统计同属刊头。
+ * - `section`：内容页。只留一句说明，横幅矮下去，正文才是主角。
+ *
+ * 文字色不在这里定：`.hero__panel` 给的 --hero-fg* 四支变量说了算
+ * （永远压在暗画上，所以固定取亮的一侧，不跟随明暗主题）。
+ */
+interface Props {
+  locale: Locale;
+  variant: 'overview' | 'section';
+}
+
+const { locale, variant } = Astro.props;
+const t = useTranslations(locale);
+
+const stats = [
+  { n: gleaningsTotals.links, label: t('gleanings.stats.links') },
+  { n: gleaningsTotals.repos, label: t('gleanings.stats.repos') },
+  { n: gleaningsTotals.topics, label: t('gleanings.stats.topics') },
+];
+---
+
+{/* data-pagefind-body：**这一块也必须带上它**，两个原因叠在一起：
+
+   ① 拾遗的正文里，搜索索引能读到的**只有这里**。总览页的正文（`.gl-page`）
+      整个包在一个 `<nav>` 里，而 pagefind 把 `<nav>` 当站内样板文字剥掉 ——
+      实测：同一页加一段普通 `<p>`，索引词数立刻从 **0 变 46**；
+      把四个带标记的拾遗页单独喂给 pagefind，只收进 2 页（内容页），
+      总览页因为「零词」**整页被丢弃**（连页都不在索引里，不是搜不到而已）。
+   ② 这一块的字是真内容（一句定位、一栏统计、「现在」三条），不是装饰，
+      本来就该被搜到 —— 「他最近在翻什么」这类问题正该落到这一页。
+      页首渲染在 `.page` **之外**（BaseLayout 里），所以这个标记只能挂在
+      这个组件自己的根节点上，跟着 `.gl-page` 是盖不住它的。
+      一页里多个可索引区是**并集**，不是先到先得（实测过）。 */}
+<div class="gl-hero" data-pagefind-body>
+  {/* 页面名做 h1，但排成刊头的小字眉标 —— 全站列表页都只有 h2，
+      这一页需要个 h1 来立住文档结构，而它本来就是这个位置该有的东西 */}
+  <h1 class="gl-hero__eyebrow">
+    {t('gleanings.title')}
+    {variant === 'section' && <span class="gl-hero__eyebrow-sub">{t('gleanings.all.title')}</span>}
+  </h1>
+
+  {
+    variant === 'overview' ? (
+      <div class="gl-hero__main">
+        <p class="gl-hero__lede">{t('gleanings.lede')}</p>
+        <p class="gl-hero__stats">
+          {stats.map((stat) => (
+            <span class="gl-hero__stat">
+              <strong>{stat.n}</strong> {stat.label}
+            </span>
+          ))}
+        </p>
+      </div>
+    ) : (
+      <p class="gl-hero__lede gl-hero__lede--small">{t('gleanings.all.lede')}</p>
+    )
+  }
+
+  {
+    variant === 'overview' && (
+      <section class="gl-hero__now">
+        <h2 class="gl-hero__now-head">
+          <span>{t('gleanings.now.title')}</span>
+          <time class="gl-hero__now-stamp" datetime={now.updatedAt}>
+            {t('gleanings.now.writtenAt')} {now.updatedAt}
+          </time>
+        </h2>
+        <ul class="gl-hero__now-list">
+          {now.items.map((item) => (
+            <li class="gl-hero__now-item">{pick(locale, item)}</li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+</div>

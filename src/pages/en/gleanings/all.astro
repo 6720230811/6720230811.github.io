@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import GleaningHero from '../../../components/gleanings/GleaningHero.astro';
+import GleaningAll from '../../../components/gleanings/GleaningAll.astro';
+import { profile } from '../../../data/profile';
+import { toLocale, useTranslations } from '../../../i18n/ui';
+import '../../../styles/gleanings.css';
+
+/**
+ * Gleanings · Everything —— 中文侧「收录」的英文页，同一份组件、同一份数据。
+ */
+const locale = toLocale('en');
+const t = useTranslations(locale);
+const p = profile[locale];
+
+const title = `${t('gleanings.all.title')} · ${t('gleanings.title')} · ${p.name}`;
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={title}
+  description={t('gleanings.all.desc')}
+  hero="panel"
+>
+  <GleaningHero slot="hero" locale={locale} variant="section" />
+  <GleaningAll locale={locale} />
+</BaseLayout>

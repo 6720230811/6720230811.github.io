@@ -1,0 +1,151 @@
+---
+import { gleaningsTotals, linkGroups, repoGroups } from '../../lib/gleanings';
+import { useTranslations, type Locale } from '../../i18n/ui';
+import GleaningIndex, { type IndexItem } from './GleaningIndex.astro';
+import LinkGrid from './LinkGrid.astro';
+import RepoList from './RepoList.astro';
+
+/**
+ * 拾遗内容页 —— `/gleanings/all/`
+ *
+ * 两个抽屉装在同一页里，用标签切换，而不是各占一条路由：
+ * 收藏夹只有 8 条，单独开一页太空；57 个仓库又太长，摆在封面上会把刊头冲走。
+ * 折中就是这一页 —— 两个面板共用一条刊头、一排把手，切换只改一个 hash。
+ *
+ * **没有 JS 时两个面板都摊着**（见 gleanings.css 的 `[data-gl-tabs]`）：
+ * 面板切换与抽屉折叠都只是「少滚几屏」的优化，不是「能不能看到」的分界。
+ * 这条是这一页唯一不能破的底线 —— 折叠/切换都可以坏，内容不可以丢。
+ */
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+
+const items: IndexItem[] = [
+  {
+    key: 'links',
+    label: t('gleanings.links.title'),
+    count: gleaningsTotals.links,
+    href: '#tab-links',
+    // 起手先标第一个作当前。带 `#tab-repos` 进来的话，脚本一跑就会改过来
+    current: true,
+  },
+  {
+    key: 'repos',
+    label: t('gleanings.repos.title'),
+    count: gleaningsTotals.repos,
+    href: '#tab-repos',
+  },
+];
+---
+
+<div class="gl-page" data-gl-tabs data-pagefind-body>
+  {/* 顶排带 id：`#tab-repos` 既是深链锚点，也是点击后落回的位置 */}
+  <GleaningIndex locale={locale} items={items} tabbable anchorIds />
+
+  <section class="gl-panel" data-panel="links" aria-labelledby="tab-links">
+    <p class="gl-panel__desc">{t('gleanings.links.desc')}</p>
+    <LinkGrid locale={locale} groups={linkGroups(locale)} />
+  </section>
+
+  <section class="gl-panel" data-panel="repos" aria-labelledby="tab-repos">
+    <p class="gl-panel__desc">{t('gleanings.repos.desc')}</p>
+    <RepoList locale={locale} groups={repoGroups(locale, t('gleanings.repos.unsorted'))} />
+  </section>
+
+  <footer class="gl-switch">
+    <p class="gl-switch__label">{t('gleanings.switch')}</p>
+    {/* 页尾这排**不带 id** —— 同一个 id 在一页里只能有一个 */}
+    <GleaningIndex locale={locale} items={items} tabbable />
+  </footer>
+</div>
+
+<script>
+  /**
+   * 标签切换。三件必须做对的事：
+   *
+   * ① **换页要重绑**。`<script>` 是模块，View Transitions 换页不会重新求值 ——
+   *    顶层只跑一次的话，新 DOM 上没人接管，症状是「点进来坏了、刷新一下就好」
+   *    （本仓在搜索按钮、宠物、原先那条模块导航上都栽过这个跟头）。
+   *    所以挂在 `astro:page-load` 上。
+   *
+   * ② **旧监听要撤**。监听挂在 document 上、走事件委托，换页后旧的那份还活着，
+   *    点一下会切两次 —— 看起来「也没坏」，其实在抖。
+   *
+   * ③ **hash 深链要认**。从总览页点「仓库」进来带的是 `#tab-repos`，
+   *    读 hash 决定起手打开哪个抽屉，不许永远打开第一个。
+   */
+  type Diag = {
+    binds: number;
+    unbinds: number;
+    /** show() 真正被执行的次数：e2e 用它证明切换在干活，而不是只有监听挂上了 */
+    switches: number;
+    cleanup: null | (() => void);
+  };
+  type GlWin = Window & { __glTabs?: Diag };
+
+  const init = () => {
+    const win = window as GlWin;
+    // 先撤上一份：它盯着的可能是上一页那批已经脱离文档的节点
+    win.__glTabs?.cleanup?.();
+
+    const root = document.querySelector<HTMLElement>('[data-gl-tabs]');
+    if (!root) return;
+
+    const diag: Diag = (win.__glTabs ??= { binds: 0, unbinds: 0, switches: 0, cleanup: null });
+
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('.gl-panel'));
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a[data-tab]'));
+    if (!panels.length || !links.length) return;
+
+    /** `#tab-repos` → `repos`。对不上任何面板就当没有（别把面板全藏了） */
+    const keyFromHash = (): string | undefined => {
+      const key = /^#tab-(.+)$/.exec(location.hash)?.[1];
+      return key && panels.some((panel) => panel.dataset.panel === key) ? key : undefined;
+    };
+
+    const show = (key: string | undefined) => {
+      if (!key || !panels.some((panel) => panel.dataset.panel === key)) return;
+      for (const panel of panels) {
+        if (panel.dataset.panel === key) panel.dataset.on = '';
+        else delete panel.dataset.on;
+      }
+      // 顶上与页尾那两排把手共用同一份状态 —— 它们都在这份 links 里
+      for (const link of links) {
+        if (link.dataset.tab === key) link.setAttribute('aria-current', 'true');
+        else link.removeAttribute('aria-current');
+      }
+      // 最后才打这个标记：它一上，非当前的面板就 display:none 了（见 gleanings.css）
+      root.dataset.ready = '';
+      diag.switches += 1;
+    };
+
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const link = target.closest<HTMLAnchorElement>('a[data-tab]');
+      if (!link || !root.contains(link)) return;
+      // **不 preventDefault**：href 本来就是 `#tab-xxx`，让它照常写进地址栏
+      // （可分享、可后退），也顺带把视线带回顶排把手那儿
+      show(link.dataset.tab);
+    };
+
+    const onHash = () => show(keyFromHash());
+
+    document.addEventListener('click', onClick);
+    window.addEventListener('hashchange', onHash);
+    show(keyFromHash() ?? panels[0].dataset.panel);
+
+    diag.binds += 1;
+    diag.cleanup = () => {
+      document.removeEventListener('click', onClick);
+      window.removeEventListener('hashchange', onHash);
+      diag.unbinds += 1;
+    };
+  };
+
+  init();
+  document.addEventListener('astro:page-load', init);
+</script>

@@ -1,0 +1,59 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import {
+  formatStars,
+  gleaningsTotals,
+  hostOf,
+  linkPreview,
+  repoPreview,
+} from '../../lib/gleanings';
+import { useTranslations, type Locale } from '../../i18n/ui';
+import GleaningIndex, { type IndexItem } from './GleaningIndex.astro';
+
+/**
+ * 拾遗总览 —— `/gleanings/`
+ *
+ * 两条路由里它是「封面」：刊头（在横幅里）之下只有一排抽屉把手，
+ * 每只把手带三行「里面最上面那几件」，点进去才铺开。
+ *
+ * 为什么不把内容直接铺在这一页（初版就是这么做的）：57 个仓库一铺，
+ * 封面就变成了一条长长的流水账 —— 页首那一句定位、那一栏统计、「现在」，
+ * 全都被冲到看不见的地方。拆开之后这一页只剩两件事：**这是什么**、**里面有什么**。
+ *
+ * 预览取的是与抽屉内部**同一种排序**的前三条（见 lib/gleanings.ts 的
+ * byLinkWeight / byWeight）：预览说的「最上面那几件」，点进去就得真的排在最上面。
+ */
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+
+/** 深链：进内容页时直接落在对应抽屉上（内容页的脚本读这个 hash） */
+const allUrl = getRelativeLocaleUrl(locale, 'gleanings/all');
+
+const items: IndexItem[] = [
+  {
+    key: 'links',
+    label: t('gleanings.links.title'),
+    count: gleaningsTotals.links,
+    href: `${allUrl}#tab-links`,
+    preview: linkPreview(3).map((link) => ({ text: link.title, meta: hostOf(link.url) })),
+  },
+  {
+    key: 'repos',
+    label: t('gleanings.repos.title'),
+    count: gleaningsTotals.repos,
+    href: `${allUrl}#tab-repos`,
+    preview: repoPreview(3).map((repo) => ({
+      text: repo.fullName,
+      meta: `★ ${formatStars(repo.stars)}`,
+    })),
+  },
+];
+---
+
+<div class="gl-page" data-pagefind-body>
+  <GleaningIndex locale={locale} items={items} />
+</div>

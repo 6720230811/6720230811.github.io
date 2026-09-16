@@ -1,0 +1,38 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import GleaningHero from '../../components/gleanings/GleaningHero.astro';
+import GleaningOverview from '../../components/gleanings/GleaningOverview.astro';
+import { profile } from '../../data/profile';
+import { toLocale, useTranslations } from '../../i18n/ui';
+import '../../styles/gleanings.css';
+
+/**
+ * 拾遗 / Gleanings —— 多来源聚合的总览（导航 05）。
+ *
+ * 它收的是**别人的东西**（我存的网页、我 star 的仓库、各站榜单），
+ * 与全站其余五页（我写的 / 我拍的 / 我这个人）性质不同，
+ * 所以版面语言也不同：不是文章版心，也不是画册跨页，是**索引柜**。
+ *
+ * 这一页只做两件事：**这是什么**（刊头，写在横幅上）与**里面有什么**（抽屉把手 +
+ * 三行预览）。内容在 /gleanings/all/ —— 57 个仓库铺在封面上的话，刊头会被冲走。
+ *
+ * 正文在组件里：中英两页共用一份，避免每加一个模块都要改两处。
+ * 规格：docs/superpowers/specs/2026-09-16-gleanings-design.md
+ */
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+
+const title = `${t('gleanings.title')} · ${p.name}`;
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={title}
+  description={t('gleanings.desc')}
+  hero="panel"
+>
+  <GleaningHero slot="hero" locale={locale} variant="overview" />
+  <GleaningOverview locale={locale} />
+</BaseLayout>

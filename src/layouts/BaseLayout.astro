@@ -31,15 +31,19 @@ interface Props {
    */
   toc?: 'sections' | MarkdownHeading[];
   /**
-   * 顶部视觉，三选一：
+   * 顶部视觉，五选一：
    * - 'banner'（默认）：静态横幅（现状），全站沿用
    * - 'immersive'：首页的沉浸式视差首屏（见 HomeHero.astro）
    * - 'backdrop'：只当背景、不占文档流。画廊跨页要的是「有背景、不占位」——
    *   横幅那 259px 一推，跨页两侧栏的 sticky 起跑线就低于让位锚点，
    *   右栏下缘会压到右下角的宠物身上（见 global.css 的 .hero--backdrop）
+   * - 'panel'：**内容驱动**的横幅。前两档的高度是写死的装饰，这一档的高度由
+   *   「写进去的页首」决定（`<slot name="hero" />`），于是内容压在图上、
+   *   而不是图归图、字归字。拾遗页用它（内容见 GleaningHero.astro）。
+   *   因为它**不是装饰**，这一档没有 aria-hidden —— 里面的字是要读的。
    * - 'none'：不渲染任何顶部视觉
    */
-  hero?: 'banner' | 'immersive' | 'backdrop' | 'none';
+  hero?: 'banner' | 'immersive' | 'backdrop' | 'panel' | 'none';
   /** hero='backdrop' 时的背景图（站内路径）；省略用全站的 banner.jpg */
   heroImage?: string;
   /** hero='backdrop' 时的高度；省略由 CSS 给 30rem */
@@ -228,6 +232,17 @@ const sectionItems = visibleSections(profile).map((s) => ({ id: s.id, text: t(s.
     {
       hero === 'immersive' ? (
         <HomeHero locale={locale} profile={profile} />
+      ) : hero === 'panel' ? (
+        /* 内容驱动的横幅：没有 aria-hidden（见上面 props 里的说明），
+           页首由页面用 <slot name="hero" /> 传进来 */
+        <div
+          class="hero hero--panel"
+          style={`--banner-img: url('${heroImage ?? `${base}banner.jpg`}')`}
+        >
+          <div class="hero__panel">
+            <slot name="hero" />
+          </div>
+        </div>
       ) : hero === 'none' ? null : (
         <div
           class:list={['hero', { 'hero--backdrop': hero === 'backdrop' }]}

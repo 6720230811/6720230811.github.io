@@ -1,0 +1,79 @@
+{
+  "links": [
+    {
+      "url": "https://docs.astro.build/",
+      "title": "Astro 文档",
+      "note": {
+        "zh": "本站的地基。踩坑时先翻这里 —— 版本换代频繁，中文博客的写法常常已经过期。",
+        "en": "The ground this site stands on. Read here first when something breaks."
+      },
+      "topics": ["design"],
+      "addedAt": "2026-09-16",
+      "featured": true
+    },
+    {
+      "url": "https://pagefind.app/",
+      "title": "Pagefind",
+      "note": {
+        "zh": "静态站的搜索。本站的搜索索引就是它，构建完跑一条命令，索引按需分片加载。"
+      },
+      "topics": ["design"],
+      "addedAt": "2026-09-16"
+    },
+    {
+      "url": "https://excalidraw.com/",
+      "title": "Excalidraw",
+      "note": {
+        "zh": "手绘风白板。画流程图不用装软件，还能把线条留住一点手写的不齐 —— 太工整的图反而没人看。"
+      },
+      "topics": ["design"],
+      "addedAt": "2026-09-16"
+    },
+    {
+      "url": "https://caniuse.com/",
+      "title": "Can I use",
+      "note": {
+        "zh": "写 CSS 之前查一眼能不能用，比猜准。本仓把 cssTarget 压到 safari15 就是照着它定的。",
+        "en": "Check browser support before writing CSS. Guessing costs more."
+      },
+      "topics": ["design"],
+      "addedAt": "2026-09-16"
+    },
+    {
+      "url": "https://tailscale.com/",
+      "title": "Tailscale",
+      "note": {
+        "zh": "几台机器组一个私有网，不用碰防火墙规则，出门在外也能连回家里的机器。"
+      },
+      "topics": ["selfhost"],
+      "addedAt": "2026-09-16"
+    },
+    {
+      "url": "https://caddyserver.com/",
+      "title": "Caddy",
+      "note": {
+        "zh": "自动签证书的 Web 服务器。配置文件比 nginx 短一大截，自托管小服务首选。"
+      },
+      "topics": ["selfhost"],
+      "addedAt": "2026-09-16"
+    },
+    {
+      "url": "https://ocrmypdf.readthedocs.io/",
+      "title": "OCRmyPDF",
+      "note": {
+        "zh": "给扫描版 PDF 补一层文字层。补完之后整份文件能搜、能复制，体积几乎不涨。"
+      },
+      "topics": ["doc"],
+      "addedAt": "2026-09-16"
+    },
+    {
+      "url": "https://arxiv.org/list/cs.CL/recent",
+      "title": "arXiv cs.CL 最新",
+      "note": {
+        "zh": "看 NLP 最近有什么，比刷信息流省时间 —— 至少标题都是真的。"
+      },
+      "topics": ["llm"],
+      "addedAt": "2026-09-16"
+    }
+  ]
+}

@@ -1,0 +1,187 @@
+---
+import {
+  dayOf,
+  formatStars,
+  hasOwnNote,
+  isStale,
+  langColor,
+  monthOf,
+  repoBlurb,
+  starsFetchedAt,
+  starsSourceUrl,
+  type Repo,
+  type RepoGroup,
+} from '../../lib/gleanings';
+import { useTranslations, type Locale } from '../../i18n/ui';
+import Icon from '../Icon.astro';
+
+/**
+ * 仓库 —— GitHub star 的仓库，按主题分组，**一组一扇抽屉**。
+ *
+ * 为什么是紧凑列表而不是卡片：57 个仓库铺成卡片要三屏多，一眼扫不完；
+ * 一行一个才好横向比对（语言、star 数、还活着吗）。这也正是它与收藏夹形态不同的理由 ——
+ * 收藏夹每条都有一句要读的批注（卡片才装得下），这里大多只有一句自述。
+ *
+ * 为什么又加折叠：9 个主题全摊开，短的几组还好，长的（agent 那组十几个）
+ * 一开就是两三屏 —— 想找「视觉那组」得先滚过它。收起来之后一屏就能看全 9 个抽屉，
+ * 点开哪个看哪个。用**原生 `<details>`**：零 JS、键盘可操作、Ctrl+F 也能找到
+ * （浏览器会展开命中的那条），而 pagefind 读的是构建出的 HTML，折叠不影响索引。
+ *
+ * 首组默认展开：全收起的话这一页就是一排标题，来的人不知道里面长什么样。
+ *
+ * 行内容：语言色点 · 仓库名 · 一句话 · star 数 · 最后推送的年月。
+ * 「最后推送」是**诚实的一部分**：一个两年没动过的仓库，值不值得看是另一回事，
+ * 但你得知道。同理，快照过期会挂徽章（见下面 fresh 那一行）。
+ */
+interface Props {
+  locale: Locale;
+  groups: readonly RepoGroup[];
+}
+
+const { locale, groups } = Astro.props;
+const t = useTranslations(locale);
+
+const stale = isStale(starsFetchedAt);
+
+/** 色点：查得到语言色就用它，查不到交给 CSS 退回中性色（暗色下也看得见） */
+function dotStyle(repo: Repo): string | undefined {
+  const color = langColor(repo.language);
+  return color ? `--lang:${color}` : undefined;
+}
+---
+
+<div class="gl-fresh">
+  <span class="gl-fresh__label">{t('gleanings.repos.snapshot')}</span>
+  <time class="gl-fresh__time" datetime={starsFetchedAt}>{dayOf(starsFetchedAt)}</time>
+  {stale && <span class="gl-fresh__stale">{t('gleanings.repos.stale')}</span>}
+</div>
+
+<div class="gl-drawer-bar">
+  <button
+    type="button"
+    class="gl-drawer-toggle"
+    data-gl-drawer-toggle
+    data-expand={t('gleanings.drawer.expandAll')}
+    data-collapse={t('gleanings.drawer.collapseAll')}
+  >
+    {t('gleanings.drawer.expandAll')}
+  </button>
+</div>
+
+{
+  groups.map((group, index) => (
+    <details class="gl-drawer" open={index === 0}>
+      <summary class="gl-drawer__head">
+        {/* 开合指示**排在标签前面**，而不是推到行尾。
+            推到行尾时它与标签之间隔着近 1000px 的空档（实测 1100px 下标签在 x=18、
+            箭头在 x=1072），裁到 2× 一看就是角落里一粒浮着的小三角 ——
+            和用户嫌「丑」的那条胶囊是同一个毛病：占满一条横向空间却只用两头。
+            排到前面之后，这一行是一个紧凑的「▾ 组名 计数」簇。 */}
+        <span class="gl-drawer__chev" aria-hidden="true" />
+        <span class="gl-drawer__label">{group.label}</span>
+        <span class="gl-drawer__count">{group.items.length}</span>
+      </summary>
+      <div class="gl-drawer__body">
+        <ul class="gl-repos">
+          {group.items.map((repo) => (
+            <li class="gl-repo" data-featured={repo.featured ? 'true' : undefined}>
+              <span
+                class="gl-repo__dot"
+                style={dotStyle(repo)}
+                title={repo.language ?? undefined}
+                aria-hidden="true"
+              />
+              {/* 名字与「已归档」标记同住一格。
+                  标记**不能**直接当 .gl-repo 的子节点：那是 5 个网格项塞进 4 条轨道，
+                  自动排布会把星标日期顶到第二行（实测行高 33.9 → 64.5）。
+                  而且它在语义上本来就是名字的注记，不是独立的一列。
+                  轨道宽度由外层 minmax(0,13rem) 管，名字太长就截断（见 CSS 的 min-width:0）。 */}
+              <span class="gl-repo__head">
+                <a class="gl-repo__name" href={repo.url} target="_blank" rel="noopener noreferrer">
+                  {repo.fullName}
+                </a>
+                {repo.archived && <span class="gl-repo__flag">{t('gleanings.repos.archived')}</span>}
+              </span>
+              <span class="gl-repo__blurb" data-mine={hasOwnNote(locale, repo) ? 'true' : undefined}>
+                {repoBlurb(locale, repo)}
+              </span>
+              <span class="gl-repo__meta">
+                <span class="gl-repo__stars">{formatStars(repo.stars)}</span>
+                {repo.pushedAt && <span class="gl-repo__pushed">{monthOf(repo.pushedAt)}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {group.hidden > 0 && (
+          <p class="gl-more">
+            {group.hidden} {t('gleanings.repos.more')} ——
+            <a href={starsSourceUrl} target="_blank" rel="noopener noreferrer">
+              {t('gleanings.repos.all')}
+              <Icon name="external" />
+            </a>
+          </p>
+        )}
+      </div>
+    </details>
+  ))
+}
+
+<script>
+  /**
+   * 「全部展开 / 全部收起」。两个细节：
+   *
+   * ① **文案要跟着实际状态走**。手动点开某一组之后，按钮还写着「全部展开」就是错的 ——
+   *    所以监听 `toggle` 重新同步文案。
+   *
+   * ② `toggle` 事件**不冒泡**，`addEventListener` 的第三个参数必须是 `true`
+   *    （捕获阶段）。少了它，监听挂上了却永远不会触发 —— 是那种「写了但没生效」
+   *    的哑巴故障。
+   *
+   * 换页重绑与旧监听清理的理由，见 GleaningAll.astro 里同名脚本的注释。
+   */
+  type Diag = { binds: number; unbinds: number; flips: number; cleanup: null | (() => void) };
+  type RlWin = Window & { __glDrawers?: Diag };
+
+  const init = () => {
+    const win = window as RlWin;
+    win.__glDrawers?.cleanup?.();
+
+    const button = document.querySelector<HTMLButtonElement>('[data-gl-drawer-toggle]');
+    if (!button) return;
+
+    const diag: Diag = (win.__glDrawers ??= { binds: 0, unbinds: 0, flips: 0, cleanup: null });
+
+    const all = () => Array.from(document.querySelectorAll<HTMLDetailsElement>('.gl-drawer'));
+    if (!all().length) return;
+
+    const sync = () => {
+      const drawers = all();
+      const everyOpen = drawers.length > 0 && drawers.every((drawer) => drawer.open);
+      button.textContent = (everyOpen ? button.dataset.collapse : button.dataset.expand) ?? '';
+    };
+
+    const onClick = () => {
+      const drawers = all();
+      const everyOpen = drawers.every((drawer) => drawer.open);
+      for (const drawer of drawers) drawer.open = !everyOpen;
+      diag.flips += 1;
+      sync();
+    };
+
+    const onToggle = () => sync();
+
+    button.addEventListener('click', onClick);
+    document.addEventListener('toggle', onToggle, true);
+    sync();
+
+    diag.binds += 1;
+    diag.cleanup = () => {
+      button.removeEventListener('click', onClick);
+      document.removeEventListener('toggle', onToggle, true);
+      diag.unbinds += 1;
+    };
+  };
+
+  init();
+  document.addEventListener('astro:page-load', init);
+</script>

@@ -22,6 +22,7 @@ const zh = {
   'nav.friends': '友链',
   'nav.blog': '博客',
   'nav.gallery': '画廊',
+  'nav.gleanings': '拾遗',
 
   // 沉浸式首页（/）—— 原来的简历式内容整体搬去了 /about
   'home.scroll': '向下滚动',
@@ -169,6 +170,34 @@ const zh = {
   'friends.desc': '下面是一些常看的博客，排名不分先后。',
   'friends.empty': '还没有添加友链。',
 
+  // 拾遗（/gleanings/）—— 多来源聚合页（导航 05）
+  'gleanings.title': '拾遗',
+  'gleanings.desc': '外面捡回来的，留在这一页：收藏的网页、star 的仓库，往后还有各站榜单。',
+  'gleanings.lede': '都是我拣过一遍的东西 —— 收藏的网页、star 的仓库，往后还有各站的榜单。',
+  'gleanings.index.aria': '收录模块',
+  'gleanings.all.title': '收录',
+  'gleanings.all.lede': '两个抽屉：我收藏的网页，与 GitHub 上 star 的仓库。',
+  'gleanings.all.desc': '拾遗的两个抽屉 —— 收藏的网页与工具、GitHub 上 star 的仓库，都按主题归过类。',
+  'gleanings.switch': '换一个抽屉',
+  'gleanings.drawer.expandAll': '全部展开',
+  'gleanings.drawer.collapseAll': '全部收起',
+  'gleanings.now.title': '现在',
+  'gleanings.now.writtenAt': '写于',
+  'gleanings.links.title': '收藏夹',
+  'gleanings.links.desc': '平时存的网页与工具，每条都记着为什么收它。',
+  'gleanings.links.empty': '还没有收藏。',
+  'gleanings.repos.title': '仓库',
+  'gleanings.repos.desc': 'GitHub star 的仓库，按主题归过类，精选排在各自组的前面。',
+  'gleanings.repos.unsorted': '未归类',
+  'gleanings.repos.more': '个还没归类 —— 这里不铺开',
+  'gleanings.repos.all': '在 GitHub 上看全部',
+  'gleanings.repos.snapshot': '快照',
+  'gleanings.repos.stale': '可能已过期',
+  'gleanings.repos.archived': '已归档',
+  'gleanings.stats.links': '条收藏',
+  'gleanings.stats.repos': '个仓库',
+  'gleanings.stats.topics': '个主题',
+
   // 搜索（pagefind）
   'search.open': '搜索文章',
   'search.placeholder': '搜索文章标题与正文…',
@@ -287,6 +316,7 @@ const en: Record<keyof typeof zh, string> = {
   'nav.friends': 'Friends',
   'nav.blog': 'Blog',
   'nav.gallery': 'Gallery',
+  'nav.gleanings': 'Gleanings',
 
   // 沉浸式首页（/）—— 原来的简历式内容整体搬去了 /about
   'home.scroll': 'Scroll down',
@@ -431,6 +461,35 @@ const en: Record<keyof typeof zh, string> = {
   'friends.title': 'Friends',
   'friends.desc': 'Blogs I read regularly, in no particular order.',
   'friends.empty': 'No links yet.',
+
+  // Gleanings (/gleanings/) — the aggregator page (nav 05)
+  'gleanings.title': 'Gleanings',
+  'gleanings.desc': 'Things picked up elsewhere and kept here: bookmarks, starred repos, and lists.',
+  'gleanings.lede': 'Everything here I went through myself — bookmarks, starred repos, and before long the lists I watch.',
+  'gleanings.index.aria': 'Sections',
+  'gleanings.all.title': 'Everything',
+  'gleanings.all.lede': 'Two drawers: the pages I saved, and the repos I starred on GitHub.',
+  'gleanings.all.desc':
+    'The two drawers of Gleanings — bookmarks, and the repos I starred on GitHub, both grouped by topic.',
+  'gleanings.switch': 'Switch drawer',
+  'gleanings.drawer.expandAll': 'Expand all',
+  'gleanings.drawer.collapseAll': 'Collapse all',
+  'gleanings.now.title': 'Now',
+  'gleanings.now.writtenAt': 'Written',
+  'gleanings.links.title': 'Bookmarks',
+  'gleanings.links.desc': 'Pages and tools I kept, each with a note on why.',
+  'gleanings.links.empty': 'Nothing bookmarked yet.',
+  'gleanings.repos.title': 'Repos',
+  'gleanings.repos.desc': 'Repos I starred on GitHub, grouped by topic; the picks come first in each group.',
+  'gleanings.repos.unsorted': 'Unsorted',
+  'gleanings.repos.more': 'more are not listed here',
+  'gleanings.repos.all': 'See all on GitHub',
+  'gleanings.repos.snapshot': 'Snapshot',
+  'gleanings.repos.stale': 'possibly stale',
+  'gleanings.repos.archived': 'archived',
+  'gleanings.stats.links': 'bookmarks',
+  'gleanings.stats.repos': 'repos',
+  'gleanings.stats.topics': 'topics',
 
   // 搜索（pagefind）
   'search.open': 'Search posts',

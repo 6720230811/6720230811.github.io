@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import GleaningHero from '../../../components/gleanings/GleaningHero.astro';
+import GleaningOverview from '../../../components/gleanings/GleaningOverview.astro';
+import { profile } from '../../../data/profile';
+import { toLocale, useTranslations } from '../../../i18n/ui';
+import '../../../styles/gleanings.css';
+
+/**
+ * Gleanings —— 拾遗的英文侧（总览）。
+ *
+ * 界面文案走 i18n，**条目标题保持原文不翻译**（外站标题翻了反而搜不到），
+ * 所以这一页的正文与中文侧是同一份组件、同一份数据。
+ */
+const locale = toLocale('en');
+const t = useTranslations(locale);
+const p = profile[locale];
+
+const title = `${t('gleanings.title')} · ${p.name}`;
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={title}
+  description={t('gleanings.desc')}
+  hero="panel"
+>
+  <GleaningHero slot="hero" locale={locale} variant="overview" />
+  <GleaningOverview locale={locale} />
+</BaseLayout>

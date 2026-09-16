@@ -1,0 +1,726 @@
+/* ============================================================
+   拾遗 / Gleanings —— 多来源聚合页（/gleanings/ 与 /gleanings/all/）
+
+   版面语言是**索引柜**：顶上一条深色刊头（页首直接写在 banner 图上），
+   下面是一排「编号 + 细线」的抽屉把手，每个抽屉里有自己的形态。
+
+   五条容易踩的：
+
+   ① 这一页**不再套 Section 白卡**。抽屉内容直接落在页面底色上，所以里面的
+      嵌套卡片（收藏夹的 .gl-link）底色取 --c-card（白），不能取 --c-bg-soft ——
+      后者是「白卡片里的次级面」，压在页面底色 #f0f2f5 上等于没画。
+   ② 压在**页面底色上**的一切线一律用 --c-border。--c-border-soft（#eef0f2）
+      是给白卡片当描边的，压在底色上只差 2/255，等于没画。
+   ③ 轨道里放正文一律 minmax(0, 1fr)：`1fr` 就是 `minmax(auto, 1fr)`，
+      一条长 URL 或长仓库名就能把轨道撑破。
+   ④ 「一行四列」与「两行」两套仓库行靠**一条媒体查询的两个条件**切换：
+      窄屏（≤48rem）与宽屏双列（≥64rem）用的是同一种两行排法。写成一条，
+      免得同一套声明抄两遍、日后只改了其中一处。
+   ⑤ 抽屉用原生 `<details>`，**pagefind 照样索引得到** —— 它读的是构建出的
+      HTML，不是渲染后的可见性。折叠不等于藏内容。
+   ============================================================ */
+
+.gl-page {
+  /* 刊头（.hero--panel）在 .page 之外、紧贴着正文，这里给它一段起跑距离 */
+  padding-top: clamp(1.75rem, 4vw, 2.5rem);
+}
+
+/* ───────────────────── 刊头（横幅里的内容） ─────────────────────
+
+   整块排在 .hero__panel 里（见 global.css 的 .hero--panel），文字色由那里
+   给的 --hero-fg* 四支变量定 —— 它们与 home.css 里 --hh-fg* 是同一套值，
+   因为处境一样：永远压在一幅暗画上。 */
+
+.gl-hero {
+  display: grid;
+  gap: clamp(1.1rem, 2.4vw, 1.5rem);
+}
+
+/* 眉标：前置一小截横线，与站内其它刊头（.hh__eyebrow、.hbs__label）同一套语言 */
+.gl-hero__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+  color: var(--hero-fg-muted);
+}
+
+.gl-hero__eyebrow::before {
+  content: '';
+  flex: none;
+  width: 2.25rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+/* 一句定位 + 右侧一栏统计。两列只在够宽时开 ——
+   窄屏把统计压到定位语下面，别让那句大字被挤成三行。 */
+.gl-hero__main {
+  display: grid;
+  gap: 1rem 2.5rem;
+}
+
+@media (min-width: 48rem) {
+  .gl-hero__main {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+}
+
+.gl-hero__lede {
+  margin: 0;
+  max-width: 44rem;
+  font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.005em;
+  color: var(--hero-fg);
+  /* 图上还有亮笔触，压过暗化罩也不是纯色底 —— 一点投影能把笔画从背景里拎出来 */
+  text-shadow: 0 2px 24px rgb(4 8 16 / 0.55);
+}
+
+/* 内容页的刊头只有一句说明，不给它大字号的排场 */
+.gl-hero__lede--small {
+  font-size: clamp(1rem, 1.6vw, 1.15rem);
+  font-weight: 400;
+  color: var(--hero-fg-soft);
+}
+
+.gl-hero__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.5rem;
+  margin: 0;
+}
+
+@media (min-width: 48rem) {
+  /* 右栏：一列三个数、右对齐 —— 与左边那句大字分居两端，版面才不是一条竖清单 */
+  .gl-hero__stats {
+    flex-direction: column;
+    gap: 0.3rem;
+    text-align: right;
+  }
+}
+
+.gl-hero__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  color: var(--hero-fg-muted);
+}
+
+@media (min-width: 48rem) {
+  .gl-hero__stat {
+    justify-content: flex-end;
+  }
+}
+
+.gl-hero__stat strong {
+  font-size: 1.3rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--hero-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 「现在」——一条细线把它与上面那句定位分开（裸区之间的分隔语言） */
+.gl-hero__now {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: clamp(1rem, 2.2vw, 1.4rem);
+  border-top: 1px solid var(--hero-fg-line);
+}
+
+.gl-hero__now-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  color: var(--hero-fg-muted);
+}
+
+.gl-hero__now-stamp {
+  margin-left: auto;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.gl-hero__now-list {
+  display: grid;
+  gap: 0.4rem;
+  max-width: 52rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gl-hero__now-item {
+  position: relative;
+  padding-left: 1.1rem;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--hero-fg-soft);
+}
+
+/* 行前的小方块，比圆点更像「记号」而不是列表项 */
+.gl-hero__now-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.68em;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+/* ───────────────────── 编号索引（抽屉把手） ─────────────────────
+
+   同一排东西在两处当两种角色：
+   · 总览页 —— 入口，每只把手下面挂三行「抽屉里最上面那几件」
+   · 内容页 —— 标签，点一下换面板（并把 hash 写进地址栏，可深链）
+
+   形态与首页首屏的编号索引（.hh__jump）是同一套：**细线在上、编号在前、
+   没有底色也没有圆角**。原来那条白色圆角胶囊是反例 ——
+   它把整条横向空间占满却只放三个小标签，右半截全是空的。 */
+
+.gl-idx {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem 2.5rem;
+}
+
+@media (max-width: 48rem) {
+  .gl-idx {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+}
+
+.gl-idx__link {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  /* 深链锚点（#tab-xxx）就落在这个把手上，而顶栏是 sticky 的，得让出来 */
+  scroll-margin-top: calc(var(--nav-h) + 1rem);
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--c-border);
+  color: var(--c-text-muted);
+  text-decoration: none;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.gl-idx__link:hover,
+.gl-idx__link:focus-visible,
+.gl-idx__link[aria-current] {
+  border-top-color: var(--c-text);
+  color: var(--c-text);
+}
+
+/* 当前抽屉只换**线与字色**，不动字重 —— 字重一变标签宽度就变，
+   切换时整排会左右跳一下（本仓在原来那条胶囊上栽过这个跟头） */
+.gl-idx__link:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 4px;
+}
+
+.gl-idx__no {
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s ease;
+}
+
+.gl-idx__link:hover .gl-idx__no,
+.gl-idx__link:focus-visible .gl-idx__no,
+.gl-idx__link[aria-current] .gl-idx__no {
+  color: var(--c-text-muted);
+}
+
+.gl-idx__label {
+  font-size: 1.0625rem;
+  font-weight: 500;
+}
+
+.gl-idx__count {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 箭头推到最右、平时退半步，hover 才走到位 ——「这一整条都可点」的暗示，
+   不必再画边框（同 .hh__jump 的做法） */
+.gl-idx__go {
+  font-size: 0.9375rem;
+  color: var(--c-text-faint);
+  opacity: 0.5;
+  transform: translateX(-0.3rem);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.gl-idx__link:hover .gl-idx__go,
+.gl-idx__link:focus-visible .gl-idx__go {
+  opacity: 1;
+  transform: none;
+}
+
+/* 把手下的三行预览（只有总览页传 preview） */
+.gl-idx__preview {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gl-idx__preview li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--c-text-muted);
+}
+
+.gl-idx__preview-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gl-idx__preview-meta {
+  flex: none;
+  margin-left: auto;
+  font-style: normal;
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───────────────────── 分组（收藏夹与仓库共用） ───────────────────── */
+
+.gl-group + .gl-group {
+  margin-top: 1.75rem;
+}
+
+.gl-group__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  color: var(--c-text);
+}
+
+.gl-group__count {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.gl-more {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--c-text-muted);
+}
+
+/* ───────────────────── 收藏夹：卡片网格 ───────────────────── */
+
+.gl-grid {
+  display: grid;
+  /* minmax(0, 1fr) 而不是 1fr —— 后者等价于 minmax(auto, 1fr)，
+     一条长 URL 或长标题就能把轨道撑破 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 44rem) {
+  .gl-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.gl-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  /* 这一页的内容不套白卡（见文件头第 ① 条），所以嵌套卡片自己取白，
+     而不是取「白卡里的次级面」 */
+  background: var(--c-card);
+  color: inherit;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.gl-link:hover {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+.gl-link__host {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+}
+
+.gl-link__host svg {
+  width: 11px;
+  height: 11px;
+  opacity: 0.75;
+}
+
+.gl-link__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.gl-link__note {
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--c-text-muted);
+}
+
+/* 精选：左边一根主色细条。**不改变是否出现**，只是排前面且更醒目 */
+.gl-link[data-featured] {
+  box-shadow: inset 2px 0 0 var(--c-accent);
+}
+
+/* ───────────────────── 仓库：快照行 ───────────────────── */
+
+/* 快照日期。**过期要被看见**，所以它单独占一行而不是藏进小字里 */
+.gl-fresh {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 1.1rem;
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+}
+
+.gl-fresh__time {
+  font-variant-numeric: tabular-nums;
+}
+
+.gl-fresh__stale {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  /* 与论文备注徽章同一套琥珀色 —— 都是「这件事你需要留意」 */
+  background: var(--c-note-bg);
+  color: var(--c-note-text);
+}
+
+/* ───────────────────── 仓库：可折叠的抽屉 ───────────────────── */
+
+.gl-drawer-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 0.5rem;
+}
+
+.gl-drawer-toggle {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--c-text-muted);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.gl-drawer-toggle:hover {
+  color: var(--c-text);
+  border-color: var(--c-text-faint);
+}
+
+.gl-drawer {
+  border-top: 1px solid var(--c-border);
+}
+
+.gl-drawer:last-of-type {
+  border-bottom: 1px solid var(--c-border);
+}
+
+/* summary 自带的三角标记各家内核长得都不一样，统一抹掉换成自绘的那个。
+   注意 `list-style: none` 只对 Firefox 有效，WebKit 那条要单独写。 */
+.gl-drawer__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.8rem 0.15rem;
+  list-style: none;
+  cursor: pointer;
+}
+
+.gl-drawer__head::-webkit-details-marker {
+  display: none;
+}
+
+.gl-drawer__head:hover .gl-drawer__label {
+  color: var(--c-accent);
+}
+
+.gl-drawer__label {
+  font-size: 0.9375rem;
+  font-weight: 650;
+  color: var(--c-text);
+  transition: color 0.15s ease;
+}
+
+.gl-drawer__count {
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 开合指示：换一个字形，**不用 transform 旋转** ——
+   旋转角度一旦和箭头画法对不上，就是「看着像坏了」的那种小毛病。
+
+   排在标签**前面**（理由见 RepoList.astro）。给一个**定宽并居中**：
+   `▸` 与 `▾` 的字面宽度不一样，不定宽的话一开一合标签就左右跳一格 ——
+   与 `.gl-idx` 那条「当前态只换线与字色、不动字重」是同一个道理。 */
+.gl-drawer__chev {
+  flex: none;
+  width: 0.85rem;
+  font-size: 0.7rem;
+  color: var(--c-text-faint);
+  text-align: center;
+}
+
+.gl-drawer__chev::before {
+  content: '▸';
+}
+
+.gl-drawer[open] .gl-drawer__chev::before {
+  content: '▾';
+}
+
+.gl-drawer__body {
+  padding: 0 0 1.1rem 0.15rem;
+}
+
+/* ───────────────────── 仓库：紧凑列表 ───────────────────── */
+
+.gl-repos {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 宽屏双列：57 条铺成一列约 4000px，两列直接砍掉一半。
+   配合下面那条媒体查询 —— 列宽变窄后行也换成两行排法，不然「一句话」只剩一条缝。 */
+@media (min-width: 64rem) {
+  .gl-repos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.1rem 1.75rem;
+  }
+}
+
+/* 一行一个仓库。**单行 + 截断**是有意的：57 条铺成两三行的段落就没法横向比对了，
+   而「扫一眼」正是这个模块存在的理由。读不全的可以点进去。 */
+.gl-repo {
+  display: grid;
+  grid-template-columns: 0.5rem minmax(0, 13rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.12s ease;
+}
+
+.gl-repo:hover {
+  background: var(--c-bg-soft);
+}
+
+/* 精选：左边一根主色细条（同收藏夹） */
+.gl-repo[data-featured] {
+  box-shadow: inset 2px 0 0 var(--c-accent);
+}
+
+.gl-repo__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  /* 查不到语言就退回主题的中性色（这样暗色下也看得见）。
+     外圈描边是给深色语言色的：Lua 的 #000080、Crystal 的 #000100
+     压在暗色底上会彻底消失。 */
+  background: var(--lang, var(--c-text-faint));
+  box-shadow: 0 0 0 1px rgb(127 127 127 / 0.28);
+}
+
+/* 名字 + 「已归档」标记。包一层 flex 让标记紧贴名字右端，
+   而不是去占一整条轨道（轨道只有四条，标记当网格项会把星标日期顶到下一行）。
+   `min-width: 0` 是必须的：flex 子项默认 `min-width: auto`，会顶住不缩，
+   长名字撑破这一格、`text-overflow: ellipsis` 永远轮不到生效。 */
+.gl-repo__head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.gl-repo__name {
+  /* 同上：不归零就跑不到省略号 */
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--c-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gl-repo[data-featured] .gl-repo__name {
+  font-weight: 600;
+}
+
+.gl-repo__flag {
+  /* 不参与收缩，免得被长名字压成一条线 */
+  flex: 0 0 auto;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--c-tag-bg);
+  color: var(--c-tag-text);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.gl-repo__blurb {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: var(--c-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 我写的注比仓库自述更重：它是「为什么值得看」，自述只是「它是什么」 */
+.gl-repo__blurb[data-mine] {
+  color: var(--c-text);
+}
+
+.gl-repo__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gl-repo__stars {
+  color: var(--c-text-muted);
+}
+
+.gl-repo__stars::before {
+  content: '★';
+  margin-right: 0.22rem;
+  font-size: 0.7rem;
+  opacity: 0.5;
+}
+
+/* 两行排法：色点 + 名字 + 星标日期一行，「一句话」独占第二行。
+   **四件都得显式写出行列**，不能只给 .gl-repo__blurb 一个 `grid-column`：
+   原因：blurb 一旦被显式落在第 2 行，自动排布的游标就停在它后面了，
+   而 DOM 里排在 blurb **之后**的星标日期只能接着往下排到**第 3 行** ——
+   实测 640px 下每行 100px（应为 ~67px），星标那一格的宽度被算成 0px，
+   57 行白多出近 2000px 页面高度。
+
+   两个条件写在一起（见文件头第 ④ 条）：
+   · ≤48rem —— 一行放不下四件
+   · ≥64rem —— 宽屏双列，每个格子只有一半宽，同样放不下 */
+@media (max-width: 48rem), (min-width: 64rem) {
+  .gl-repo {
+    grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    padding: 0.45rem 0.5rem;
+  }
+
+  .gl-repo__dot {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .gl-repo__head {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .gl-repo__meta {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .gl-repo__blurb {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+}
+
+/* ───────────────────── 标签面板 ───────────────────── */
+
+.gl-panel__desc {
+  margin: 0 0 1.4rem;
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  color: var(--c-text-muted);
+}
+
+/* 面板与顶上那排把手之间的距离。放在面板上而不是「把手 + margin-bottom」上：
+   两个面板并排时（无 JS 那条路）中间也得有这段空档，挂在谁身上就漏谁。 */
+.gl-panel {
+  margin-top: clamp(1.5rem, 3.5vw, 2.25rem);
+}
+
+/* 渐进增强：没有 JS 时两个面板都摊着 —— 信息一条不少，只是长一点；
+   脚本一到位就给容器打上 data-ready，非当前的那块才收起来。
+   状态写在**容器的属性**上而不是各面板的类名上，免得两处状态不同步。 */
+[data-gl-tabs][data-ready] .gl-panel:not([data-on]) {
+  display: none;
+}
+
+/* ───────────────────── 页尾：换一个抽屉 ───────────────────── */
+
+.gl-switch {
+  margin-top: clamp(2rem, 5vw, 3rem);
+  padding-top: 1.25rem;
+}
+
+.gl-switch__label {
+  margin: 0 0 0.9rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  color: var(--c-text-faint);
+}

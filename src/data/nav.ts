@@ -23,5 +23,8 @@ export const navItems: readonly NavItem[] = [
   { key: 'nav.about', path: 'about' },
   { key: 'nav.blog', path: 'blog' },
   { key: 'nav.gallery', path: 'gallery' },
+  // 拾遗收的是「别人做的、我拣回来的」东西，是目的地（与博客、画廊同级），
+  // 所以排在友链之前 —— 友链更像附录。
+  { key: 'nav.gleanings', path: 'gleanings' },
   { key: 'nav.friends', path: 'friends' },
 ];

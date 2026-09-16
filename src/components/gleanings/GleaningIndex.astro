@@ -1,0 +1,75 @@
+---
+import { useTranslations, type Locale } from '../../i18n/ui';
+
+/**
+ * 编号索引 —— 拾遗的**抽屉把手**。
+ *
+ * 同一排东西在两处当两种角色：
+ * · 总览页 —— 入口。把手下面挂三行「抽屉里最上面那几件」，点进去看全部。
+ * · 内容页 —— 标签。点一下换面板，并把这个抽屉写进地址栏（`#tab-repos`），
+ *   于是「仓库那一抽屉」是一条可分享、可收藏、可后退的深链。
+ *
+ * 为什么是 `<a>` 不是 `<button>`：**渐进增强**。没有 JS 时它照样是一排能跳的链接，
+ * 两个面板也都摊着（见 gleanings.css 的 `[data-gl-tabs]`）—— 功能一条不少。
+ *
+ * 为什么不做 `role="tab"` 那一套：那要求 aria-controls + 游标 tabindex + 方向键
+ * 一整套键盘约定，而这里两个面板本来就在同一个文档里、靠链接切换。用链接 +
+ * `aria-current` 更诚实，也少一半出错的地方。
+ */
+export interface IndexItem {
+  /** 抽屉 key，与面板的 `data-panel` 对上 */
+  key: string;
+  label: string;
+  count: number;
+  href: string;
+  /** 当前抽屉（只有内容页会传） */
+  current?: boolean;
+  /** 把手下面的三行预览（只有总览页传） */
+  preview?: readonly { text: string; meta?: string }[];
+}
+
+interface Props {
+  locale: Locale;
+  items: readonly IndexItem[];
+  /** 内容页：把把手接成标签（点它切面板） */
+  tabbable?: boolean;
+  /** 只有顶上那排把手带 id（`#tab-xxx` 深链要用）—— 页尾重复的那排不能带，会撞车 */
+  anchorIds?: boolean;
+}
+
+const { locale, items, tabbable = false, anchorIds = false } = Astro.props;
+const t = useTranslations(locale);
+---
+
+<nav class="gl-idx" aria-label={t('gleanings.index.aria')}>
+  {
+    items.map((item, index) => (
+      <div class="gl-idx__cell">
+        <a
+          class="gl-idx__link"
+          href={item.href}
+          id={anchorIds ? `tab-${item.key}` : undefined}
+          data-tab={tabbable ? item.key : undefined}
+          aria-current={item.current ? 'true' : undefined}
+        >
+          <span class="gl-idx__no">{String(index + 1).padStart(2, '0')}</span>
+          <span class="gl-idx__label">{item.label}</span>
+          <span class="gl-idx__count">{item.count}</span>
+          <span class="gl-idx__go" aria-hidden="true">
+            →
+          </span>
+        </a>
+        {item.preview && (
+          <ul class="gl-idx__preview">
+            {item.preview.map((row) => (
+              <li>
+                <span class="gl-idx__preview-text">{row.text}</span>
+                {row.meta && <em class="gl-idx__preview-meta">{row.meta}</em>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    ))
+  }
+</nav>

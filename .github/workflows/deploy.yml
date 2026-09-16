@@ -4,6 +4,11 @@ on:
   # 推送到 main 分支时自动部署
   push:
     branches: [main]
+  # 每天定时重建 —— 为的是拾遗（/gleanings/）那份 star 快照：
+  # 构建前会重新抓一次（见 build 里的 collect 那一步），所以页面上的数据是新的。
+  # UTC 20:17 = 北京时间 04:17，挑的是没人看站的时候。
+  schedule:
+    - cron: '17 20 * * *'
   # 允许在 Actions 页面手动触发
   workflow_dispatch:
 
@@ -20,9 +25,27 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 把抓取那一步的结果透给 deploy —— 只有 deploy 结束后才有资格把整次 run 判红
+    # （理由见 deploy 里最后那一步）
+    outputs:
+      collect: ${{ steps.collect.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      # 拾遗页的数据快照：**在构建之前**抓一次，写进 src/data/gleanings/stars.json。
+      # 只喂本次构建，**不提交回仓库** —— 所以不需要 contents: write，
+      # 也不会污染 git log。
+      #
+      # `continue-on-error` 是刻意的：抓取失败（限流、源改版）**不该掐断一次正常的部署**。
+      # 仓库里的 stars.json 就是上一次的快照，照旧构建，页面顶多旧一天 ——
+      # 而若让它失败到底，一次 API 抖动就会把「推送文章本该触发的部署」一起挡掉，那更糟。
+      # 注意 `collect.mjs` 自己的四道守卫保证它**不会写坏数据**：
+      # 任何一道命中就整份不写，宁可用旧的。
+      - name: Refresh gleanings snapshot
+        id: collect
+        continue-on-error: true
+        run: node scripts/collect.mjs
 
       - name: Install, build, and upload
         uses: withastro/action@v6
@@ -40,3 +63,15 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+      # 抓取失败要**被看见**，但又不能拦住部署 —— 所以把它放到部署**之后**再判红。
+      #
+      # 放在 build 里判红是不行的：那会让 deploy 因为 needs 失败而整个跳过，
+      # 推送一篇文章都可能被一次 API 抖动挡在门外。
+      # 放在这里，语义正好是想要的：**红得看得见，站照常上**。
+      - name: Surface a failed snapshot refresh
+        if: needs.build.outputs.collect == 'failure'
+        run: |
+          echo "::error::拾遗快照抓取失败 —— 这次部署用的是仓库里上一次的快照，页面上的数据可能旧了一天。"
+          echo "抓取脚本的报错在上一步（build / Refresh gleanings snapshot）的日志里。"
+          exit 1

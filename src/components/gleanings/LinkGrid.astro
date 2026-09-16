@@ -1,0 +1,54 @@
+---
+import { hostOf, pick, type LinkGroup } from '../../lib/gleanings';
+import { useTranslations, type Locale } from '../../i18n/ui';
+import Icon from '../Icon.astro';
+
+/**
+ * 收藏夹 —— 我平时存的网页与工具，按主题分组，每组一片卡片网格。
+ *
+ * 每张卡片的核心是**那句「为什么收它」**（`note`，数据层要求必填）。
+ * 没有这句话的链接等于书签栏，不该进这一页 —— 这是这个模块与「仓库」的区别所在。
+ *
+ * 整卡可点，外链带外链图标（照 friends.astro 的做法）。
+ */
+interface Props {
+  locale: Locale;
+  groups: readonly LinkGroup[];
+}
+
+const { locale, groups } = Astro.props;
+const t = useTranslations(locale);
+---
+
+{
+  groups.length === 0 ? (
+    <p class="empty-hint">{t('gleanings.links.empty')}</p>
+  ) : (
+    groups.map((group) => (
+      <section class="gl-group">
+        <h3 class="gl-group__title">
+          {group.label}
+          <span class="gl-group__count">{group.items.length}</span>
+        </h3>
+        <div class="gl-grid">
+          {group.items.map((link) => (
+            <a
+              class="gl-link"
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-featured={link.featured ? 'true' : undefined}
+            >
+              <span class="gl-link__host">
+                {hostOf(link.url)}
+                <Icon name="external" />
+              </span>
+              <span class="gl-link__title">{link.title}</span>
+              <span class="gl-link__note">{pick(locale, link.note)}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    ))
+  )
+}

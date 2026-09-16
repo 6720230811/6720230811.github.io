@@ -1,0 +1,35 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import GleaningHero from '../../components/gleanings/GleaningHero.astro';
+import GleaningAll from '../../components/gleanings/GleaningAll.astro';
+import { profile } from '../../data/profile';
+import { toLocale, useTranslations } from '../../i18n/ui';
+import '../../styles/gleanings.css';
+
+/**
+ * 拾遗 · 收录 —— 两个抽屉装在一页（/gleanings/all/）。
+ *
+ * 为什么内容页单独一条路由，而不是把 57 个仓库直接摆在 /gleanings/：
+ * 那一页是封面，页首要立住（一句定位 + 一栏统计 + 「现在」）；
+ * 内容一铺开，封面就变成了流水账。
+ *
+ * 为什么两个抽屉合成一页而不是各占一条路由：收藏夹只有 8 条，
+ * 单独开一页太空 —— 一页两条内容配一排标签，切换只改一个 hash，最省。
+ */
+const locale = toLocale('zh');
+const t = useTranslations(locale);
+const p = profile[locale];
+
+const title = `${t('gleanings.all.title')} · ${t('gleanings.title')} · ${p.name}`;
+---
+
+<BaseLayout
+  profile={p}
+  locale={locale}
+  title={title}
+  description={t('gleanings.all.desc')}
+  hero="panel"
+>
+  <GleaningHero slot="hero" locale={locale} variant="section" />
+  <GleaningAll locale={locale} />
+</BaseLayout>
