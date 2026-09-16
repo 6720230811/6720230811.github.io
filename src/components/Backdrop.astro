@@ -3,12 +3,21 @@
  * 背景效果层：一块固定画布 + 一层噪点，压在正文之下、顶部横幅之上
  * （层级、配色、噪点见 global.css 的 .backdrop / .backdrop-grain）
  *
- * 效果由五团柔光叠出来：
+ * 画布上画两样东西：
  *   1. 两团极淡的环境光，始终按李萨如曲线缓慢漂移 —— 页面静止时也有呼吸感
- *   2. 三团跟随光标的柔光，跟随速度各不相同，移动时拖出层次分明的尾迹
- *   3. 呼吸：每团的半径与透明度按各自周期轻微起伏
- *   4. 速度感应：光标划得越快，光晕越大越亮，停下后缓缓收回
- *   5. 进场淡入；鼠标移出窗口后交还给自动漂移
+ *   2. 一串**跟随指针的流星**：粒子沿指针的运动方向抛出去，几百毫秒内自己烧完。
+ *      引擎与配色从 HomeHero 的 `.hh__fx` 原样搬过来（那层只在首屏用、且只认首屏矩形），
+ *      现在它只在**这一处**存在 —— 首页那层本地副本已撤掉，否则首页会同时跑两套粒子。
+ *
+ * 三条刻意的实现选择跟着搬了过来，别改回去：
+ *   - **按帧发射，不按事件发射。** `pointermove` 的频率随设备浮动（几十到几百次/秒），
+ *     在事件里 spawn 等于把粒子密度交给硬件决定 —— 高刷屏上稠到糊成一片
+ *   - **方向来自位移本身**，不是随机方向。快划时又长又亮、慢移时只剩零星火花，
+ *     这个耦合才是「流星」的读法（随机方向只会得到一团雪花）
+ *   - **粒子有寿命，指针一停就自然结束。** 不写「空闲时清空」那种逻辑
+ *
+ * 与首屏那版的唯一区别是坐标：那边用「首屏内的绝对坐标」，这里用视口坐标（整页通用），
+ * 于是滚到哪儿、在哪一页，效果都在。
  */
 ---
 
@@ -26,9 +35,17 @@
     type RGB = [number, number, number];
 
     /** 配色写在 CSS 变量里（明暗主题各一套），这里按效果给透明度 */
-    let c1: RGB = [37, 99, 235]; // 主光
-    let c2: RGB = [139, 92, 246]; // 副光
-    let c3: RGB = [13, 148, 136]; // 第三层，偏青，和主色拉开层次
+    let sky1: RGB = [37, 99, 235]; // 夜空主色
+    let sky2: RGB = [139, 92, 246]; // 夜空副色
+    let core: RGB = [30, 58, 138]; // 彗头核心
+    let halo: RGB = [59, 130, 246]; // 彗头外晕
+    /**
+     * 光丝的颜色。**两套是反的**：暗色下就是首屏那套「冷白 + 淡青 + 淡紫」，
+     * 因为要压在深色夜空上当光看；浅色纸面上白线会直接消失，所以浅色用一列
+     * 浓蓝 / 靛 / 青绿 —— 它们在白底上读得出，压到首页那幅暗画上也还看得见
+     * （首页的画比纸面暗，亮蓝比深蓝稳妥，所以没有一个取到 near-black）。
+     */
+    let moteColors: string[] = ['37 99 235', '79 70 229', '13 148 136', '67 56 202'];
 
     const parse = (value: string, fallback: RGB): RGB => {
       const parts = value.trim().split(/\s+/).map(Number);
@@ -37,11 +54,33 @@
         : fallback;
     };
 
+    /**
+     * 一列颜色：`--bd-mote` 用**逗号**分隔（那是「列表」的分隔符），
+     * 每项内部仍是 `"R G B"`。
+     *
+     * 输出统一拼成**空格分隔**的 `"R G B"`，因为下面要把它塞进
+     * `rgb(R G B / A)` 这个现代写法里 —— 逗号和斜杠混用（`rgb(1,2,3 / .5)`）
+     * 是**非法颜色**，而 canvas 对非法 `strokeStyle` 的处理是**静默忽略**：
+     * 不报错、不警告，直接沿用上一个值（初始就是黑色）。
+     * 这一条真踩过：光丝全画成了黑的，而所有按 alpha 写的断言照样全绿 ——
+     * 是截图里那一条黑带把它抓出来的。
+     */
+    const parseList = (value: string, fallback: string[]): string[] => {
+      const list = value
+        .split(',')
+        .map((item) => item.trim().split(/\s+/).map(Number))
+        .filter((parts) => parts.length === 3 && parts.every((n) => Number.isFinite(n)))
+        .map((parts) => parts.map((n) => Math.round(n)).join(' '));
+      return list.length > 0 ? list : fallback;
+    };
+
     const readPalette = () => {
       const style = getComputedStyle(canvas);
-      c1 = parse(style.getPropertyValue('--bd-1'), c1);
-      c2 = parse(style.getPropertyValue('--bd-2'), c2);
-      c3 = parse(style.getPropertyValue('--bd-3'), c3);
+      sky1 = parse(style.getPropertyValue('--bd-1'), sky1);
+      sky2 = parse(style.getPropertyValue('--bd-2'), sky2);
+      core = parse(style.getPropertyValue('--bd-core'), core);
+      halo = parse(style.getPropertyValue('--bd-halo'), halo);
+      moteColors = parseList(style.getPropertyValue('--bd-mote'), moteColors);
     };
     readPalette();
     // 主题切换后变量值会变，重新读一次
@@ -50,7 +89,8 @@
       attributeFilter: ['data-theme'],
     });
 
-    const rgba = (c: RGB, alpha: number) => `rgb(${c[0]} ${c[1]} ${c[2]} / ${alpha})`;
+    const rgba = (c: RGB, alpha: number) =>
+      `rgb(${Math.round(c[0])} ${Math.round(c[1])} ${Math.round(c[2])} / ${alpha})`;
 
     // ---------- 画布尺寸 ----------
     // 半分辨率渲染再拉满：柔光本来就没有细节，省下 3/4 的填充量，
@@ -69,36 +109,18 @@
     resize();
     window.addEventListener('resize', resize);
 
-    // ---------- 光标 ----------
-    const target = { x: w / 2, y: h * 0.4 };
-    let engaged = false; // 用户是否动过鼠标
+    /**
+     * 「减少动态效果」偏好。
+     *
+     * 收在这里当常量、**每帧重读一次 `.matches`**（浏览器缓存了实时值，开销可忽略）：
+     * 偏好可能在页面加载**之后**才改，那时循环已经在跑，只在启动时判一次就漏了 ——
+     * 半空的粒子会继续留在画面上。上一版是拿 CSS 的 `display: none` 兜的，
+     * 现在画布是全站唯一一层、夜里那两团环境光也在同一块画布上，
+     * 整层藏掉会连夜空一起没，所以改成在帧里跳过粒子那一趟。
+     */
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-    const onPoint = (e: PointerEvent) => {
-      target.x = e.clientX;
-      target.y = e.clientY;
-      engaged = true;
-    };
-    window.addEventListener('pointermove', onPoint, { passive: true });
-    window.addEventListener('pointerdown', onPoint, { passive: true });
-    // 鼠标移出窗口：交还给自动漂移
-    document.addEventListener('pointerleave', () => {
-      engaged = false;
-    });
-
-    // ---------- 五团柔光 ----------
-    interface Orb {
-      x: number;
-      y: number;
-      /** 跟随速度，越小拖得越长 */
-      lag: number;
-      /** 半径（相对 base） */
-      r: number;
-      alpha: number;
-      /** 呼吸相位，避免所有层同步起伏 */
-      phase: number;
-      color: () => RGB;
-    }
-
+    // ---------- 环境光（夜空） ----------
     interface Ambient {
       /** 漂移幅度（相对视口宽高）与速度 */
       ax: number;
@@ -111,19 +133,11 @@
       color: () => RGB;
     }
 
-    const orbSpecs: Omit<Orb, 'x' | 'y'>[] = [
-      { lag: 0.14, r: 0.34, alpha: 0.3, phase: 0, color: () => c1 },
-      { lag: 0.085, r: 0.52, alpha: 0.22, phase: 2.1, color: () => c2 },
-      { lag: 0.05, r: 0.78, alpha: 0.14, phase: 4.3, color: () => c3 },
-    ];
-
-    // 环境光：不跟光标，自己在整页里游走，避免画面大片死寂
+    // 不跟光标，自己在整页里游走：避免画面大片死寂
     const ambient: Ambient[] = [
-      { ax: 0.3, ay: 0.24, sx: 0.07, sy: 0.05, r: 0.9, alpha: 0.07, phase: 0, color: () => c1 },
-      { ax: 0.26, ay: 0.3, sx: -0.05, sy: 0.08, r: 1, alpha: 0.06, phase: 2.4, color: () => c2 },
+      { ax: 0.3, ay: 0.24, sx: 0.07, sy: 0.05, r: 0.9, alpha: 0.07, phase: 0, color: () => sky1 },
+      { ax: 0.26, ay: 0.3, sx: -0.05, sy: 0.08, r: 1, alpha: 0.06, phase: 2.4, color: () => sky2 },
     ];
-
-    const orbs: Orb[] = orbSpecs.map((o) => ({ ...o, x: target.x, y: target.y }));
 
     /** 画一团柔光：中间加一个色标，衰减比纯线性更自然 */
     const blob = (x: number, y: number, r: number, color: RGB, alpha: number) => {
@@ -137,8 +151,225 @@
       ctx.fillRect(x - r, y - r, r * 2, r * 2);
     };
 
-    const render = (t: number, intro: number, boost: number) => {
+    // ---------- 光标 ----------
+    /** 指针此刻的视口坐标。**事件里只记坐标**，发射放到帧里 —— 见下面 frame */
+    const pointer = { x: w / 2, y: h * 0.4 };
+    /** 用户是否动过鼠标（给 e2e 分辨「有没有指针」这条分支） */
+    let engaged = false;
+    /** 本帧有没有收到过新的指针位置（只有它为真才发射） */
+    let moved = false;
+    /** 上一帧的指针位置（视口坐标）。发射量用它和本帧做差 */
+    let prevX = 0;
+    let prevY = 0;
+    let hasPrev = false;
+
+    const onPoint = (e: PointerEvent) => {
+      // 触屏没有 hover；手指滑过时整屏撒粒子既晕又白烧电
+      if (e.pointerType === 'touch') return;
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+      engaged = true;
+      moved = true;
+    };
+    const onLeave = () => {
+      engaged = false;
+      // 丢掉「上一帧位置」：否则下次指针进来会拿离开前的旧点算出一个假位移，
+      // 一进来就炸出一整屏粒子
+      hasPrev = false;
+      moved = false;
+    };
+
+    // ---------- 流星（粒子） ----------
+    type Mote = {
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      /**
+       * 发射时指针的**运动方向**（单位向量）。光丝沿它画，**不沿粒子自己的速度** ——
+       * 那 78% 的慢粒子残余速度接近 0，沿它画出来只有一个点，连续光带根本形不成。
+       */
+      dirX: number;
+      dirY: number;
+      /** 每帧速度衰减。飞溅的火星拖得久，贴着路径的慢粒子落得快 */
+      drag: number;
+      /** 这一颗画多长（px）。**按指针速度定** —— 见 emit 里为什么 */
+      trail: number;
+      /** 亮度增益。飞溅的火星亮一档，于是光带有「芯」也有「星」 */
+      gain: number;
+      life: number;
+      max: number;
+      color: string;
+    };
+
+    const motes: Mote[] = [];
+    /** 彗头：指针此刻所在处的一小团光。热度自己衰减，指针一停就灭（否则又成了静止色斑） */
+    let headX = 0;
+    let headY = 0;
+    let headHeat = 0;
+
+    /** 给 e2e 的自报面板：读像素只能证明「画了」，证明不了「按什么机制画的」 */
+    const diag = {
+      emitted: 0,
+      alive: 0,
+      headHeat: 0,
+      engaged: false,
+      /** 本帧指针走过的距离（px/帧）。光丝长度与发射量都由它定 */
+      speed: 0,
+      /** 指针此刻的位置（= 彗头该在的地方）。e2e 要靠它算「头前方 / 头后方」 */
+      x: 0,
+      y: 0,
+    };
+    (window as Window & { __bd?: typeof diag }).__bd = diag;
+
+    /** 在 (x, y) 处按「本帧位移 (dx, dy)」抛出一撮粒子 */
+    const emit = (x: number, y: number, dx: number, dy: number) => {
+      const speed = Math.hypot(dx, dy);
+      diag.speed = speed;
+      // 阈值 0.7px：多数指针停下时仍在抖 ±1px，不挡掉会一直渗粒子
+      // 上限 1200：一帧最多 9 个、寿命 ~1s，正常划动到不了；这条挡的是「按住快速乱划」
+      if (speed < 0.7 || motes.length > 1200) return;
+      // 彗头记在指针此刻的位置。**它必须有自己的热度衰减**（见 step）：
+      // 不衰减就是一颗不动的亮点，指针停下后留在那儿 —— 又回到「一块色斑」那个毛病
+      headX = x;
+      headY = y;
+      headHeat = 1;
+
+      const base = Math.atan2(dy, dx);
+      const count = Math.min(7, 2 + Math.floor(speed / 6));
+      /*
+        光丝长度取「指针这一帧走过的距离」（speed，px/帧）× 1.2。
+
+        这是**尺度**问题，第一版栽在这里：光丝固定 16px —— 铺到 1440px 的屏上只占
+        1.2% 宽，看着就是几道若有若无的划痕。改成跟着 speed 走之后有两个好处：
+          ① 相邻两帧的光丝**首尾相接**，指针走过的那条线被铺成一条**连续的光带**
+             （这才是「拖尾」；固定长度的散点永远拼不成一条线）
+          ② 快划自然长、慢移自然短，不必再人为设一张「速度 → 长度」的映射表
+      */
+      const trail = Math.max(5, Math.min(80, speed * 1.2));
+
+      /*
+        横向抖动：粒子沿**垂直于运动方向**散开 ±5.5px。
+
+        这是「一根线」与「一条光带」的区别。把粒子都撒在路径正中，画出来是
+        一条 1~2px 的发丝细线 —— 与用户抱怨的「只是一根线的变化不明显」是同一个毛病。
+        给厚度之后它才有体积，配合稀疏的火星，读起来是「一道光扫过」而不是「画了条线」。
+      */
+      const perpX = -Math.sin(base);
+      const perpY = Math.cos(base);
+
+      for (let i = 0; i < count; i += 1) {
+        // 散射 ±0.18rad（≈±10°）：方向感必须保留，散太大就从流星退化成雪花。
+        // 这个量是照「截图放大之后」定的：±0.45rad 时火星飞得远、方向又散，
+        // 整屏看是光带，放大看却是一把平行的长针 —— 像划痕，不像流星。
+        const angle = base + (Math.random() - 0.5) * 0.36;
+        /*
+          两种粒子按约 1:4 配：**大多数几乎不飞**（v≈0.2px/帧，一辈子挪不到 5px），
+          贴着指针走过的那条线堆成连续光带；少数飞得远、拖得长，负责「火星四溅」。
+
+          全是慢的会是一条死光带、没有生气；全是快的会散成一片雾 ——
+          更早那版就是后者：粒子在 800ms 里飘出近百像素，覆盖率只有 0.26%，
+          所以怎么看都是「有几道很细的光丝」。
+
+          火星**飞多远**也要收着：`v` 每帧乘 `drag`，总行程约 `v / (1 - drag)`，
+          所以 v 的系数取 3 意味着火星能飘出 150px 以上 —— 那就离开「拖尾」的范围、
+          变成一片散开的火星了。收到 1.7 之后总行程约 40~80px，正好像光带甩出来的碎屑。
+        */
+        const spark = Math.random() < 0.22;
+        const v = spark
+          ? (0.9 + Math.random() * 0.9) * Math.min(1.7, 0.6 + speed * 0.16)
+          : (0.1 + Math.random() * 0.2) * Math.min(2, 0.5 + speed * 0.1);
+        const off = (Math.random() - 0.5) * 11;
+        motes.push({
+          x: x + perpX * off + (Math.random() - 0.5) * 3,
+          y: y + perpY * off + (Math.random() - 0.5) * 3,
+          vx: Math.cos(angle) * v,
+          vy: Math.sin(angle) * v,
+          // 方向取 `base`（指针的运动方向）而不是散射后的 `angle`：
+          // 光丝必须**对齐那条路**才能连成带；各画各的会散成毛球
+          dirX: Math.cos(base),
+          dirY: Math.sin(base),
+          drag: spark ? 0.966 : 0.94,
+          // 长度也抖一下（0.5~1.3 倍）：等长的光丝码起来像一条刷子，太齐整。
+          // 火星只再乘 1.3（不是 1.6）：乘太多会画出上百像素的长针
+          trail: trail * (0.5 + Math.random() * 0.8) * (spark ? 1.3 : 1),
+          gain: spark ? 1.6 : 1,
+          life: 460 + Math.random() * 420,
+          max: 880,
+          color: moteColors[Math.floor(Math.random() * moteColors.length)] ?? '255 255 255',
+        });
+      }
+      diag.emitted += count;
+    };
+
+    /** 推进并重画粒子。**每帧都跑** —— 指针停下后粒子还要飞完自己的寿命 */
+    const step = (dt: number) => {
+      // 彗头热度先降：它有独立寿命（~240ms），与粒子是否还活着无关
+      headHeat = Math.max(0, headHeat - dt / 240);
+      diag.headHeat = headHeat;
+      diag.alive = motes.length;
+      const headOn = headHeat > 0.02;
+      if (!headOn && motes.length === 0) return;
+
+      /* **这里不清屏。** 粒子与夜空共用同一块画布，而 render 已经在开头
+         `clearRect` 过一次、并把两团环境光画上去了 —— 在这里再清一次会把夜空
+         整个抹掉（首屏那版之所以能清，是因为流星独占一层 canvas）。
+         于是每帧的顺序固定是「清 → 星空 → 粒子叠上去」。 */
+
+      // lighter 叠加：交叠处更亮，才像光。每帧重设一次，不依赖上一帧留下的状态
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+
+      /* 彗头：半径只有 9~18px。上一版那片光斑是 375×199px 的一团 —— 被否掉的理由
+         正是「太大、读不出是什么」。这一颗只说明「指针此刻在这儿」，并且随热度消失。 */
+      if (headOn) {
+        const r = 9 + 9 * headHeat;
+        const glow = ctx.createRadialGradient(headX, headY, 0, headX, headY, r);
+        glow.addColorStop(0, rgba(core, 0.5 * headHeat));
+        glow.addColorStop(0.4, rgba(halo, 0.22 * headHeat));
+        glow.addColorStop(1, rgba(halo, 0));
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(headX, headY, r, 0, 6.2832);
+        ctx.fill();
+      }
+
+      for (let i = motes.length - 1; i >= 0; i -= 1) {
+        const mote = motes[i];
+        if (!mote) continue;
+        mote.x += (mote.vx * dt) / 16;
+        mote.y += (mote.vy * dt) / 16;
+        mote.vx *= mote.drag;
+        // 一点重力：尾巴自然下垂，不像直线射出去
+        mote.vy = mote.vy * mote.drag + 0.012;
+        mote.life -= dt;
+        if (mote.life <= 0) {
+          motes.splice(i, 1);
+          continue;
+        }
+        const k = mote.life / mote.max;
+        // 光丝沿**指针的运动方向**向后画（见 Mote.dirX 的说明），长度随寿命收缩。
+        // 相邻两帧的 trail 首尾相接，于是连成一条不断的光带。
+        const len = mote.trail * (0.3 + 0.7 * k);
+        // 衰减用 k^1.2 而不是 k²：二次方前半段掉得太快，粒子刚飞出去就快看不见了
+        const alpha = Math.min(1, 0.72 * mote.gain * Math.pow(k, 1.2));
+        ctx.strokeStyle = `rgb(${mote.color} / ${alpha.toFixed(3)})`;
+        // 5px 宽（不是 1~2px 的发丝）：要有体积，读起来才是一道光而不是一条线
+        ctx.lineWidth = Math.max(1.2, 5 * k);
+        ctx.beginPath();
+        ctx.moveTo(mote.x, mote.y);
+        ctx.lineTo(mote.x - mote.dirX * len, mote.y - mote.dirY * len);
+        ctx.stroke();
+      }
+    };
+
+    // ---------- 绘制 ----------
+    // **分两趟**：环境光用默认的 source-over（它是一层「雾」，不该互相加亮），
+    // 粒子自己切到 lighter（交叠处更亮，才像光）。每趟开头显式复位一次合成模式，
+    // 不依赖上一帧留下的状态 —— 少一条「谁改了状态」的隐式路径
+    const render = (t: number, dt: number, intro: number) => {
       ctx.clearRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'source-over';
       const base = Math.hypot(w, h) * 0.45;
 
       for (const a of ambient) {
@@ -148,41 +379,54 @@
         blob(x, y, r, a.color(), a.alpha * intro);
       }
 
-      for (const o of orbs) {
-        o.x += (target.x - o.x) * o.lag;
-        o.y += (target.y - o.y) * o.lag;
-        // 呼吸 + 速度感应：划得越快，光晕越大越亮
-        const r =
-          base * o.r * (1 + 0.06 * Math.sin(t * 0.7 + o.phase)) * (1 + 0.18 * boost);
-        blob(o.x, o.y, r, o.color(), o.alpha * (1 + 0.35 * boost) * intro);
-      }
+      // 偏好是「减少动态效果」时只留夜空：粒子那一趟整趟跳过 ——
+      // 又是「动才有」的东西，静态下本来就该是空的
+      if (!motionQuery.matches) step(dt);
     };
 
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      // 尊重系统的「减少动态效果」：只画一帧静态背景，不进动画循环
-      render(0, 1, 0);
+    if (motionQuery.matches) {
+      // 尊重系统的「减少动态效果」：只画一帧静态背景，不进动画循环。
+      // 流星是「动才有」的东西，这一帧自然是空的，正好 —— 连指针监听都不挂
+      render(0, 16.7, 1);
     } else {
-      const t0 = performance.now();
-      let energy = 0; // 平滑后的光标移动强度
-      const prev = { x: target.x, y: target.y };
+      // 事件里只记坐标，换算留到帧里 —— 同一条纪律（见 HomeHero 那段注释）
+      window.addEventListener('pointermove', onPoint, { passive: true });
+      window.addEventListener('pointerdown', onPoint, { passive: true });
+      document.addEventListener('pointerleave', onLeave);
 
-      const frame = (now: number) => {
+      const t0 = performance.now();
+      let last = t0;
+
+      const frame = () => {
+        /* dt 用 performance.now() 自己量，**不用 rAF 传进来的时间戳**。
+           那个时间戳是「这一帧的开始时刻」，而脚本的模块求值可能正好落在
+           「这一帧开始」与「本帧回调执行」之间 —— 那样第一帧拿到的戳会早于
+           初始化时记下的 t0，dt 为负；换页 / 重建渲染管线时戳也可能回跳。
+           performance.now() 只在调用处单调递增，没有这些坑。
+           下限 1ms：同一时刻连着两帧时 dt=0，会让粒子原地不动。 */
+        const now = performance.now();
+        const dt = Math.min(Math.max(now - last, 1), 50);
+        last = now;
         const t = (now - t0) / 1000;
         const intro = Math.min(t / 1.2, 1); // 进场淡入
 
-        if (!engaged) {
-          // 还没动过鼠标（触屏、或刚打开页面）时自己慢慢飘
-          target.x = w * (0.5 + 0.28 * Math.sin(t * 0.23));
-          target.y = h * (0.45 + 0.22 * Math.cos(t * 0.19));
+        diag.engaged = engaged;
+        if (engaged) {
+          diag.x = pointer.x;
+          diag.y = pointer.y;
         }
 
-        const moved = Math.hypot(target.x - prev.x, target.y - prev.y);
-        energy += (moved - energy) * 0.15;
-        prev.x = target.x;
-        prev.y = target.y;
-        const boost = Math.min(energy / 22, 1);
+        // 发射放在帧里、不放在 pointermove 里：密度只跟「这一帧走了多远」有关，
+        // 与设备的事件频率无关
+        if (moved) {
+          moved = false;
+          if (hasPrev) emit(pointer.x, pointer.y, pointer.x - prevX, pointer.y - prevY);
+          prevX = pointer.x;
+          prevY = pointer.y;
+          hasPrev = true;
+        }
 
-        render(t, intro, boost);
+        render(t, dt, intro);
         window.requestAnimationFrame(frame);
       };
 

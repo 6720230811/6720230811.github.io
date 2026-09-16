@@ -74,16 +74,14 @@ const sectionIds = visibleSections(profile)
   data-about-sections={sectionIds}
   aria-labelledby="hh-name"
 >
-  {/* 三层视差：纯装饰，对读屏隐藏 */}
+  {/* 三层视差：纯装饰，对读屏隐藏。
+      流星层**不在这里** —— 它已经搬到全站的 `#backdrop`（见 Backdrop.astro）：
+      同一份引擎在首屏和内容页各跑一遍没有意义，而两层粒子在首页会原样重叠、
+      亮度直接翻倍。这里只管画面本身的景深。 */}
   <div class="hh__scene" aria-hidden="true">
     <div class="hh__layer hh__layer--far" style={`--layer-img: url('${base}home/far.webp')`}></div>
     <div class="hh__layer hh__layer--mid" style={`--layer-img: url('${base}home/mid.webp')`}></div>
     <div class="hh__layer hh__layer--near" style={`--layer-img: url('${base}home/near.webp')`}></div>
-
-    {/* 流星层：**必须排在三层之后** —— 它没有 z-index，靠 DOM 顺序压在画面之上；
-        而 .hh__content 的 z-index:2 比它高，文字仍在最上面。
-        canvas 空着也没关系（CSS 里 opacity:0，指针没进来过就不显示）。 */}
-    <canvas class="hh__fx"></canvas>
   </div>
 
   {/* 版面：左上刊头 / 右栏一句站点自己的话 / 底部编号索引。
@@ -184,10 +182,8 @@ const sectionIds = visibleSections(profile)
     if (!hero) return;
 
     if (shouldTrim()) {
-      // 流星层一并摘掉：省流 / 慢网下连 canvas 都不留（不建粒子系统）
-      hero
-        .querySelectorAll('.hh__layer--mid, .hh__layer--near, .hh__fx')
-        .forEach((el) => el.remove());
+      // 中景 / 近景两层干脆不加载（节点移除，背景图自然不发请求）
+      hero.querySelectorAll('.hh__layer--mid, .hh__layer--near').forEach((el) => el.remove());
     }
 
     type HomeHeroDiag = {
@@ -195,10 +191,6 @@ const sectionIds = visibleSections(profile)
       stopped: number;
       active: number;
       ticks: number;
-      /** 累计发射过多少粒子 */
-      fxEmitted: number;
-      /** 此刻还在飞的粒子数 */
-      fxAlive: number;
     };
     const win = window as Window & {
       __homeHero?: HomeHeroDiag;
@@ -211,17 +203,12 @@ const sectionIds = visibleSections(profile)
      * - `ticks`：每帧 +1。**这是唯一能证明「只有一份循环」的量** ——
      *   active 是脚本自己贴的标签，撤不掉的那份旧循环不会改写它；
      *   而旧循环若还活着，ticks 的增速会变成两倍。
-     *
-     * 流星层那两个是同一条纪律的延伸：一个**建好了却从没画过**的 canvas，从外面看
-     * 与「没有这一层」完全一样（都是空白）。所以让它自己报「发射过多少、此刻还剩多少」。
      */
     const diag: HomeHeroDiag = (win.__homeHero ??= {
       started: 0,
       stopped: 0,
       active: 0,
       ticks: 0,
-      fxEmitted: 0,
-      fxAlive: 0,
     });
 
     let raf = 0;
@@ -240,228 +227,14 @@ const sectionIds = visibleSections(profile)
       return;
     }
 
-    /**
-     * 流星层：一层 canvas，粒子由**指针位移**驱动。
-     *
-     * 三条刻意的实现选择：
-     *
-     * - **按帧发射，不按事件发射。** `pointermove` 的频率随设备浮动（几十到几百次/秒），
-     *   在事件里 spawn 等于把粒子密度交给硬件决定 —— 高刷屏上稠到糊成一片。
-     *   事件仍然只记坐标（与上面那套同一条纪律），发射量按「本帧与上一帧的位移」算。
-     * - **方向来自位移本身**，不是随机方向。粒子沿指针走过的方向抛出去：快划时又长又亮、
-     *   慢移时只剩零星火花，这个耦合才是「流星」的读法（随机方向只会得到一团雪花）。
-     * - **粒子有寿命，指针一停就自然结束。** 不写「空闲时清空」那种逻辑 ——
-     *   少一条状态路径，也少一种「清早了 / 清晚了」的 bug。
-     *
-     * 这一层建在 `reduceMotion()` 提前返回**之后**：关掉动画偏好时它根本不存在（连 canvas
-     * 都不碰），而不是「建了但不画」。
-     */
-    type Mote = {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      /**
-       * 发射时指针的**运动方向**（单位向量）。光丝沿它画，**不沿粒子自己的速度** ——
-       * 那 88% 的慢粒子残余速度接近 0，沿它画出来只有一个点，连续光带根本形不成。
-       */
-      dirX: number;
-      dirY: number;
-      /** 每帧速度衰减。飞溅的火星拖得久，贴着路径的慢粒子落得快 */
-      drag: number;
-      /** 这一颗画多长（px）。**按指针速度定** —— 见 fxEmit 里为什么 */
-      trail: number;
-      /** 亮度增益。飞溅的火星亮一档，于是光带有「芯」也有「星」 */
-      gain: number;
-      life: number;
-      max: number;
-      color: string;
-    };
-
-    const fxCanvas = hero.querySelector<HTMLCanvasElement>('.hh__fx');
-    const fxCtx = fxCanvas ? fxCanvas.getContext('2d') : null;
-    /** 设备像素比封顶 2：3x 屏上粒子线宽只有 1~2px，翻三倍纯粹白烧填充率 */
-    const fxDpr = Math.min(2, window.devicePixelRatio || 1);
-    const motes: Mote[] = [];
-    /** 冷色系，与画面里的青蓝 / 淡紫笔触同一族 */
-    const MOTE_COLORS = ['186,228,255', '255,255,255', '152,250,236', '206,204,255'];
-    let fxW = 0;
-    let fxH = 0;
-    /** 彗头：指针此刻所在处的一小团光。热度自己衰减，指针一停就灭（否则又成了静止色斑） */
-    let fxHeadX = 0;
-    let fxHeadY = 0;
-    let fxHeadHeat = 0;
-    /** 上一帧画布上是否有东西 —— 决定这一帧要不要 clearRect（见 fxStep 里那段注释） */
-    let fxPainted = false;
-
-    const fxResize = () => {
-      if (!fxCanvas || !fxCtx) return;
-      const rect = hero.getBoundingClientRect();
-      fxW = Math.max(1, Math.round(rect.width));
-      fxH = Math.max(1, Math.round(rect.height));
-      // 后备缓冲尺寸按 DPR 放大，再用 setTransform 把绘制坐标换回 CSS 像素 ——
-      // 于是下面的坐标全部可以按「CSS 像素」想，不必到处乘 DPR
-      fxCanvas.width = Math.round(fxW * fxDpr);
-      fxCanvas.height = Math.round(fxH * fxDpr);
-      fxCtx.setTransform(fxDpr, 0, 0, fxDpr, 0, 0);
-    };
-
-    /** 在 (x, y) 处按「本帧位移 (dx, dy)」抛出一撮粒子 */
-    const fxEmit = (x: number, y: number, dx: number, dy: number) => {
-      const speed = Math.hypot(dx, dy);
-      // 阈值 0.7px：多数指针停下时仍在抖 ±1px，不挡掉会一直渗粒子
-      // 上限 1200：一帧最多 9 个、寿命 ~1s，正常划动到不了；这条挡的是「按住快速乱划」
-      if (speed < 0.7 || motes.length > 1200) return;
-      // 彗头记在指针此刻的位置。**它必须有自己的热度衰减**（见 fxStep）：
-      // 不衰减就是一颗不动的亮点，指针停下后留在那儿 —— 又回到「一块色斑」那个毛病
-      fxHeadX = x;
-      fxHeadY = y;
-      fxHeadHeat = 1;
-
-      const base = Math.atan2(dy, dx);
-      const count = Math.min(7, 2 + Math.floor(speed / 6));
-      /*
-        光丝长度取「指针这一帧走过的距离」（speed，px/帧）× 1.2。
-
-        这条是**尺度**问题，第一版栽在这里：照搬预览里那个 330px 宽的小格子调参，
-        光丝固定 16px —— 铺到 1440px 的首屏上只占 1.2% 宽，看着就是几道若有若无的划痕。
-        改成跟着 speed 走之后有两个好处：
-          ① 相邻两帧的光丝**首尾相接**，指针走过的那条线被铺成一条**连续的光带**
-             （这才是「拖尾」；固定长度的散点永远拼不成一条线）
-          ② 快划自然长、慢移自然短，不必再人为设一张「速度 → 长度」的映射表
-      */
-      const trail = Math.max(5, Math.min(80, speed * 1.2));
-
-      /*
-        横向抖动：粒子沿**垂直于运动方向**散开 ±5.5px。
-
-        这是「一根线」与「一条光带」的区别。第一版把粒子都撒在路径正中，画出来是
-        一条 1~2px 的发丝细线 —— 与用户抱怨的「只是一根线的变化不明显」是同一个毛病。
-        给厚度之后它才有体积，配合稀疏的火星，读起来是「一道光扫过」而不是「画了条线」。
-      */
-      const perpX = -Math.sin(base);
-      const perpY = Math.cos(base);
-
-      for (let i = 0; i < count; i += 1) {
-        // 散射 ±0.18rad（≈±10°）：方向感必须保留，散太大就从流星退化成雪花。
-        // 这个量是照「截图放大之后」定的：±0.45rad 时火星飞得远、方向又散，
-        // 整屏看是光带，放大看却是一把平行的长针 —— 像划痕，不像流星。
-        const angle = base + (Math.random() - 0.5) * 0.36;
-        /*
-          两种粒子按约 1:4 配：**大多数几乎不飞**（v≈0.2px/帧，一辈子挪不到 5px），
-          贴着指针走过的那条线堆成连续光带；少数飞得远、拖得长，负责「火星四溅」。
-
-          全是慢的会是一条死光带、没有生气；全是快的会散成一片雾 —— 更早那版就是后者：
-          粒子在 800ms 里飘出近百像素，400 多颗摊在约 978×250 的范围里，覆盖率只有 0.26%，
-          所以怎么看都是「有几道很细的光丝」（e2e 量出来的非透明像素也印证了这一点）。
-
-          火星**飞多远**也要收着：`v` 每帧乘 `drag`，总行程约 `v / (1 - drag)` ≈ 29 帧的量，
-          所以 v 的系数取 3 意味着火星能飘出 150px 以上 —— 那就离开「拖尾」的范围、
-          变成一片散开的火星了。收到 1.7 之后总行程约 40~80px，正好像光带甩出来的碎屑。
-        */
-        const spark = Math.random() < 0.22;
-        const v = spark
-          ? (0.9 + Math.random() * 0.9) * Math.min(1.7, 0.6 + speed * 0.16)
-          : (0.1 + Math.random() * 0.2) * Math.min(2, 0.5 + speed * 0.1);
-        const off = (Math.random() - 0.5) * 11;
-        motes.push({
-          x: x + perpX * off + (Math.random() - 0.5) * 3,
-          y: y + perpY * off + (Math.random() - 0.5) * 3,
-          vx: Math.cos(angle) * v,
-          vy: Math.sin(angle) * v,
-          // 方向取 `base`（指针的运动方向）而不是散射后的 `angle`：
-          // 光丝必须**对齐那条路**才能连成带；各画各的会散成毛球
-          dirX: Math.cos(base),
-          dirY: Math.sin(base),
-          drag: spark ? 0.966 : 0.94,
-          // 长度也抖一下（0.5~1.3 倍）：等长的光丝码起来像一条刷子，太齐整。
-          // 火星只再乘 1.3（不是 1.6）：乘太多会画出上百像素的长针，见下面 fxStep 里
-          // `len` 那条 —— 整屏看着没事，放大就是一把划痕
-          trail: trail * (0.5 + Math.random() * 0.8) * (spark ? 1.3 : 1),
-          gain: spark ? 1.6 : 1,
-          life: 460 + Math.random() * 420,
-          max: 880,
-          color: MOTE_COLORS[Math.floor(Math.random() * MOTE_COLORS.length)] ?? '255,255,255',
-        });
-      }
-      diag.fxEmitted += count;
-    };
-
-    /** 推进并重画。**每帧都跑**，不受 `pointing` 影响 —— 指针停下后粒子还要飞完自己的寿命 */
-    const fxStep = (dt: number) => {
-      if (!fxCtx) return;
-      // 彗头热度先降：它有独立寿命（~240ms），与粒子是否还活着无关
-      fxHeadHeat = Math.max(0, fxHeadHeat - dt / 240);
-      const headOn = fxHeadHeat > 0.02;
-      const any = motes.length > 0 || headOn;
-
-      // 只在「上一帧画过」或「这一帧要画」时才清一次：整页从未动过指针的情况下，
-      // 每帧只剩一个布尔判断，不必去刷 1440×828 的像素（首屏是全站最大的绘制面积）
-      if (!any && !fxPainted) return;
-      fxCtx.clearRect(0, 0, fxW, fxH);
-      fxPainted = any;
-      diag.fxAlive = motes.length;
-      if (!any) return;
-
-      // lighter 叠加：交叠处更亮，才像光。clearRect 之后每帧重设一次，不缓存状态
-      fxCtx.globalCompositeOperation = 'lighter';
-      fxCtx.lineCap = 'round';
-
-      /* 彗头：半径只有 9~18px。上一版那片光斑是 375×199px 的一团 —— 用户否掉它的理由
-         正是「太大、读不出是什么」。这一颗只说明「指针此刻在这儿」，并且随热度消失。 */
-      if (headOn) {
-        const r = 9 + 9 * fxHeadHeat;
-        const glow = fxCtx.createRadialGradient(fxHeadX, fxHeadY, 0, fxHeadX, fxHeadY, r);
-        glow.addColorStop(0, `rgba(255,255,255,${(0.5 * fxHeadHeat).toFixed(3)})`);
-        glow.addColorStop(0.4, `rgba(196,230,255,${(0.22 * fxHeadHeat).toFixed(3)})`);
-        glow.addColorStop(1, 'rgba(196,230,255,0)');
-        fxCtx.fillStyle = glow;
-        fxCtx.beginPath();
-        fxCtx.arc(fxHeadX, fxHeadY, r, 0, 6.2832);
-        fxCtx.fill();
-      }
-
-      for (let i = motes.length - 1; i >= 0; i -= 1) {
-        const mote = motes[i];
-        if (!mote) continue;
-        mote.x += (mote.vx * dt) / 16;
-        mote.y += (mote.vy * dt) / 16;
-        mote.vx *= mote.drag;
-        // 一点重力：尾巴自然下垂，不像直线射出去
-        mote.vy = mote.vy * mote.drag + 0.012;
-        mote.life -= dt;
-        if (mote.life <= 0) {
-          motes.splice(i, 1);
-          continue;
-        }
-        const k = mote.life / mote.max;
-        // 光丝沿**指针的运动方向**向后画（见 Mote.dirX 的说明），长度随寿命收缩。
-        // 相邻两帧的 trail 首尾相接，于是连成一条不断的光带。
-        const len = mote.trail * (0.3 + 0.7 * k);
-        // 衰减用 k^1.2 而不是 k²：二次方前半段掉得太快，粒子刚飞出去就快看不见了
-        const alpha = Math.min(1, 0.72 * mote.gain * Math.pow(k, 1.2));
-        fxCtx.strokeStyle = `rgba(${mote.color},${alpha.toFixed(3)})`;
-        // 5px 宽（不是 1~2px 的发丝）：要有体积，读起来才是一道光而不是一条线
-        fxCtx.lineWidth = Math.max(1.2, 5 * k);
-        fxCtx.beginPath();
-        fxCtx.moveTo(mote.x, mote.y);
-        fxCtx.lineTo(mote.x - mote.dirX * len, mote.y - mote.dirY * len);
-        fxCtx.stroke();
-      }
-    };
-
-    /** 清空。首屏滚出视口时用 —— 否则循环一停，半空的粒子会**冻在画面上** */
-    const fxClear = () => {
-      motes.length = 0;
-      diag.fxAlive = 0;
-      fxHeadHeat = 0;
-      fxPainted = false;
-      if (fxCtx) fxCtx.clearRect(0, 0, fxW, fxH);
-    };
+    /* 流星层（跟着指针走的一串粒子）原来就长在这段之后，现在整段搬去了
+       全站的 `#backdrop`（见 Backdrop.astro）—— 那边引擎、参数、注释都原样保留。
+       搬走而不是复制，是因为首页同时跑两套粒子会**原样重叠**：两边的坐标都在
+       同一个视口里、发射条件也一样，叠起来只是把亮度翻倍，看不出是两回事。
+       这里从此只管「首屏景深」一件事。 */
 
     const measure = () => {
       height = hero.offsetHeight || 1;
-      fxResize();
     };
 
     /**
@@ -488,7 +261,6 @@ const sectionIds = visibleSections(profile)
       pyRaw = event.clientY;
       pointing = true;
       offHero = false;
-      if (!hero.dataset.lit) hero.dataset.lit = 'true';
     };
 
     /**
@@ -498,24 +270,11 @@ const sectionIds = visibleSections(profile)
     const onPointerLeave = () => {
       offHero = true;
       pointing = true;
-      delete hero.dataset.lit;
     };
-
-    /** 上一帧的指针位置（首屏内的像素坐标）。发射量用它和本帧做差 —— 见 fxEmit */
-    let fxPrevX = 0;
-    let fxPrevY = 0;
-    let fxHasPrev = false;
-    /** 上一帧时刻。粒子的运动必须按**真实时长**推进，不能按「帧」—— 否则 144Hz 与 60Hz 上速度不一样 */
-    let lastFrame = performance.now();
 
     const tick = () => {
       if (!running) return;
       diag.ticks += 1;
-
-      const now = performance.now();
-      // 夹住 dt：切回前台、或第一帧，dt 可能是几秒，粒子会一帧穿出画面
-      const dt = Math.min(50, now - lastFrame);
-      lastFrame = now;
 
       // 先读完再写：这一帧要读 scrollY 与（可能）首屏矩形，之后只碰变量
       const progress = Math.min(1, Math.max(0, window.scrollY / height));
@@ -532,20 +291,7 @@ const sectionIds = visibleSections(profile)
             // 以首屏中心为原点归一化到 ±1，交给 CSS 乘各自的系数
             hx = clamp1((pxRaw - (rect.left + rect.width / 2)) / (rect.width / 2));
             hy = clamp1((pyRaw - (rect.top + rect.height / 2)) / (rect.height / 2));
-
-            // 流星用的是**同一份指针原始坐标**，但要的是「首屏内的绝对值」而不是
-            // 相对中心的归一化值：粒子必须落在指针所在的那一点上。发射在这里、
-            // 不在 pointermove 里，是为了让密度只跟「这一帧走了多远」有关。
-            const localX = pxRaw - rect.left;
-            const localY = pyRaw - rect.top;
-            if (fxHasPrev) fxEmit(localX, localY, localX - fxPrevX, localY - fxPrevY);
-            fxPrevX = localX;
-            fxPrevY = localY;
-            fxHasPrev = true;
           }
-        } else {
-          // 指针已离开首屏：丢掉「上一帧位置」，否则下次进来会拿离开前的旧点算出一个假位移
-          fxHasPrev = false;
         }
       }
 
@@ -555,9 +301,6 @@ const sectionIds = visibleSections(profile)
         hero.style.setProperty('--hy', hy.toFixed(4));
       }
 
-      // 粒子推进与绘制**每帧都跑**，不受 pointing 影响
-      fxStep(dt);
-
       raf = requestAnimationFrame(tick);
     };
 
@@ -565,9 +308,6 @@ const sectionIds = visibleSections(profile)
       if (running) return;
       running = true;
       measure();
-      // 起手先把时刻钉住：否则第一帧的 dt 是「上次停到现在」的整段时长（夹到 50ms
-      // 也是一次突然的跳跃），粒子会往前猛蹿一下
-      lastFrame = performance.now();
       diag.started += 1;
       diag.active = 1;
       raf = requestAnimationFrame(tick);
@@ -579,9 +319,6 @@ const sectionIds = visibleSections(profile)
       cancelAnimationFrame(raf);
       diag.stopped += 1;
       diag.active = 0;
-      // **必须清画布**：循环停了就没人再重画，半空的粒子会冻在画面上 ——
-      // 首屏滚出视口正是最常见的触发场景（往下看文章时，画面上留着几道静止的光）
-      fxClear();
     };
 
     // 首屏滚出视口就停掉循环（首页很长，没必要一直空转）
@@ -622,7 +359,6 @@ const sectionIds = visibleSections(profile)
       hero.style.removeProperty('--hh-p');
       hero.style.removeProperty('--hx');
       hero.style.removeProperty('--hy');
-      delete hero.dataset.lit;
     };
   };
 

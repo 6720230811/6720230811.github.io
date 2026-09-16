@@ -199,15 +199,28 @@ h4 {
   pointer-events: none;
 
   /* 画布配色：写成 "R G B" 三元组，透明度由脚本按效果给 */
-  --bd-1: 37 99 235; /* 主光 */
-  --bd-2: 139 92 246; /* 副光 */
-  --bd-3: 13 148 136; /* 第三层，偏青 */
+  --bd-1: 37 99 235; /* 夜空主色（环境光） */
+  --bd-2: 139 92 246; /* 夜空副色（环境光） */
+
+  /* 流星：引擎与配色从首屏的 `.hh__fx` 搬过来（见 Backdrop.astro 的说明）。
+     `-core` 是彗头那一点，`-halo` 是它外面那圈柔光，`-mote` 是光丝的颜色表
+     （逗号分隔，每项仍是 "R G B"，脚本按逗号切）。
+
+     两套配色是**反的**，这不是随手写的：暗色下沿用首屏那套「冷白 + 淡青 + 淡紫」，
+     压在这片深色夜空上当光看；浅色纸面上一根白线会直接消失，所以浅色换成
+     浓蓝 / 靛 / 青绿 —— 它们在白底上读得出，压到首页那幅暗画上也还看得见
+     （首页的画比纸面暗，所以没有一个取到 near-black）。 */
+  --bd-core: 30 58 138;
+  --bd-halo: 59 130 246;
+  --bd-mote: 37 99 235, 79 70 229, 13 148 136, 67 56 202;
 }
 
 :root[data-theme='dark'] .backdrop {
   --bd-1: 88 166 255;
   --bd-2: 167 139 250;
-  --bd-3: 45 212 191;
+  --bd-core: 255 255 255;
+  --bd-halo: 186 230 255;
+  --bd-mote: 186 228 255, 255 255 255, 152 250 236, 206 204 255;
 }
 
 /* 噪点层：大面积柔光在 8bit 画布上会出现色带，压一层几乎看不见的颗粒即可打散；
@@ -796,6 +809,54 @@ h4 {
   inset: auto 0 0 0;
   height: 40%;
   background: linear-gradient(to bottom, transparent, var(--c-page));
+}
+
+/* 内容驱动的横幅（hero="panel"）。高度**不写死**，由里面排的页首决定 ——
+   这正是它与 .hero / .hh 的区别：那两档是装饰，高度是设计值；
+   这一档是「把页首写在图上」，高度是内容的自然高度。
+
+   与 .hero 的另外三处差异：
+   ① 文字色**固定在「亮」这一侧，不跟随明暗主题**。它永远压在一幅暗画上，
+      跟随的话亮色主题会拿深灰字去压深色画（同 .hh 的理由）。
+      四支变量与 home.css 里那套同名同值 —— 都是「压在暗画上」的同一种处境。
+   ② margin-bottom: 0。.hero 靠负 margin 让 .page 盖住底边，那是为了
+      把横幅尾巴藏进内容区；这里的底边下面紧接着就是正文，盖住就会压到最后一行字上。
+   ③ ::after 的渐隐从 40% 收到一条边：40% 对 315px 的横幅是 126px（轻轻抹开），
+      对一条 400px 的横幅就是 160px 的灰白雾，会把底下的小字泡进去。 */
+.hero--panel {
+  --hero-fg: #f2f6fb;
+  --hero-fg-soft: rgb(222 233 245 / 0.92);
+  --hero-fg-muted: rgba(212, 225, 240, 0.78);
+  --hero-fg-line: rgba(226, 236, 248, 0.28);
+
+  height: auto;
+  margin-bottom: 0;
+  padding: clamp(1.75rem, 4vw, 2.75rem) 0 clamp(2.25rem, 5vw, 3.5rem);
+}
+
+/* 暗化罩。banner.jpg 上有几处亮笔触（左下与右上那两道米黄），
+   不压一层的话浅色小字正好落在上面读不出来。用画面同色系的深蓝黑而不是纯黑 ——
+   纯黑会把横幅与下面那条渐隐割成两块，看起来像两个东西。 */
+.hero--panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(9 14 24 / 0.58), rgb(9 14 24 / 0.8));
+  pointer-events: none;
+}
+
+/* 版心与 .page 对齐（同 --page-max 与 1rem 内边距），否则刊头左缘与正文的左缘差一截 */
+.hero__panel {
+  position: relative;
+  z-index: 2;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 1rem;
+  color: var(--hero-fg);
+}
+
+.hero--panel::after {
+  height: clamp(2rem, 4vw, 3rem);
 }
 
 /* ============================================================
