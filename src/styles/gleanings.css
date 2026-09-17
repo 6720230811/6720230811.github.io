@@ -842,14 +842,41 @@
   color: var(--c-text-faint);
 }
 
-/* ───────────────────── 雷达：总览条 ───────────────────── */
+/* ───────────────────── 雷达：分区段（刻度行 + 卡片） ───────────────────── */
 
 /* ⚠️ 这一整块**坐在页面底色上**（不在白卡片里）——
    和 .gl-drawer 一样。所以描边与轨道一律用 `--c-border`（浅色 #e4e7eb，差 12/255），
    不能用 `--c-border-soft`（#eef0f2，压在 #f0f2f5 上只差 2/255，等于没画）。 */
 
+/* 两个语区段（中文热榜 / 技术榜单）纵向排；段与段之间留一截呼吸 */
+.gl-radar__zones {
+  display: grid;
+  gap: clamp(1.6rem, 4vw, 2.4rem);
+}
+
 .gl-radar {
-  margin-bottom: clamp(1.4rem, 3vw, 2rem);
+  min-width: 0;
+}
+
+/* 区名：细线在前（同 .gl-hero__eyebrow 那套眉标语言），一望而知换区了 */
+.gl-radar__zone {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--c-text-muted);
+}
+
+.gl-radar__zone::before {
+  content: '';
+  flex: none;
+  width: 1.75rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.55;
 }
 
 .gl-radar__head {
@@ -905,6 +932,8 @@
   }
 }
 
+/* 刻度条横排：一个区最多 5 格，压在 64rem 内容区里每格 ~11rem，够读；
+   窄屏 auto-fit 自己塌成 2~3 列 */
 .gl-radar__strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
@@ -953,18 +982,6 @@
   }
 }
 
-/* 两个语区之间裂一道缝 —— 九格连成一片的话，看不出第 6 格换了批次 */
-.gl-radar__cell[data-band-start='true'] {
-  padding-left: 0.9rem;
-  border-left: 1px solid var(--c-border);
-}
-
-.gl-radar__band {
-  font-size: 0.6875rem;
-  letter-spacing: 0.12em;
-  color: var(--c-text-faint);
-}
-
 /* 十条刻度，榜首在**下**（column-reverse）。条的宽度 = 源内归一化热度 */
 .gl-radar__scale {
   display: flex;
@@ -1001,14 +1018,14 @@
   background: var(--c-accent);
 }
 
-.gl-radar__meta {
-  display: flex;
+/* 源名行：名字 + 「按名次」标记 + 「暂时取不到」徽章挤一行，装不下就换行 */
+.gl-radar__cell {
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem;
 }
 
+/* 源名要单独占满一行（wrap 会把它和徽章并排）——用 basis 强制独占 */
 .gl-radar__name {
+  flex: 1 0 100%;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--c-text);
@@ -1028,18 +1045,7 @@
   white-space: nowrap;
 }
 
-.gl-radar__top {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--c-text-muted);
-}
-
 .gl-radar__warn {
-  align-self: flex-start;
   padding: 0.05rem 0.35rem;
   border-radius: 999px;
   background: var(--c-note-bg);
@@ -1074,12 +1080,64 @@
   color: var(--c-note-text);
 }
 
-/* ───────────────────── 雷达：九个来源抽屉 ───────────────────── */
+/* ── 卡片榜单：每源一张 ────────────────────────────── */
+
+/* 卡片网格。**卡片底色取 --c-card（白/暗卡），不是 --c-bg-soft** ——
+   这一页不套 Section 白卡，卡片直接压在页面底色上（见文件头第 ① 条）。
+   宽屏 3 列：中文区 5 张排成 3+2，技术区 4 张正好 3+1；
+   两列一列都太宽，三列的卡宽（~21rem）正好让标题一行放得下。 */
+.gl-radar__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
+.gl-radar__card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0.9rem 1rem 0.85rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-card);
+}
+
+/* 坏源卡片不藏，只把刻度行压暗（上面还有旧快照可读） */
+.gl-radar__card[data-ok='false'] .gl-radar__rows {
+  opacity: 0.55;
+}
+
+.gl-radar__cardhead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.gl-radar__cardtitle {
+  font-size: 0.9375rem;
+  font-weight: 650;
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.gl-radar__cardtitle:hover {
+  color: var(--c-accent);
+}
+
+.gl-radar__cardcount {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
 
 .gl-radar__note {
-  margin: 0 0 0.75rem;
-  font-size: 0.8125rem;
-  line-height: 1.7;
+  margin: 0.6rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.65;
   color: var(--c-text-muted);
 }
 
@@ -1088,20 +1146,21 @@
 }
 
 .gl-radar__rows {
-  margin: 0;
+  flex: 1;
+  margin: 0.35rem 0 0;
   padding: 0;
   list-style: none;
 }
 
-/* 三件固定：排名 / 标题（内含可选的一句话）/ 热度。
+/* 三件固定：名次徽章 / 标题（内含可选的一句话）/ 热度。
    `minmax(0, 1fr)` 不能写成 `1fr` —— 后者等价于 `minmax(auto, 1fr)`，
-   一个长标题就能把整条轨道撑破（本仓在正文与仓库行上都踩过）。 */
+   一条长标题就能把整条轨道撑破（本仓在正文与仓库行上都踩过）。 */
 .gl-radar__row {
   display: grid;
-  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
   gap: 0.5rem;
   align-items: baseline;
-  padding: 0.4rem 0;
+  padding: 0.34rem 0;
   border-bottom: 1px solid var(--c-border);
 }
 
@@ -1109,11 +1168,26 @@
   border-bottom: 0;
 }
 
+/* 名次徽章：方块小号数字。前三名点亮（主色淡底 + 主色字），
+   4 起回落成灰 —— 「谁在领跑」一眼可辨，且不依赖颜色单打独斗（数字仍在）。
+   配色全部走主题 token，不引参考图的深蓝。 */
 .gl-radar__no {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
+  align-self: center;
+  padding: 0.1rem 0;
+  border-radius: 4px;
+  background: var(--c-bg-soft);
   color: var(--c-text-faint);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1;
+  text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+.gl-radar__no[data-top] {
+  background: color-mix(in srgb, var(--c-accent) 16%, transparent);
+  color: var(--c-accent);
+  font-weight: 600;
 }
 
 .gl-radar__main {
@@ -1124,7 +1198,11 @@
 }
 
 .gl-radar__link {
-  font-size: 0.875rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  font-size: 0.8125rem;
   line-height: 1.55;
   color: var(--c-text);
   text-decoration: none;
@@ -1151,7 +1229,9 @@
 }
 
 .gl-radar__more {
-  margin: 0.75rem 0 0;
+  margin: 0.7rem 0 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--c-border);
   font-size: 0.75rem;
 }
 
@@ -1172,7 +1252,7 @@
   opacity: 0.75;
 }
 
-/* 窄屏：格子从 9 列塌成 2~3 列。`auto-fit` 自己会算，不用写断点；
+/* 窄屏：刻度格子从 5 列塌成 2~3 列。`auto-fit` 自己会算，不用写断点；
    但刻度那一列在窄屏要留够宽度，否则十条刻度短得读不出形状 */
 @media (max-width: 30rem) {
   .gl-radar__strip {
