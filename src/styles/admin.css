@@ -399,10 +399,17 @@ body.admin-shell {
 .workbench[data-section='friends'] [data-only='post'],
 .workbench[data-section='assets'] [data-only='post'],
 .workbench[data-section='gallery'] [data-only='post'],
+.workbench[data-section='links'] [data-only='post'],
 .workbench[data-section='post'] [data-only='gallery'],
 .workbench[data-section='profile'] [data-only='gallery'],
 .workbench[data-section='friends'] [data-only='gallery'],
-.workbench[data-section='assets'] [data-only='gallery'] {
+.workbench[data-section='assets'] [data-only='gallery'],
+.workbench[data-section='links'] [data-only='gallery'],
+.workbench[data-section='post'] [data-only='links'],
+.workbench[data-section='profile'] [data-only='links'],
+.workbench[data-section='friends'] [data-only='links'],
+.workbench[data-section='assets'] [data-only='links'],
+.workbench[data-section='gallery'] [data-only='links'] {
   display: none;
 }
 
@@ -420,14 +427,24 @@ body.admin-shell {
   overflow: hidden;
 }
 
+/* 六个分区（文章/个人信息/友链/素材/画廊/收藏夹）在 260px 的栏里
+   **放不下**：每个标签都是 nowrap 的中文词，最小内容宽度加起来约 399px。
+   原来写的是 flex:1（均分）+ nowrap，结果 flex 收缩不到 min-content 以下，
+   第 6 个标签直接溢出侧栏、压在主区上 —— 看得见、点不到（实测 x=329.8 > 259）。
+   现在改成 flex-wrap 换行 + 按内容宽度排：放不下就折到第二行，
+   每个标签仍完整可点。等价于把「一行六格」换成「两行三格」。 */
 .sidebar__menu {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--adm-line);
 }
 
 .sidebar__tab {
-  flex: 1;
+  /* flex:1 是「有空间就分一点」，配合 min-width 保底，
+     换行后同一行的几个标签宽度仍然均等（视觉上还是整齐的格子） */
+  flex: 1 1 auto;
+  min-width: 5.2rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2235,6 +2252,49 @@ select.input {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
   gap: 0.85rem 1.25rem;
+}
+
+/* ============================================================
+   收藏夹分区（lib/admin/gleaningsLinks.ts）
+   ============================================================ */
+/* 主题是多选：9 个词表项排成可换行的芯片，勾中的用 accent 描边。
+   flex-wrap + 自然宽度，不写固定列数 —— 词表项长度差得多（「AI 应用」两字
+   vs「设计与前端」五个字），均分格子会让窄的那个空一大截 */
+.lnk-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.5rem;
+}
+
+.lnk-topic {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--adm-r);
+  font-size: 0.78rem;
+  color: var(--adm-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.lnk-topic:hover {
+  border-color: var(--adm-accent);
+}
+
+/* 勾中态：:has() 让芯片整体跟着里面的 checkbox 走 ——
+   状态只有 checkbox 一个真源，不必再额外维护一份类名 */
+.lnk-topic:has(input:checked) {
+  border-color: var(--adm-accent);
+  background: var(--adm-accent-soft);
+  color: var(--adm-accent);
+}
+
+.lnk-topic input {
+  margin: 0;
+  accent-color: var(--adm-accent);
+  cursor: pointer;
 }
 
 /* ============================================================

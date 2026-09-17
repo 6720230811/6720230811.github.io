@@ -1,0 +1,88 @@
+---
+import Icon from '../Icon.astro';
+
+/**
+ * 「收藏夹」分区：编辑 `src/data/gleanings/links.json`。
+ * 逻辑在 lib/admin/gleaningsLinks.ts（载入 / 增删 / 校验 / 整份写回）。
+ *
+ * 两条刻意的取舍，与画廊面板同源：
+ *
+ * ① **左栏列表由脚本生成**，不写死在模板里 —— 写死就等于「有几条」被抄了两份。
+ *    这个文件里只有空容器（#lnk-items）。
+ * ② **主题芯片由脚本按词表画**（#lnk-topics），不在模板里手抄 9 个主题 ——
+ *    词表加一项时，后台跟着就有，不用记得回来改这里。
+ *
+ * 右栏编辑的是「左栏选中的那一条」。没有选中时显示占位提示（#lnk-placeholder）。
+ */
+const base = import.meta.env.BASE_URL;
+---
+
+<section class="panel">
+  <div class="panel__head">
+    <h2>收藏夹（src/data/gleanings/links.json）</h2>
+    <div class="panel__tools">
+      <a class="btn btn--ghost" href={`${base}gleanings/all/#tab-links`} target="_blank" rel="noreferrer">
+        <Icon name="external" />
+        线上收藏夹
+      </a>
+    </div>
+  </div>
+
+  <p class="panel__hint">
+    收藏夹是**一份文件**，不是目录制：整份 <code>links.json</code> 读写。
+    第 1 步「载入」把仓库里那份读进来；之后增删改都只在内存里，
+    点「保存到仓库」才整份写回、等 Actions 上线。<strong>没保存就刷新会丢。</strong>
+  </p>
+
+  <p id="lnk-placeholder" class="galp-placeholder">
+    左栏选一条来编辑，或者点左栏的「新增收藏」。
+  </p>
+
+  <div id="lnk-editor" hidden>
+    <div class="galp-bar">
+      <code id="lnk-crumb" class="galp-crumb"></code>
+      <span class="galp-spacer"></span>
+      <button id="lnk-up" class="btn btn--sm btn--ghost" type="button" title="在列表里上移一位">↑ 上移</button>
+      <button id="lnk-down" class="btn btn--sm btn--ghost" type="button" title="在列表里下移一位">↓ 下移</button>
+      <button id="lnk-delete" class="btn btn--sm btn--danger" type="button">删除这条</button>
+      <button id="lnk-save" class="btn btn--sm" type="button">保存到仓库</button>
+    </div>
+
+    <div class="json-grid">
+      <label class="galp-field galp-field--wide">
+        <span>网址<small>必须 https://，且全列表不重</small></span>
+        <input id="lnk-url" class="input" type="url" spellcheck="false" placeholder="https://example.com/" />
+      </label>
+      <label class="galp-field">
+        <span>标题<small>列表里显示的就是它</small></span>
+        <input id="lnk-title" class="input" type="text" spellcheck="false" placeholder="Astro 文档" />
+      </label>
+      <label class="galp-field">
+        <span>收录日期<small>YYYY-MM-DD，新增默认今天</small></span>
+        <input id="lnk-added" class="input" type="date" />
+      </label>
+
+      <label class="galp-field galp-field--wide">
+        <span>说明 zh<small>必填 —— 收藏夹的正文就是这句话</small></span>
+        <textarea id="lnk-note-zh" class="input" rows="3" spellcheck="false"></textarea>
+      </label>
+      <label class="galp-field galp-field--wide">
+        <span>说明 en<small>可留空，留空则英文页回落中文</small></span>
+        <textarea id="lnk-note-en" class="input" rows="3" spellcheck="false"></textarea>
+      </label>
+    </div>
+
+    <p class="panel__sub">主题<small>（至少一个；与「仓库」共用同一张词表）</small></p>
+    <div id="lnk-topics" class="lnk-topics"></div>
+
+    <label class="galp-check">
+      <input id="lnk-featured" type="checkbox" />
+      <span>标为精选<small>精选的排在前面（同日期时）</small></span>
+    </label>
+  </div>
+
+  <p class="galp-note">
+    保存前会自检一遍：标题、网址（https 且不重复）、中文说明、主题（必须在词表内）、
+    日期格式 —— 有问题当场拦下，不必等构建红掉再回来查。
+  </p>
+</section>

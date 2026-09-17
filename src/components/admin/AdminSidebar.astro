@@ -35,6 +35,11 @@ const base = import.meta.env.BASE_URL;
       <Icon name="frame" />
       <span>画廊</span>
     </button>
+    <button class="sidebar__tab" type="button" role="tab" id="tab-links" data-tab="links" aria-selected="false" aria-controls="panel-links">
+      <Icon name="bookmark" />
+      <span>收藏夹</span>
+      <span class="sidebar__count" id="links-count" hidden>0</span>
+    </button>
   </nav>
 
   <div class="sidebar__block" data-only="post">
@@ -163,6 +168,36 @@ const base = import.meta.env.BASE_URL;
 
   <ul id="gal-items" class="sidebar__list" data-only="gallery" aria-label="合集列表"></ul>
   <p id="gal-list-meta" class="sidebar__meta" data-only="gallery"></p>
+
+  {/* 收藏夹分区：一份 links.json，左栏列出条目，右栏编选中的那一条 */}
+  <div class="sidebar__block" data-only="links">
+    <div class="galp-new">
+      <button id="lnk-new" class="btn btn--soft btn--block" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        新增收藏
+      </button>
+      <button id="lnk-reload" class="btn btn--ghost btn--block" type="button">
+        <Icon name="refresh" />
+        重新载入
+      </button>
+    </div>
+
+    <label class="search">
+      <Icon name="search" />
+      <input
+        id="lnk-filter"
+        class="search__input"
+        type="search"
+        placeholder="过滤标题 / 网址"
+        spellcheck="false"
+      />
+    </label>
+  </div>
+
+  <ul id="lnk-items" class="sidebar__list" data-only="links" aria-label="收藏列表"></ul>
+  <p id="lnk-list-meta" class="sidebar__meta" data-only="links"></p>
 
   <footer class="sidebar__foot">
     <button id="token-pill" class="pill" type="button" data-state="missing">

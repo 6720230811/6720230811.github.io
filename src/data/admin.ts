@@ -16,6 +16,12 @@ export const paths = {
   post: (lang: string, slug: string) => `src/content/posts/${lang}/${slug}.md`,
   profile: (lang: string) => `src/data/profile.${lang}.json`,
   friends: () => 'src/data/friends.json',
+  /**
+   * 拾遗 · 收藏夹。**整份是一份 JSON，不是目录制**（对比 galleryDir）：
+   * 每条就七八个字段、进出一整个文件，写回时按 schema 顺序稳定序列化。
+   * 主题键取 `src/data/gleanings/topics.ts` 的词表，写进去之前先过滤一遍。
+   */
+  gleaningsLinks: () => 'src/data/gleanings/links.json',
   // 静态目录下的配图目录：public/ 里的东西按原样发布，
   // 所以 public/illustrations/x.png ↔ /illustrations/x.png
   illustrationsDir: () => 'public/illustrations',

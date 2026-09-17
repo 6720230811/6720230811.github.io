@@ -3,6 +3,7 @@ import ProfileEditor from './ProfileEditor.astro';
 import FriendsEditor from './FriendsEditor.astro';
 import AssetPanel from './AssetPanel.astro';
 import GalleryPanel from './GalleryPanel.astro';
+import GleaningsLinksEditor from './GleaningsLinksEditor.astro';
 
 /**
  * 中间：沉浸式写作主控台。
@@ -147,5 +148,16 @@ import GalleryPanel from './GalleryPanel.astro';
     hidden
   >
     <GalleryPanel />
+  </section>
+
+  <section
+    class="canvas__panel canvas__panel--doc"
+    data-panel="links"
+    id="panel-links"
+    role="tabpanel"
+    aria-labelledby="tab-links"
+    hidden
+  >
+    <GleaningsLinksEditor />
   </section>
 </main>

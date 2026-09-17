@@ -180,6 +180,43 @@ export function stableFriendsFileJson(
   return `${JSON.stringify(parsed, null, 2)}\n`;
 }
 
+/** 收藏夹的一条（内存里的形状；key 顺序 = 写回 JSON 的顺序） */
+export interface LinkRow {
+  url: string;
+  title: string;
+  note: { zh: string; en?: string };
+  topics: string[];
+  addedAt: string;
+  featured: boolean;
+}
+
+/**
+ * `src/data/gleanings/links.json` 的稳定输出。
+ *
+ * **逐字段重建对象**，不用 `JSON.stringify(原对象)` —— 后者会保留编辑历史留下的
+ * key 顺序，增删改几条之后每条字段次序都可能不同，diff 里全是噪声。
+ * 这里固定 url → title → note → topics → addedAt → featured，
+ * 与 `lib/gleanings.ts` 里 LinkSchema 的声明顺序一致。
+ *
+ * `featured` 为 false 时**不写这个键**：数据文件里那几条没标精选的本来就没有它
+ * （zod 有 default，缺键等价于 false），补上会平白多出一片 diff。
+ * `note.en` 同理，空就不写。
+ */
+export function stableLinksJson(rows: LinkRow[]): string {
+  const links = rows.map((row) => {
+    const item: Record<string, unknown> = {
+      url: row.url,
+      title: row.title,
+      note: row.note.en?.trim() ? { zh: row.note.zh, en: row.note.en } : { zh: row.note.zh },
+      topics: row.topics,
+      addedAt: row.addedAt,
+    };
+    if (row.featured) item.featured = true;
+    return item;
+  });
+  return `${JSON.stringify({ links }, null, 2)}\n`;
+}
+
 // ---------------------------------------------------------------- 行内 HTML 白名单
 // NewsItem.text 用 set:html 渲染，所以保存前过滤一次。
 // 注意正则不带 /g：带 g 时 test() 会因 lastIndex 漂移而给出错误结果。
