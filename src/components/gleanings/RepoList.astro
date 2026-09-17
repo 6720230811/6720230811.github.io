@@ -50,6 +50,10 @@ function dotStyle(repo: Repo): string | undefined {
 }
 ---
 
+{/* 整组包进 `[data-gl-drawers="repos"]`：雷达那边也有一排 `.gl-drawer`，
+    「全部展开」必须各管各的（两边都用全局查询的话，点一个会把二十扇一起翻转）。
+    e2e 也靠这个范围明确地问「仓库这一组现在什么状态」。 */}
+<div data-gl-drawers="repos">
 <div class="gl-fresh">
   <span class="gl-fresh__label">{t('gleanings.repos.snapshot')}</span>
   <time class="gl-fresh__time" datetime={starsFetchedAt}>{dayOf(starsFetchedAt)}</time>
@@ -125,6 +129,7 @@ function dotStyle(repo: Repo): string | undefined {
     </details>
   ))
 }
+</div>
 
 <script>
   /**
@@ -146,12 +151,15 @@ function dotStyle(repo: Repo): string | undefined {
     const win = window as RlWin;
     win.__glDrawers?.cleanup?.();
 
-    const button = document.querySelector<HTMLButtonElement>('[data-gl-drawer-toggle]');
-    if (!button) return;
+    // 作用域限定在仓库自己这一组：雷达那边也有一排 `.gl-drawer`，
+    // 用全局查询会把它的九扇一起翻转（而雷达的按钮看起来毫无反应）
+    const scope = document.querySelector<HTMLElement>('[data-gl-drawers="repos"]');
+    const button = scope?.querySelector<HTMLButtonElement>('[data-gl-drawer-toggle]');
+    if (!button || !scope) return;
 
     const diag: Diag = (win.__glDrawers ??= { binds: 0, unbinds: 0, flips: 0, cleanup: null });
 
-    const all = () => Array.from(document.querySelectorAll<HTMLDetailsElement>('.gl-drawer'));
+    const all = () => Array.from(scope.querySelectorAll<HTMLDetailsElement>('.gl-drawer'));
     if (!all().length) return;
 
     const sync = () => {

@@ -724,3 +724,348 @@
   letter-spacing: 0.14em;
   color: var(--c-text-faint);
 }
+
+/* ───────────────────── 雷达：总览条 ───────────────────── */
+
+/* ⚠️ 这一整块**坐在页面底色上**（不在白卡片里）——
+   和 .gl-drawer 一样。所以描边与轨道一律用 `--c-border`（浅色 #e4e7eb，差 12/255），
+   不能用 `--c-border-soft`（#eef0f2，压在 #f0f2f5 上只差 2/255，等于没画）。 */
+
+.gl-radar {
+  margin-bottom: clamp(1.4rem, 3vw, 2rem);
+}
+
+.gl-radar__head {
+  margin-bottom: 1rem;
+}
+
+.gl-radar__title {
+  margin: 0 0 0.35rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--c-text);
+}
+
+.gl-radar__hint {
+  max-width: 46rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--c-text-muted);
+}
+
+.gl-radar__frame {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 扫描线：只在进视口时扫**一次**，扫完停住。
+   循环扫描会变成一根一直在动的装饰，在这一页（正文页）是干扰。 */
+.gl-radar__sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--c-accent), transparent);
+}
+
+[data-gl-radar][data-armed='true'] .gl-radar__sweep {
+  animation: gl-radar-sweep 900ms linear 1 both;
+}
+
+@keyframes gl-radar-sweep {
+  from {
+    left: 0;
+    opacity: 0.85;
+  }
+  to {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+.gl-radar__strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  gap: 0.1rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gl-radar__cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.6rem 0.4rem 0.65rem;
+  border-top: 1px solid var(--c-border);
+}
+
+/* 扫过时亮一下。**亮的是覆盖层，不是刻度本身** ——
+   刻度由服务端渲染的 `--t` 决定，动画只负责「让它被注意到」，
+   所以断掉 JS / 关掉动画之后画面依然完整。 */
+.gl-radar__cell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--c-accent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-gl-radar][data-armed='true'] .gl-radar__cell::after {
+  animation: gl-radar-flash 700ms ease-out 1 both;
+  animation-delay: calc(var(--i) * 80ms);
+}
+
+@keyframes gl-radar-flash {
+  0% {
+    opacity: 0;
+  }
+  22% {
+    opacity: 0.09;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 两个语区之间裂一道缝 —— 九格连成一片的话，看不出第 6 格换了批次 */
+.gl-radar__cell[data-band-start='true'] {
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--c-border);
+}
+
+.gl-radar__band {
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  color: var(--c-text-faint);
+}
+
+/* 十条刻度，榜首在**下**（column-reverse）。条的宽度 = 源内归一化热度 */
+.gl-radar__scale {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+}
+
+.gl-radar__tick {
+  position: relative;
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--c-border);
+}
+
+/* `max(3px, …)`：归一化后只有 0.1 的条目，纯按比例画会短到看不见，
+   那条线就消失在轨道里了 */
+.gl-radar__tick::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: max(3px, calc(var(--t) * 100%));
+  border-radius: inherit;
+  background: var(--c-text-faint);
+}
+
+.gl-radar__tick[data-band='mid']::after {
+  background: var(--c-text-muted);
+}
+
+.gl-radar__tick[data-band='high']::after {
+  background: var(--c-accent);
+}
+
+.gl-radar__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.gl-radar__name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.gl-radar__name:hover {
+  color: var(--c-accent);
+}
+
+.gl-radar__rank {
+  padding: 0.02rem 0.3rem;
+  border-radius: 999px;
+  background: var(--c-tag-bg);
+  color: var(--c-tag-text);
+  font-size: 0.625rem;
+  white-space: nowrap;
+}
+
+.gl-radar__top {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+}
+
+.gl-radar__warn {
+  align-self: flex-start;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--c-note-bg);
+  color: var(--c-note-text);
+  font-size: 0.6875rem;
+}
+
+/* 坏掉的那一格**不藏起来，只是压暗**：它上面还挂着上一次的快照，
+   抹掉才是真的丢信息 */
+.gl-radar__cell[data-ok='false'] .gl-radar__scale {
+  opacity: 0.45;
+}
+
+.gl-radar__down {
+  margin: 0;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--c-border);
+  font-size: 0.8125rem;
+  color: var(--c-note-text);
+}
+
+/* 快照行上那个「9/9 源可用」。全绿是中性色，缺了就转琥珀 ——
+   与 `.gl-fresh__stale` 同一套「这件事你需要留意」的色 */
+.gl-fresh__live {
+  font-variant-numeric: tabular-nums;
+}
+
+.gl-fresh__live[data-alive='partial'] {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--c-note-bg);
+  color: var(--c-note-text);
+}
+
+/* ───────────────────── 雷达：九个来源抽屉 ───────────────────── */
+
+.gl-radar__note {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--c-text-muted);
+}
+
+.gl-radar__note--down {
+  color: var(--c-note-text);
+}
+
+.gl-radar__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 三件固定：排名 / 标题（内含可选的一句话）/ 热度。
+   `minmax(0, 1fr)` 不能写成 `1fr` —— 后者等价于 `minmax(auto, 1fr)`，
+   一个长标题就能把整条轨道撑破（本仓在正文与仓库行上都踩过）。 */
+.gl-radar__row {
+  display: grid;
+  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.gl-radar__row:last-child {
+  border-bottom: 0;
+}
+
+.gl-radar__no {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.gl-radar__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.gl-radar__link {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.gl-radar__link:hover {
+  color: var(--c-accent);
+}
+
+.gl-radar__blurb {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  font-size: 0.75rem;
+  color: var(--c-text-muted);
+}
+
+.gl-radar__heat {
+  font-size: 0.75rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gl-radar__more {
+  margin: 0.75rem 0 0;
+  font-size: 0.75rem;
+}
+
+.gl-radar__more a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--c-accent);
+  text-decoration: none;
+  /* inline-flex 里 svg 无宽高时按 intrinsic（300×150）占位，会把文字挤成
+     两字一行的竖排（实测 a 盒 76×63、文案折成三行）—— 必须给死尺寸 */
+  white-space: nowrap;
+}
+
+.gl-radar__more a svg {
+  width: 11px;
+  height: 11px;
+  opacity: 0.75;
+}
+
+/* 窄屏：格子从 9 列塌成 2~3 列。`auto-fit` 自己会算，不用写断点；
+   但刻度那一列在窄屏要留够宽度，否则十条刻度短得读不出形状 */
+@media (max-width: 30rem) {
+  .gl-radar__strip {
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-gl-radar][data-armed='true'] .gl-radar__sweep,
+  [data-gl-radar][data-armed='true'] .gl-radar__cell::after {
+    animation: none;
+  }
+}

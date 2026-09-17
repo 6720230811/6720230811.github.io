@@ -1,10 +1,16 @@
 import { z } from 'zod';
 import { TOPICS, TOPIC_KEYS, type TopicTerm } from '../data/gleanings/topics';
+import {
+  RADAR_SOURCES,
+  RADAR_SOURCE_IDS,
+  type RadarSourceTerm,
+} from '../data/gleanings/radar-sources';
 import { formatIssues } from '../data/profile.schema';
 import linksJson from '../data/gleanings/links.json';
 import nowJson from '../data/gleanings/now.json';
 import starsJson from '../data/gleanings/stars.json';
 import curatedJson from '../data/gleanings/stars-curated.json';
+import radarJson from '../data/gleanings/radar.json';
 import type { Locale } from '../i18n/ui';
 
 /**
@@ -98,6 +104,41 @@ const CuratedSchema = z.object({
   ),
 });
 
+/**
+ * 雷达的条目。
+ *
+ * 只有 `title` / `url` 是必填 —— 其余全是「某些源才有」的：
+ * `score` 只有给热度的源有（百度、腾讯、少数派都没有）；
+ * `blurb` 目前只有 GitHub 趋势用（光一个 `owner/name` 不构成标题）；
+ * `meta` 目前只有少数派用（右栏放发布日期，因为它没有热度可放）。
+ */
+const RadarItemSchema = z.object({
+  title: z.string().min(1),
+  url: z.url().startsWith('https://'),
+  score: z.number().optional(),
+  blurb: z.string().min(1).optional(),
+  meta: z.string().min(1).optional(),
+});
+
+/** 一个源的一块。`ok:false` 时 `items` 是**上一次成功的原样**，不是空数组 */
+const RadarSourceSchema = z.object({
+  ok: z.boolean(),
+  /** 这一块**自己**的抓取时刻。`ok:false` 时是上一次成功的时间（不是「现在」） */
+  fetchedAt: z.string().min(1).nullable(),
+  /** 只在 ok:false 时出现，内容是守卫的原话（含编号） */
+  error: z.string().min(1).optional(),
+  scoreKind: z.enum(['hot', 'rank']),
+  items: z.array(RadarItemSchema),
+});
+
+const RadarSchema = z.object({
+  version: z.literal(1),
+  fetchedAt: z.string().min(1),
+  okCount: z.number().int().nonnegative(),
+  total: z.number().int().positive(),
+  sources: z.record(z.string(), RadarSourceSchema),
+});
+
 /* ───────────────────────────── 读入并校验 ───────────────────────────── */
 
 function parseOrThrow<T>(schema: z.ZodType<T>, raw: unknown, where: string): T {
@@ -117,6 +158,7 @@ const curatedData = parseOrThrow(
   curatedJson,
   'src/data/gleanings/stars-curated.json'
 );
+const radarData = parseOrThrow(RadarSchema, radarJson, 'src/data/gleanings/radar.json');
 
 /** 校验过的主题词表 */
 export const topics: Record<string, TopicTerm> = topicsParsed;
@@ -223,6 +265,89 @@ for (const [fullName, entry] of Object.entries(curatedData.repos)) {
       `[gleanings] stars-curated.json 里有 ${ghost.length} 条指向已不在 star 列表里的仓库，` +
         `可以删掉：${ghost.join('、')}`
     );
+  }
+})();
+
+/* ───────────────── 雷达：源元数据与抓取产物的**双向对账** ───────────────── */
+
+/**
+ * 雷达的 id 有三个来源，这份断言管其中两处：
+ *   ① `radar-sources.ts` 的 `id`（手写的显示名等）
+ *   ② `radar.json` 的 `sources` 的 key（抓取产物）
+ * （③ `collect-radar.mjs` 里 `ADAPTERS` 的 id 由探针比对 —— 那是脚本，构建期读不到。）
+ *
+ * **两个方向都要查**，因为两个方向的病不一样：
+ *   - 抓到了但元数据没有 → 页面取不到显示名，只能整块不渲染（数据白抓）
+ *   - 元数据有但没抓到 → 页面上是个永远空的抽屉（更糟：看着像坏了）
+ * 所以这条不是「校验通过就行」，而是**两边必须恰好相等**。
+ */
+(() => {
+  const wired = new Set(Object.keys(radarData.sources));
+  const declared = new Set(RADAR_SOURCE_IDS);
+
+  const orphanData = [...wired].filter((id) => !declared.has(id));
+  const orphanMeta = [...declared].filter((id) => !wired.has(id));
+
+  if (!orphanData.length && !orphanMeta.length) return;
+
+  const lines: string[] = [];
+  if (orphanData.length) {
+    lines.push(
+      `  radar.json 里有、radar-sources.ts 里没有：${orphanData.join('、')}` +
+        `\n    → 抓到了但页面不会渲染它。往 RADAR_SOURCES 里补一条。`
+    );
+  }
+  if (orphanMeta.length) {
+    lines.push(
+      `  radar-sources.ts 里有、radar.json 里没有：${orphanMeta.join('、')}` +
+        `\n    → 页面上会是一个永远空的抽屉。先跑 node scripts/collect-radar.mjs。`
+    );
+  }
+  throw new Error(`雷达的源对不上账（radar-sources.ts ↔ radar.json）：\n${lines.join('\n')}`);
+})();
+
+/** order 必须两两不同：相同的话排序会退化成「看声明顺序」（同主题词表那条） */
+(() => {
+  const seen = new Map<number, string>();
+  for (const source of RADAR_SOURCES) {
+    const taken = seen.get(source.order);
+    if (taken) {
+      throw new Error(
+        `radar-sources.ts 里 ${taken} 和 ${source.id} 的 order 都是 ${source.order}。` +
+          `排序会变得不确定，改掉一个（同类之间留 10 的间隔）。`
+      );
+    }
+    seen.set(source.order, source.id);
+  }
+})();
+
+/**
+ * 快照自身的自洽：`okCount` 要等于 `ok:true` 的源数，且
+ * **有条目的源必须知道那些条目是什么时候抓的**。
+ *
+ * 第二条是这份设计里最要紧的一条不变量：`ok:false` 的源沿用上一次的条目，
+ * 如果那时 `fetchedAt` 被写成「现在」，页面就会宣称「这一格是刚抓的」——
+ * 而它其实是一天前的数据。那是「过期可见」的反面，属于说谎。
+ */
+(() => {
+  const entries = Object.entries(radarData.sources);
+  const actualOk = entries.filter(([, s]) => s.ok).length;
+  if (actualOk !== radarData.okCount) {
+    throw new Error(
+      `radar.json 的 okCount=${radarData.okCount}，但实际 ok:true 的源有 ${actualOk} 个。` +
+        `这份快照自相矛盾（多半是手改过它 —— 它是脚本整份合并的产物）。`
+    );
+  }
+  for (const [id, source] of entries) {
+    if (source.items.length > 0 && !source.fetchedAt) {
+      throw new Error(
+        `radar.json 的 ${id} 有 ${source.items.length} 条，却没有 fetchedAt。` +
+          `有条目就必须知道它们是什么时候抓的 —— 否则页面没法说清这格数据有多旧。`
+      );
+    }
+    if (!source.ok && !source.error) {
+      throw new Error(`radar.json 的 ${id} 是 ok:false 却没写 error，失败原因丢了。`);
+    }
   }
 })();
 
@@ -500,6 +625,156 @@ const LANGUAGE_COLORS: Record<string, string> = {
   GDScript: '#355570',
 };
 
+/* ───────────────────────────── 雷达 ───────────────────────────── */
+
+export interface RadarItem {
+  /** 榜位，从 1 起。**由数组下标算出来**，不用源给的 realpos/index/position */
+  rank: number;
+  title: string;
+  url: string;
+  /** 源给的热度值。没有这一项的源（百度的榜位、少数派的时间）不显示 */
+  score?: number;
+  blurb?: string;
+  meta?: string;
+  /**
+   * 刻度值，`(0, 1]` —— **源内归一化**，不是原始热度。
+   * 见下面 `ticksOf` 的注释：跨源比热度是没有意义的。
+   */
+  tick: number;
+}
+
+export interface RadarSource {
+  id: string;
+  /** 按语言取好的显示名 */
+  label: string;
+  home: string;
+  zone: 'hot' | 'tech';
+  ok: boolean;
+  /** 这一块自己那一份抓取时刻；首次就失败的源是 null */
+  fetchedAt: string | null;
+  /** 这一块的数据是不是已经过期（构建时判断，同仓库快照那条） */
+  stale: boolean;
+  error?: string;
+  scoreKind: 'hot' | 'rank';
+  /** 源语义与「榜单」有偏差时的那句话（如少数派是「最近发的」） */
+  note?: string;
+  items: RadarItem[];
+  /** 榜首，总览条上要显示它的标题；空源为 null */
+  top: RadarItem | null;
+}
+
+/**
+ * 刻度值：**一律源内归一化**。这是这一块最容易画错的地方。
+ *
+ * 九个源的热度数值互相之间没有任何可比性 —— 实测同一时刻：
+ * 微博 296 万、抖音 1161 万、头条 1467 万、HN 1311、Lobsters 25、百度**没有这个字段**。
+ * 按原始值画柱子，画出来的是「哪个站的计数单位大」，不是「哪个站更热」。
+ *
+ * 归一化基准取**该源的最高分**，不是榜首那一名的分 ——
+ * 因为 HN 与 Lobsters 的分数**不是递减的**（实测 HN：1311, 1606, 162, 515…；
+ * Lobsters：25, 72, 34, 17…），它们的顺序是各自的排序算法给的，
+ * 拿榜首当分母会得到一堆大于 1 的值。
+ *
+ * `scoreKind: 'rank'` 的源（百度 / 腾讯 / 少数派）没有热度可归一化，
+ * 按榜位线性递减 —— 页面上会给这几个源挂一枚小标记，**不拿名次假装是热度**。
+ * 缺 `score` 的单条也走这条回落（防御性：实测微博 52 条都有 num）。
+ */
+function ticksOf(items: readonly { score?: number }[], scoreKind: 'hot' | 'rank'): number[] {
+  const n = items.length;
+  if (!n) return [];
+  /** 榜首 1、末位 1/n */
+  const rankTick = (index: number) => (n - index) / n;
+
+  if (scoreKind === 'rank') return items.map((_, index) => rankTick(index));
+
+  const scores = items
+    .map((item) => item.score)
+    .filter((value): value is number => typeof value === 'number' && value > 0);
+  const max = scores.length ? Math.max(...scores) : 0;
+  if (max <= 0) return items.map((_, index) => rankTick(index));
+
+  return items.map((item, index) =>
+    typeof item.score === 'number' && item.score > 0 ? item.score / max : rankTick(index)
+  );
+}
+
+/** 雷达这次运行的时刻（顶层那份）。每块自己有 fetchedAt，两者不是一回事 */
+export const radarFetchedAt: string = radarData.fetchedAt;
+
+export const radarTotal: number = radarData.total;
+
+/** 这一轮活着的源数（页面顶上要显示「九格活了几格」） */
+export const radarAlive: number = radarData.okCount;
+
+/**
+ * 雷达的源，**按手写的 order 排**（不是 id、不是抓取顺序）。
+ * 只输出元数据里声明过的源 —— 对账断言已经保证两边恰好相等。
+ *
+ * 做成**按 locale 的函数**而不是模块级常量：显示名与那句说明要按语言取，
+ * 而条目本身（90 条）与语言无关。分两份常量存整块数据不划算，
+ * 这些字段都只是字符串替换，构建期算两遍的成本可以忽略。
+ */
+export function radarSourcesFor(locale: Locale): RadarSource[] {
+  return [...RADAR_SOURCES]
+    .sort((a, b) => a.order - b.order)
+    .map((term: RadarSourceTerm) => {
+      const block = radarData.sources[term.id];
+      const items: RadarItem[] = block.items.map((item, index) => ({
+        ...item,
+        rank: index + 1,
+        tick: 0,
+      }));
+      const ticks = ticksOf(items, block.scoreKind);
+      items.forEach((item, index) => {
+        item.tick = ticks[index];
+      });
+
+      return {
+        id: term.id,
+        label: pick(locale, term),
+        home: term.home,
+        zone: term.zone,
+        ok: block.ok,
+        fetchedAt: block.fetchedAt,
+        // 没有 fetchedAt（首次就抓失败、一条都没有）也算「该提醒」
+        stale: block.fetchedAt ? isStale(block.fetchedAt) : true,
+        error: block.error,
+        scoreKind: block.scoreKind,
+        note: term.note ? pick(locale, term.note) : undefined,
+        items,
+        top: items[0] ?? null,
+      };
+    });
+}
+
+/**
+ * 热度压缩。
+ *
+ * 中文用万/亿、英文用 K/M/B —— 这不是「顺手做个本地化」：
+ * 微博的 2959366 直接印出来，读者要自己数位数才能判断它有多大。
+ */
+export function formatHeat(locale: Locale, n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const trim = (value: number) =>
+    value >= 100 ? String(Math.round(value)) : value.toFixed(1).replace(/\.0$/, '');
+  if (locale === 'en') {
+    if (n >= 1e9) return `${trim(n / 1e9)}B`;
+    if (n >= 1e6) return `${trim(n / 1e6)}M`;
+    if (n >= 1e3) return `${trim(n / 1e3)}K`;
+    return String(n);
+  }
+  if (n >= 1e8) return `${trim(n / 1e8)}亿`;
+  if (n >= 1e4) return `${trim(n / 1e4)}万`;
+  return String(n);
+}
+
+/** 雷达那一格是「有点热」还是「已经凉了」——总览条按这个分级配色 */
+export function heatBand(tick: number): 'low' | 'mid' | 'high' {
+  if (tick >= 0.66) return 'high';
+  if (tick >= 0.33) return 'mid';
+  return 'low';
+}
+
 /* ───────────────────────────── 现在 ───────────────────────────── */
 
 export const now = {
@@ -534,6 +809,9 @@ export const gleaningsTotals = {
   links: links.length,
   repos: repos.length,
   topics: orderedTopicKeys().filter((key) => repos.some((r) => r.topic === key)).length,
+  /** 雷达：源的个数与条目总数（九源全绿时是 9 与 90） */
+  radarSources: RADAR_SOURCES.length,
+  radarItems: Object.values(radarData.sources).reduce((sum, block) => sum + block.items.length, 0),
 };
 
 /* ───────────────────── 总览页：抽屉里最上面那几件 ───────────────────── */
@@ -569,4 +847,26 @@ export function linkPreview(limit: number): LinkItem[] {
 /** 总览页的仓库预览：与组内同序（精选优先，其余按 star 降序） */
 export function repoPreview(limit: number): Repo[] {
   return [...repos].sort(byWeight).slice(0, limit);
+}
+
+/**
+ * 总览页的雷达预览：**取前几个源的榜首**，与抽屉里的顺序一致（都按手写的 order）。
+ *
+ * 为什么不是「九个源里最热的三条」：热度**跨源不可比**（见 `ticksOf` 的注释），
+ * 挑「最热」需要先定义跨源的可比量，而那个量不存在。
+ * 前几个源的榜首则是确定的、也是访客在抽屉里最先看到的那三条 ——
+ * 预览说的「最上面那几件」，点进去必须真的排在最上面。
+ */
+export function radarPreview(
+  locale: Locale,
+  limit: number
+): { sourceId: string; label: string; title: string }[] {
+  return radarSourcesFor(locale)
+    .filter((source) => source.top)
+    .slice(0, limit)
+    .map((source) => ({
+      sourceId: source.id,
+      label: source.label,
+      title: source.top?.title ?? '',
+    }));
 }

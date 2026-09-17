@@ -29,6 +29,7 @@ jobs:
     # （理由见 deploy 里最后那一步）
     outputs:
       collect: ${{ steps.collect.outcome }}
+      radar: ${{ steps.radar.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -46,6 +47,19 @@ jobs:
         id: collect
         continue-on-error: true
         run: node scripts/collect.mjs
+
+      # 雷达的九个榜单。**九个源互相独立**：每个源各跑一遍自己的五道守卫，
+      # 谁挂了就沿用谁的上一次快照，其余照常更新 —— 所以这一整步的退出码
+      # 只在「一个都没取到」时为 0，只要有源失败了就是非 0。
+      #
+      # 这和上面 collect.mjs 的语义不一样（那份是「整份要么全写、要么不写」），
+      # 所以这里**同样**用 continue-on-error：**中文热榜的失败形态是常态**
+      # （改版、限流、加签名），一次抖动不该让整站部署失败。
+      # 九个源里的每一个都已经在页面上标了「暂时取不到」，坏是看得见的 —— 不需要靠判红。
+      - name: Refresh radar snapshot
+        id: radar
+        continue-on-error: true
+        run: node scripts/collect-radar.mjs
 
       - name: Install, build, and upload
         uses: withastro/action@v6
@@ -70,8 +84,13 @@ jobs:
       # 推送一篇文章都可能被一次 API 抖动挡在门外。
       # 放在这里，语义正好是想要的：**红得看得见，站照常上**。
       - name: Surface a failed snapshot refresh
-        if: needs.build.outputs.collect == 'failure'
+        if: needs.build.outputs.collect == 'failure' || needs.build.outputs.radar == 'failure'
         run: |
-          echo "::error::拾遗快照抓取失败 —— 这次部署用的是仓库里上一次的快照，页面上的数据可能旧了一天。"
-          echo "抓取脚本的报错在上一步（build / Refresh gleanings snapshot）的日志里。"
+          if [ "${{ needs.build.outputs.collect }}" = "failure" ]; then
+            echo "::error::拾遗 star 快照抓取失败 —— 这次部署用的是仓库里上一次的快照，页面上的数据可能旧了一天。"
+          fi
+          if [ "${{ needs.build.outputs.radar }}" = "failure" ]; then
+            echo "::error::雷达抓取有源失败（九个源里有至少一个没取到）—— 失败的那一格在页面上标了「暂时取不到」，沿用它的上一次快照。"
+          fi
+          echo "抓取脚本的报错在上一步（build / Refresh … snapshot）的日志里。"
           exit 1

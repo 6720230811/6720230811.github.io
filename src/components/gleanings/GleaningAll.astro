@@ -3,16 +3,18 @@ import { gleaningsTotals, linkGroups, repoGroups } from '../../lib/gleanings';
 import { useTranslations, type Locale } from '../../i18n/ui';
 import GleaningIndex, { type IndexItem } from './GleaningIndex.astro';
 import LinkGrid from './LinkGrid.astro';
+import RadarBoard from './RadarBoard.astro';
 import RepoList from './RepoList.astro';
 
 /**
  * 拾遗内容页 —— `/gleanings/all/`
  *
- * 两个抽屉装在同一页里，用标签切换，而不是各占一条路由：
- * 收藏夹只有 8 条，单独开一页太空；57 个仓库又太长，摆在封面上会把刊头冲走。
- * 折中就是这一页 —— 两个面板共用一条刊头、一排把手，切换只改一个 hash。
+ * 三个抽屉装在同一页里，用标签切换，而不是各占一条路由：
+ * 收藏夹只有 8 条，单独开一页太空；57 个仓库又太长，摆在封面上会把刊头冲走；
+ * 雷达九个源各十条，也够不上单开一页。折中就是这一页 ——
+ * 三个面板共用一条刊头、一排把手，切换只改一个 hash。
  *
- * **没有 JS 时两个面板都摊着**（见 gleanings.css 的 `[data-gl-tabs]`）：
+ * **没有 JS 时三个面板都摊着**（见 gleanings.css 的 `[data-gl-tabs]`）：
  * 面板切换与抽屉折叠都只是「少滚几屏」的优化，不是「能不能看到」的分界。
  * 这条是这一页唯一不能破的底线 —— 折叠/切换都可以坏，内容不可以丢。
  */
@@ -38,6 +40,12 @@ const items: IndexItem[] = [
     count: gleaningsTotals.repos,
     href: '#tab-repos',
   },
+  {
+    key: 'radar',
+    label: t('gleanings.radar.title'),
+    count: gleaningsTotals.radarItems,
+    href: '#tab-radar',
+  },
 ];
 ---
 
@@ -53,6 +61,11 @@ const items: IndexItem[] = [
   <section class="gl-panel" data-panel="repos" aria-labelledby="tab-repos">
     <p class="gl-panel__desc">{t('gleanings.repos.desc')}</p>
     <RepoList locale={locale} groups={repoGroups(locale, t('gleanings.repos.unsorted'))} />
+  </section>
+
+  <section class="gl-panel" data-panel="radar" aria-labelledby="tab-radar">
+    <p class="gl-panel__desc">{t('gleanings.radar.desc')}</p>
+    <RadarBoard locale={locale} />
   </section>
 
   <footer class="gl-switch">

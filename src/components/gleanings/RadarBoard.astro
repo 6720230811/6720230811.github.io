@@ -1,0 +1,336 @@
+---
+import {
+  dayOf,
+  formatHeat,
+  heatBand,
+  isStale,
+  radarAlive,
+  radarFetchedAt,
+  radarSourcesFor,
+  radarTotal,
+} from '../../lib/gleanings';
+import { useTranslations, type Locale } from '../../i18n/ui';
+import Icon from '../Icon.astro';
+
+/**
+ * 雷达 —— 九个站的榜单并列在一处。
+ *
+ * 版面分两层：
+ *   ① **总览条**：九格横排，每格十条刻度（榜首在下、末位在上）。一眼看清
+ *      「哪个源的头部悬殊、哪个源势均力敌」—— 这才是「雷达」该有的语义：
+ *      **看形状，不看绝对值。**
+ *   ② **九个抽屉**：每源一扇，复用仓库那套 `.gl-drawer`（原生 `<details>`）。
+ *
+ * ---------------------------------------------------------------------------
+ * 一条必须写死在代码里的约束：**刻度一律源内归一化**
+ *
+ * 九个源的热度数值互相之间没有任何可比性。实测同一时刻：
+ * 微博 296 万、抖音 1161 万、头条 1467 万、HN 1311、Lobsters 25、百度**没有这个字段**。
+ * 按原始值画，画出来的是「哪个站的计数单位大」，不是「哪个站更热」。
+ *
+ * 归一化在 `src/lib/gleanings.ts` 的 `ticksOf()` 里做完才传进来（`item.tick`）。
+ * 这里只负责把它画出来 —— **刻度值由服务端渲染就写进 CSS 自定义属性**，
+ * 所以断掉 JS 之后这一块依然完整，脚本只负责「扫一下、亮一下」。
+ *
+ * ---------------------------------------------------------------------------
+ * 没有 JS 时：面板摊着、刻度在、抽屉全是关闭状态（原生 `<details>`）。
+ * 内容一条不少，只是长一点 —— 这是这一页唯一不能破的底线。
+ */
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useTranslations(locale);
+
+const sources = radarSourcesFor(locale);
+const stale = isStale(radarFetchedAt);
+const allDown = sources.every((source) => !source.ok);
+
+/** 每个语区的第一格要挂上区名（中文热榜 / 技术榜单），其余不挂 */
+const bandStarts = new Set<string>();
+{
+  const seen = new Set<string>();
+  for (const source of sources) {
+    if (!seen.has(source.zone)) {
+      seen.add(source.zone);
+      bandStarts.add(source.id);
+    }
+  }
+}
+---
+
+<div class="gl-fresh">
+  <span class="gl-fresh__label">{t('gleanings.radar.snapshot')}</span>
+  <time class="gl-fresh__time" datetime={radarFetchedAt}>{dayOf(radarFetchedAt)}</time>
+  {/* 「九格活了几格」必须摆在明面上。少了它，一格坏掉和一个源本来就没内容
+      在页面上长得一模一样 —— 而这个模块的失败形态本来就是「空」。 */}
+  <span class="gl-fresh__live" data-alive={radarAlive === radarTotal ? 'all' : 'partial'}>
+    {radarAlive}/{radarTotal} {t('gleanings.radar.alive')}
+  </span>
+  {stale && <span class="gl-fresh__stale">{t('gleanings.repos.stale')}</span>}
+</div>
+
+<section class="gl-radar" data-gl-radar data-armed="false" aria-labelledby="gl-radar-overview-title">
+  <div class="gl-radar__head">
+    <h3 class="gl-radar__title" id="gl-radar-overview-title">
+      {t('gleanings.radar.overview')}
+    </h3>
+    <p class="gl-radar__hint">{t('gleanings.radar.hint')}</p>
+  </div>
+
+  {
+    allDown ? (
+      <p class="gl-radar__down">{t('gleanings.radar.allDown')}</p>
+    ) : (
+      <div class="gl-radar__frame">
+        {/* 扫描线。只在**进视口时扫一次**，扫完停住 —— 循环扫描会变成一根
+            一直在动的装饰，在正文页是干扰。无 JS 时它是 opacity:0 的一条，不参与。 */}
+        <span class="gl-radar__sweep" aria-hidden="true" />
+        <ol class="gl-radar__strip">
+          {sources.map((source, index) => (
+            <li
+              class="gl-radar__cell"
+              data-ok={source.ok ? 'true' : 'false'}
+              data-zone={source.zone}
+              data-band-start={bandStarts.has(source.id) ? 'true' : undefined}
+              style={`--i:${index}`}
+            >
+              {bandStarts.has(source.id) && (
+                <span class="gl-radar__band">{t(`gleanings.radar.zone.${source.zone}`)}</span>
+              )}
+              {/* 十条刻度，榜首在**下**、末位在上（column-reverse）。
+                  条的宽度就是归一化后的热度 —— 所以这一格读起来是「榜单的形状」。 */}
+              <span class="gl-radar__scale" aria-hidden="true">
+                {source.items.map((item) => (
+                  <i
+                    class="gl-radar__tick"
+                    data-band={heatBand(item.tick)}
+                    style={`--t:${item.tick.toFixed(4)}`}
+                  />
+                ))}
+              </span>
+              <span class="gl-radar__meta">
+                <a class="gl-radar__name" href={source.home} target="_blank" rel="noopener noreferrer">
+                  {source.label}
+                </a>
+                {/* 「这一源只给榜位、不给热度」要写在源名旁边，不能只在说明里提一句 ——
+                    否则访客会把「榜首与第二名的落差」当成热度落差，而它只是名次差 */}
+                {source.scoreKind === 'rank' && (
+                  <span class="gl-radar__rank" title={t('gleanings.radar.rankOnlyTitle')}>
+                    {t('gleanings.radar.rankOnly')}
+                  </span>
+                )}
+              </span>
+              <span class="gl-radar__top" title={source.top?.title}>
+                {source.top?.title ?? t('gleanings.radar.empty')}
+              </span>
+              {!source.ok && (
+                <span class="gl-radar__warn">
+                  {t('gleanings.radar.stale')}
+                  {source.fetchedAt ? ` · ${dayOf(source.fetchedAt)}` : ''}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </div>
+    )
+  }
+</section>
+
+{/* 抽屉整组包进 `[data-gl-drawers="radar"]`。
+    为什么必须包：仓库那边也有一排 `.gl-drawer`，两边的「全部展开」如果都用
+    `document.querySelectorAll('.gl-drawer')`，点一个按钮会把**两边的二十扇抽屉
+    一起翻转**，而另一个按钮看起来毫无反应。加了范围之后各自管各自。
+    这也让 e2e 能明确地问「仓库那一组现在什么状态」。 */}
+<div class="gl-radar__drawers" data-gl-drawers="radar">
+  <div class="gl-drawer-bar">
+    <button
+      type="button"
+      class="gl-drawer-toggle"
+      data-gl-radar-toggle
+      data-expand={t('gleanings.drawer.expandAll')}
+      data-collapse={t('gleanings.drawer.collapseAll')}
+    >
+      {t('gleanings.drawer.expandAll')}
+    </button>
+  </div>
+
+  {sources.map((source, index) => (
+    <details
+      class="gl-drawer gl-radar__drawer"
+      open={index === 0}
+      data-ok={source.ok ? 'true' : 'false'}
+    >
+      <summary class="gl-drawer__head">
+        <span class="gl-drawer__chev" aria-hidden="true" />
+        <span class="gl-drawer__label">{source.label}</span>
+        <span class="gl-drawer__count">{source.items.length}</span>
+      </summary>
+      <div class="gl-drawer__body">
+        {source.note && <p class="gl-radar__note">{source.note}</p>}
+        {source.items.length === 0 ? (
+          <p class="gl-radar__note gl-radar__note--down">
+            {t('gleanings.radar.empty')}
+            {source.error ? ` —— ${source.error}` : ''}
+          </p>
+        ) : (
+          <ul class="gl-radar__rows">
+            {source.items.map((item) => (
+              <li class="gl-radar__row">
+                <span class="gl-radar__no">{String(item.rank).padStart(2, '0')}</span>
+                {/* 标题与「一句话」同住一格。**不能**让 blurb 直接当 .gl-radar__row 的
+                    子节点：那是 4 个网格项塞进 3 条轨道，自动排布会把热度顶到第二行
+                    （同 .gl-repo 那条踩过：行高 33.9 → 64.5）。 */}
+                <span class="gl-radar__main">
+                  <a class="gl-radar__link" href={item.url} target="_blank" rel="noopener noreferrer">
+                    {item.title}
+                  </a>
+                  {item.blurb && <span class="gl-radar__blurb">{item.blurb}</span>}
+                </span>
+                <span class="gl-radar__heat">
+                  {item.score !== undefined
+                    ? formatHeat(locale, item.score)
+                    : (item.meta ?? '')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p class="gl-radar__more">
+          <a href={source.home} target="_blank" rel="noopener noreferrer">
+            {t('gleanings.radar.sourceHome')}
+            <Icon name="external" />
+          </a>
+        </p>
+      </div>
+    </details>
+  ))}
+</div>
+
+<script>
+  /**
+   * 两件事：① 总览条进视口时扫一次；② 九扇抽屉的「全部展开 / 全部收起」。
+   *
+   * 三处必须做对：
+   *
+   * ① **换页要重绑**。`<script>` 是模块，View Transitions 换页不重新求值 ——
+   *    顶层只跑一次的话，新 DOM 上没人接管，症状是「点进来坏了、刷新一下就好」
+   *    （本仓在搜索按钮、宠物、标签切换上都栽过）。挂 `astro:page-load`。
+   *
+   * ② **旧监听与旧观察者都要撤**。观察者不撤的话，它盯着的还是上一页那批已经
+   *    脱离文档的节点，会一直空转。所以 diag 里存一个 cleanup。
+   *
+   * ③ **抽屉的开关按钮要认自己的那一组**。仓库那边也有一排 `.gl-drawer`，
+   *    两边都用 `document.querySelectorAll('.gl-drawer')` 的话，点一个按钮会把
+   *    **两边的二十扇抽屉一起翻转**（而另一边的按钮看起来毫无反应）。
+   *    所以这里的选择器全部限定在 `.gl-radar` 自己的抽屉上。
+   */
+  type Diag = {
+    binds: number;
+    unbinds: number;
+    /** 扫描真的被执行了几次（e2e 用它证明动画在干活，而不是只有观察者挂上了） */
+    sweeps: number;
+    /** 全部展开/收起被点了几次 */
+    flips: number;
+    cleanup: null | (() => void);
+  };
+  type RadarWin = Window & { __glRadar?: Diag };
+
+  const init = () => {
+    const win = window as RadarWin;
+    win.__glRadar?.cleanup?.();
+
+    const board = document.querySelector<HTMLElement>('[data-gl-radar]');
+    // 抽屉整组的作用域。所有抽屉查询都从这里往下找 —— 见组件顶部那条注释
+    const scope = document.querySelector<HTMLElement>('[data-gl-drawers="radar"]');
+    const toggle = scope?.querySelector<HTMLButtonElement>('[data-gl-radar-toggle]');
+    if (!board && !scope) return;
+
+    const diag: Diag = (win.__glRadar ??= {
+      binds: 0,
+      unbinds: 0,
+      sweeps: 0,
+      flips: 0,
+      cleanup: null,
+    });
+
+    // 要撤的东西统一收在一个数组里：`IntersectionObserver` 与 `MutationObserver`
+    // 都有 `disconnect()`，不用为它们各写一套清理
+    const observers: Array<{ disconnect: () => void }> = [];
+    const listeners: Array<() => void> = [];
+
+    /* ── ① 总览条扫一次 ── */
+    if (board) {
+      const arm = () => {
+        if (board.dataset.armed === 'true') return;
+        board.dataset.armed = 'true';
+        diag.sweeps += 1;
+      };
+      if (typeof IntersectionObserver === 'function') {
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) if (entry.isIntersecting) arm();
+          },
+          { threshold: 0.25 }
+        );
+        io.observe(board);
+        observers.push(io);
+
+        // 兜底：面板被标签切换藏起来时（display:none），观察者**不会回调** ——
+        // 元素不可见就是不相交。不补这一手的话，「先切到雷达再滚」那条路上
+        // 动画永远不跑（而这条路的用户全是真访客，e2e 只走默认路径时看不见）。
+        const mo = new MutationObserver(() => {
+          if (board.getClientRects().length > 0) arm();
+        });
+        mo.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ['data-on', 'data-ready'],
+          subtree: true,
+        });
+        observers.push(mo);
+      } else {
+        arm();
+      }
+    }
+
+    /* ── ② 九扇抽屉的全部展开/收起（只看自己这一组，别去动仓库那九扇） ── */
+    if (toggle && scope) {
+      const drawers = () => Array.from(scope.querySelectorAll<HTMLDetailsElement>('.gl-drawer'));
+      const sync = () => {
+        const all = drawers();
+        const everyOpen = all.length > 0 && all.every((d) => d.open);
+        toggle.textContent = (everyOpen ? toggle.dataset.collapse : toggle.dataset.expand) ?? '';
+      };
+      const onClick = () => {
+        const all = drawers();
+        const everyOpen = all.every((d) => d.open);
+        for (const drawer of all) drawer.open = !everyOpen;
+        diag.flips += 1;
+        sync();
+      };
+      const onToggle = () => sync();
+
+      toggle.addEventListener('click', onClick);
+      // `toggle` 事件**不冒泡**：第三个参数必须是 true（捕获阶段）。
+      // 少了它监听挂上了却永远不触发 —— 是那种「写了但没生效」的哑巴故障。
+      document.addEventListener('toggle', onToggle, true);
+      sync();
+      listeners.push(() => {
+        toggle.removeEventListener('click', onClick);
+        document.removeEventListener('toggle', onToggle, true);
+      });
+    }
+
+    diag.binds += 1;
+    diag.cleanup = () => {
+      for (const io of observers) io.disconnect();
+      for (const off of listeners) off();
+      diag.unbinds += 1;
+    };
+  };
+
+  init();
+  document.addEventListener('astro:page-load', init);
+</script>
