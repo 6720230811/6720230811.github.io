@@ -29,6 +29,13 @@ import Icon from '../Icon.astro';
  *
  * 首组默认展开：全收起的话这一页就是一排标题，来的人不知道里面长什么样。
  *
+ * 宽屏（≥64rem 且 JS 在位）换一种摆法：**左边一列分类目录，右边只摊开选中的那一组**。
+ * details 仍是唯一的内容载体 —— 脚本给容器打 data-rcat，CSS 用 display:contents
+ * 把收起的抽屉退场、把开着的 body 显式落到右栏，同一批节点在窄屏当抽屉身体、
+ * 在宽屏当右栏列表：形态切换零拷贝，pagefind 索引与 no-JS 回退都不受影响
+ * （no-JS 时容器没有 data-rcat，宽屏规则不生效，目录本身也是基础态 display:none）。
+ * 样式见 gleanings.css 的「宽屏目录」一节，行为见文件尾部的第二个脚本。
+ *
  * 行内容：语言色点 · 仓库名 · 一句话 · star 数 · 最后推送的年月。
  * 「最后推送」是**诚实的一部分**：一个两年没动过的仓库，值不值得看是另一回事，
  * 但你得知道。同理，快照过期会挂徽章（见下面 fresh 那一行）。
@@ -71,6 +78,22 @@ function dotStyle(repo: Repo): string | undefined {
     {t('gleanings.drawer.expandAll')}
   </button>
 </div>
+
+{/* 宽屏目录：**无 JS 时不渲染**（基础态 display:none 由脚本打上 data-rcat 才放开）。
+    这是脚本要点的同一批名字/计数，所以与抽屉头共用一份词序 —— groups 的顺序。 */}
+<nav class="gl-rcat" aria-label={t('gleanings.repos.catalog')}>
+  {groups.map((group) => (
+    <button
+      type="button"
+      class="gl-rcat__item"
+      data-gl-rcat-item
+      data-count={group.items.length}
+    >
+      <span class="gl-rcat__label">{group.label}</span>
+      <span class="gl-rcat__count">{group.items.length}</span>
+    </button>
+  ))}
+</nav>
 
 {
   groups.map((group, index) => (
@@ -192,4 +215,95 @@ function dotStyle(repo: Repo): string | undefined {
 
   init();
   document.addEventListener('astro:page-load', init);
+</script>
+
+<script>
+  /**
+   * 宽屏目录联动：**形态切换，不是另一种渲染**。
+   *
+   * 九扇 details 仍是唯一的内容载体 —— 这里只是：
+   * ① 给容器打 data-rcat（CSS 据此把抽屉栈摆成「左目录 + 右列表」）；
+   * ② 点目录 = 只保留那一组展开（其余七扇收起）；
+   * ③ 「全部展开/收起」按钮与手动 toggle 在这个形态下没有意义
+   *    （右栏只摊一组），所以打上 data-rcat 的同时把按钮藏起来；
+   * ④ 反过来，目录点完也要回写：details 的 open 属性是唯一状态源，
+   *    目录的高亮、data-on 全部从 details 现读，两套形态共用一份事实。
+   *
+   * 窄屏（<64rem）一律不挂 data-rcat —— 形态选择是 CSS 媒体查询定的，
+   * JS 只负责行为，别抢布局的话事权。换页重绑与清理钩子同上一个脚本。
+   */
+  type CatDiag = { binds: number; unbinds: number; picks: number; cleanup: null | (() => void) };
+  type CatWin = Window & { __glRcat?: CatDiag };
+
+  const WIDE = '(min-width: 64rem)';
+
+  const initCat = () => {
+    const win = window as CatWin;
+    win.__glRcat?.cleanup?.();
+
+    const scope = document.querySelector<HTMLElement>('[data-gl-drawers="repos"]');
+    const nav = scope?.querySelector<HTMLElement>('.gl-rcat');
+    if (!scope || !nav) return;
+
+    const drawers = () => Array.from(scope.querySelectorAll<HTMLDetailsElement>('.gl-drawer'));
+    if (!drawers().length) return;
+
+    const items = Array.from(nav.querySelectorAll<HTMLButtonElement>('[data-gl-rcat-item]'));
+    const mq = window.matchMedia(WIDE);
+
+    const diag: CatDiag = (win.__glRcat ??= { binds: 0, unbinds: 0, picks: 0, cleanup: null });
+
+    /** 高亮与 data-on 全部从 details 现读 —— details.open 是唯一状态源 */
+    const sync = () => {
+      const ds = drawers();
+      const opened = ds.map((d) => d.open);
+      // 目录项高亮：开着的那个（宽屏形态下至多一个；多个时也只标事实）
+      items.forEach((item, i) => item.setAttribute('aria-current', opened[i] ? 'true' : 'false'));
+      // 各扇 body 的显隐交给 CSS（[data-rcat] 的 display:contents 规则），
+      // 这里只把「当前组」记在容器上，右栏的空态提示用
+      const firstOpen = opened.indexOf(true);
+      scope.dataset.on = firstOpen >= 0 ? String(firstOpen) : '';
+      if (firstOpen < 0) {
+        // 全收起 = 右栏空了：宽屏形态下把首组放回来，右栏不空转
+        ds[0].open = true;
+      }
+    };
+
+    const onPick = (event: Event) => {
+      const item = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-gl-rcat-item]');
+      if (!item) return;
+      const index = items.indexOf(item);
+      if (index < 0) return;
+      drawers().forEach((d, i) => (d.open = i === index));
+      diag.picks += 1;
+      sync();
+    };
+
+    const apply = () => {
+      // 显隐全部交给 CSS（[data-rcat] 的规则里管目录与「全部展开」按钮）：
+      // JS 直接动 .hidden 会被作者样式（display:flex 等）盖掉，是「写了但没生效」家族的
+      if (mq.matches) {
+        scope.dataset.rcat = 'true';
+        // 进宽屏形态时保证至少一组开着（首组兜底），否则右栏是空的
+        sync();
+      } else {
+        delete scope.dataset.rcat;
+      }
+    };
+
+    nav.addEventListener('click', onPick);
+    mq.addEventListener?.('change', apply);
+    apply();
+
+    diag.binds += 1;
+    diag.cleanup = () => {
+      nav.removeEventListener('click', onPick);
+      mq.removeEventListener?.('change', apply);
+      delete scope.dataset.rcat;
+      diag.unbinds += 1;
+    };
+  };
+
+  initCat();
+  document.addEventListener('astro:page-load', initCat);
 </script>

@@ -529,6 +529,123 @@
   padding: 0 0 1.1rem 0.15rem;
 }
 
+/* ───────────────────── 仓库：宽屏目录形态 ─────────────────────
+
+   ≥64rem 且 JS 在位（容器有 data-rcat）时，抽屉栈换成「左目录 + 右列表」：
+   左边一列分类（名字 + 计数），点哪个右边就只摊开那一组。
+
+   details 仍是唯一的内容载体：收起的整扇退场（display:none），
+   开着的那扇用 display:contents 溶掉自己的盒子，让 body 直接成为
+   grid 的一个项落到右栏 —— 同一批节点，两种形态，零拷贝。
+   窄屏与 no-JS 都不走这段（容器没有 data-rcat），抽屉栈照旧。 */
+
+/* 基础态：目录是脚本增强件，没有 JS 时它没意义 —— 干脆不显示。
+   （脚本不直接动 .hidden：[hidden] 会被 display 规则盖掉，
+   「写了但没生效」家族的成员。） */
+.gl-rcat {
+  display: none;
+}
+
+[data-gl-drawers='repos'][data-rcat] {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  /* 列间距给目录右缘留出呼吸；目录第一行上面本来就有快照行的 margin */
+  column-gap: 2.25rem;
+  align-items: start;
+}
+
+/* 目录固定在左栏、跨满两行；「全部展开」按钮与抽屉在右栏流里重新排队 */
+[data-gl-drawers='repos'][data-rcat] .gl-rcat {
+  display: flex;
+  flex-direction: column;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  gap: 0;
+  /* 目录太长时自己滚，右栏列表跟着视口走 —— 9 个组撑不满，这条是给未来的 */
+  max-height: 100%;
+  overflow: auto;
+}
+
+[data-gl-drawers='repos'][data-rcat] .gl-drawer-bar {
+  display: none;
+}
+
+/* 目录项：与抽屉把手同一套语言（细线在上、名字在前、计数退到行尾），
+   但更矮 —— 它一屏要站下 9 个。当前组只换线与字色，不动字重
+   （字重一变宽度就变，切换时整列会跳，同 .gl-idx 那条教训）。 */
+.gl-rcat__item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.15rem;
+  border: none;
+  border-top: 1px solid var(--c-border);
+  background: none;
+  color: var(--c-text-muted);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.gl-rcat__item:hover,
+.gl-rcat__item[aria-current='true'] {
+  border-top-color: var(--c-text);
+  color: var(--c-text);
+}
+
+.gl-rcat__item:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+.gl-rcat__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gl-rcat__count {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 宽屏形态下的抽屉重排：
+   收起的整扇退场；开着的那扇把 summary（目录已经表达了它）与自己的盒子
+   都溶掉，body 直接顶替它进 grid。第一行留给快照行（grid-row 1），
+   body 落在 (2, 2) —— 与目录（跨 1~2 行、第 1 列）并排。 */
+[data-gl-drawers='repos'][data-rcat] .gl-drawer {
+  display: none;
+}
+
+[data-gl-drawers='repos'][data-rcat] .gl-drawer[open] {
+  display: contents;
+}
+
+[data-gl-drawers='repos'][data-rcat] .gl-drawer[open] .gl-drawer__head {
+  display: none;
+}
+
+[data-gl-drawers='repos'][data-rcat] .gl-drawer[open] .gl-drawer__body {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+/* 右栏只摊一组时双列反而挤（栏宽只有原来的六成），收成一列；
+   行的两行排法由上面 (max-width:48rem),(min-width:64rem) 那条媒体查询
+   照旧生效 —— 也就是说右栏里的行永远是两行式，这是有意的：
+   栏变窄后「一句话」才有地方。 */
+[data-gl-drawers='repos'][data-rcat] .gl-repos {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* ───────────────────── 仓库：紧凑列表 ───────────────────── */
 
 .gl-repos {
